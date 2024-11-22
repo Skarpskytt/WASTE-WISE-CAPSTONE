@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="bg-gray-800 text-white p-4 flex justify-between items-center">
+    <h1 class="text-2xl">Admin Dashboard</h1>
+  </header>
+
+  <div class="p-6">
+    <!-- Overview Section -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div class="bg-white p-4 rounded-lg border-8 border-Green border-double">
+        <h2 class="text-xl font-semibold mb-2">Total Sales</h2>
+        <p id="totalSales" class="text-gray-600">Loading...</p>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-2">Total Waste</h2>
+        <p id="totalWaste" class="text-gray-600">Loading...</p>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-2">Total Profit</h2>
+        <p id="totalProfit" class="text-gray-600">Loading...</p>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-2">Production Forecast</h2>
+        <p id="productionForecast" class="text-gray-600">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Sales Analytics -->
+    <div class="mt-6 bg-white p-4 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-2">Sales Trends</h2>
+      <canvas id="salesChart"></canvas>
+    </div>
+
+    <!-- Waste Management -->
+    <div class="mt-6 bg-white p-4 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-2">Waste Trends</h2>
+      <canvas id="wasteChart"></canvas>
+    </div>
+
+    <!-- Inventory Management -->
+    <div class="mt-6 bg-white p-4 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-2">Inventory Levels</h2>
+      <div id="inventoryLevels" class="text-gray-600">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    // Fetch and display total sales
+    fetch('fetch_sales.php')
+      .then(response => response.json())
+      .then(data => {
+        let totalSales = 0;
+        data.forEach(sale => {
+          totalSales += parseFloat(sale.revenue);
+        });
+        document.getElementById('totalSales').innerText = totalSales.toFixed(2);
+      });
+
+    // Fetch and display total waste
+    fetch('fetch_waste.php')
+      .then(response => response.json())
+      .then(data => {
+        let totalWaste = 0;
+        data.forEach(waste => {
+          totalWaste += parseInt(waste.quantity);
+        });
+        document.getElementById('totalWaste').innerText = totalWaste;
+      });
+
+    // Fetch and display inventory levels
+    fetch('fetch_inventory.php')
+      .then(response => response.json())
+      .then(data => {
+        let inventoryHtml = '<ul>';
+        data.forEach(item => {
+          inventoryHtml += `<li>${item.ingredient}: Used ${item.quantity_used}, Remaining ${item.quantity_remaining}</li>`;
+        });
+        inventoryHtml += '</ul>';
+        document.getElementById('inventoryLevels').innerHTML = inventoryHtml;
+      });
+
+    // Fetch and display sales trends
+    fetch('fetch_sales.php')
+      .then(response => response.json())
+      .then(data => {
+        const labels = data.map(sale => sale.date);
+        const salesData = data.map(sale => parseFloat(sale.revenue));
+
+        const salesCtx = document.getElementById('salesChart').getContext('2d');
+        new Chart(salesCtx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Sales Data',
+              data: salesData,
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true
+              }
+            }
+          }
+        });
+      });
+
+    // Fetch and display waste trends
+    fetch('fetch_waste.php')
+      .then(response => response.json())
+      .then(data => {
+        const labels = data.map(waste => waste.date);
+        const wasteData = data.map(waste => parseInt(waste.quantity));
+
+        const wasteCtx = document.getElementById('wasteChart').getContext('2d');
+        new Chart(wasteCtx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Waste Data',
+              data: wasteData,
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true
+              }
+            }
+          }
+        });
+      });
+  </script>
+</body>
+</html>
