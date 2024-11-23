@@ -172,47 +172,7 @@
  
  <hr class="bg-sec">
 
-<div class="p-8">
-<div class="grid grid-cols-4 gap-8">
-
-<div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold">Total Sales</h2>
-         <p class="font-bold text-2xl font-roboto">₱9,220.93</p>
-    </div>
-
-    <div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold">Total Waste Value</h2>
-         <p class="font-bold text-2xl font-roboto">₱10,200.00</p>
-    </div>
-
-    <div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold"></h2>
-         <p class="font-bold text-2xl font-roboto">₱10,200.00</p>
-    </div>
-    <div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold">Production Forecast</h2>
-         <p class="font-bold text-2xl font-roboto">82.99%</p>
-    </div>
-
-   
-    </div>
-    <div class="grid grid-cols-2 gap-6">
-    <div class="flex flex-col mb-4 rounded bg-gry-50  mt-9 size-full ">
-      <h2 class="font-bold">Total Sales</h2>
-    <?php include '../../charts/areachart.php'?>
-    </div>
-    <div class="flex flex-col mb-4 rounded bg-gry-50  mt-9 size-full ">
-      <h2 class="font-bold">Total Waste Food</h2>
-    <?php include '../../charts/barchart.php'?>
-    </div>
 
 
-</div>
-</div>
-</div>
-
-
-
-
-</body>
+ </body>
 </html>
