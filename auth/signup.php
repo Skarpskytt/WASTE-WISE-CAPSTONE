@@ -31,11 +31,11 @@
            <div class="flex flex-row gap-2">
           <div>
             <label for="username" class="block text-sm font-medium text-gray-700">First Name</label>
-            <input type="text" id="username" name="username" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+            <input type="text" id="fname" name="fname" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
           </div>
           <div>
             <label for="username" class="block text-sm font-medium text-gray-700">Last Name</label>
-            <input type="text" id="username" name="username" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+            <input type="text" id="lname" name="lname" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
           </div>
         </div>
           <div>
@@ -48,7 +48,7 @@
           </div>
           <div>
             <label for="password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-            <input type="password" id="password" name="password" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+            <input type="password" id="conpassword" name="conpassword" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
           </div>
           <div class="flex gap-2">
           <input type="checkbox"> <a href="" class="text-xs text-gray-600 hover:text-gray-800 focus:underline mt-">Accept Terms and Condition</a>
@@ -58,7 +58,7 @@
           </div>
         </form>
         <div class="mt-4 text-sm text-gray-600 text-center">
-          <p>Already have an account? <a href="/auth/login.html" class="text-black hover:underline">Login here</a>
+          <p>Already have an account? <a href="../auth/login.php" class="text-black hover:underline">Login here</a>
           </p>
         </div>
       </div>
@@ -66,7 +66,7 @@
     <!-- Left Pane -->
     <div class="hidden lg:flex items-center justify-center flex-1 bg-sec text-black ">
       <div class="max-w-md">
-        <img src="/assets/images/isometric-recycling-plastic-and-making-shoes.gif" alt="">
+        <img src="../assets/images/isometric-recycling-plastic-and-making-shoes.gif" alt="">
       </div>
     </div>
     <!-- Right Pane -->

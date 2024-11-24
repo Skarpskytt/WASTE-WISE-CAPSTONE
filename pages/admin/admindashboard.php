@@ -37,178 +37,88 @@
    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 
-<body class="flex h-screen">
-<aside id="sidebar" class="bg-base-100 w-full md:w-64 lg:w-64 h-full border-r border-gray-200 fixed md:relative lg:relative transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 z-50">
-    <div class="h-full px-3 py-4 overflow-y-auto bg-white dark:bg-gray-800">
-    <button id="closeSidebar" class="btn btn-ghost block md:hidden lg:hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" class="size-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        </button>
-       <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
-                </svg>                
-                <span class="ms-3">Dashboard</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
-                </svg>                           
-                <span class="flex-1 ms-3 whitespace-nowrap">Product Data</span>      
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
-                </svg>                
-                <span class="flex-1 ms-3 whitespace-nowrap">Table</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
-                </svg>
-                <span class="flex-1 ms-3 whitespace-nowrap">Users</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                  </svg>
-                <span class="flex-1 ms-3 whitespace-nowrap">Notification</span>
-             </a>
-          </li>
-          <h3> <span class="font-bold">Settings</span></h3>
-          <li>
-             <a href="#" class="flex self-end p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                  </svg>
+<body class="flex h-max">
+<?php include '../layout/nav.php'?>
 
-                <span class="flex-1 ms-3 whitespace-nowrap">Account</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex self-edn p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                        </svg>
-
-                <span class="flex-1 ms-3 whitespace-nowrap">Settings</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex self-edn p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-               <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />  
-               </svg>
-
-                <span class="flex-1 ms-3 whitespace-nowrap">Logout</span>
-             </a>
-          </li>
-       </ul>
-    </div>
-
- </aside>
-
- 
- 
-          
-  <div class="flex-1">
- 
-   <div class="px-3 py-3 lg:px-5 lg:pl-3">
-     <div class="flex items-center justify-between">
-       <div class="flex items-center justify-start rtl:justify-end">
-         <button  id="toggleSidebar" class="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600">
-            <span class="sr-only">Open sidebar</span>
-            <svg class="w-6 h-6" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-               <path clip-rule="evenodd" fill-rule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"></path>
-            </svg>
-         </button>
-         
-         <a href="dashboard.html" class="flex ms-2 md:me-24">
-           <img src="https://cdn.discordapp.com/attachments/1298939154402508861/1308721223550631966/image.png?ex=674244de&is=6740f35e&hm=16581a1d7a0cef04641a43506bd0b391a5e8b46d61da38617752257dc7dbdca4&" class="h-8 me-3" alt="WasteWise"/>
-           <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Wastewise</span>
-         </a>
-       </div>
-       <div class="flex items-center">
-           <div class="flex items-center ms-3">
-            <div class="dropdown dropdown-end">
-               <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
-                 <div class="w-10 rounded-full">
-                   <img
-                     alt="Tailwind CSS Navbar component"
-                     src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" />
-                 </div>
-               </div>
-               <ul
-                 tabindex="0"
-                 class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
-                 <li>
-                   <a class="justify-between">
-                     Profile
-                     <span class="badge">New</span>
-                   </a>
-                 </li>
-                 <li><a>Settings</a></li>
-                 <li><a>Logout</a></li>
-               </ul>
-             </div>
-             
-           </div>
-         </div>
-     </div>
-   </div>
- </nav>
- 
- <hr class="bg-sec">
 
 <div class="p-8">
-<div class="grid grid-cols-4 gap-8">
+<div class="grid grid-cols-4 gap-6 p-8 ">
+<div class="stats stats-vertical shadow gap-4 border-4 border-sec">
+  <div class="stat">
+    <div class="stat-title font-semibold">Sales</div>
+    <div class="stat-value text-primarycol">₱10,559.93</div>
+    <div class="stat-desc">Jan 1st - Feb 1st</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Waste Value</div>
+    <div class="stat-value text-primarycol">₱4,220.44</div>
+    <div class="stat-desc">Jan 1st - Feb 1st</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Production</div>
+    <div class="stat-value text-primarycol">80.23</div>
+    <div class="stat-desc">Past Month</div>
+  </div>
 
-<div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold">Total Sales</h2>
-         <p class="font-bold text-2xl font-roboto">₱9,220.93</p>
-    </div>
+  <div class="stat">
+    <div class="stat-title">Product Trend</div>
+    <div class="stat-value text-primarycol">Ensaymada</div>
+    <div class="stat-desc">This Week</div>
+  </div>
+</div>
 
-    <div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold">Total Waste Value</h2>
-         <p class="font-bold text-2xl font-roboto">₱10,200.00</p>
-    </div>
-
-    <div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold"></h2>
-         <p class="font-bold text-2xl font-roboto">₱10,200.00</p>
-    </div>
-    <div class="flex flex-col justify-center align-middle bg-sec rounded-2xl  p-3">
-       <h2 class="text-sm text-gray-700 font-semibold">Production Forecast</h2>
-         <p class="font-bold text-2xl font-roboto">82.99%</p>
-    </div>
-
-   
-    </div>
-    <div class="grid grid-cols-2 gap-6">
-    <div class="flex flex-col mb-4 rounded bg-gry-50  mt-9 size-full ">
-      <h2 class="font-bold">Total Sales</h2>
+<div class="flex flex-col col-span-3 mb-4 rounded-2xl bg-gry-50 size-full p-4 border-4 border-sec ">
+      <h2 class="font-extrabold text-3xl text-primarycol">Sales & Waste Data</h2>
     <?php include '../../charts/areachart.php'?>
+    <div>
+    <div class="overflow-x-auto">
+  <table class="table">
+    <!-- head -->
+    <thead>
+      <tr class="bg-primarycol text-white">
+        <th></th>
+        <th>Name</th>
+        <th>Jan1-Feb1</th>
+        <th>Feb1-March1</th>
+        <th>April-May1</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- row 1 -->
+      <tr>
+        <th>1</th>
+        <td>Sales</td>
+        <td>0</td>
+        <td>6.0</td>
+        <td>4.0</td>
+      </tr>
+      <!-- row 2 -->
+      <tr>
+        <th>2</th>
+        <td>Waste</td>
+        <td>7.0</td>
+        <td>0</td>
+        <td>3.0</td>
+      </tr> 
+    </tbody>
+  </table>
+</div>
     </div>
-    <div class="flex flex-col mb-4 rounded bg-gry-50  mt-9 size-full ">
-      <h2 class="font-bold">Total Waste Food</h2>
+    
+
+</div>
+</div>
+<div class="grid grid-cols-4 p-8 gap-6 ">
+  <div class="flex flex-col mb-4 bg-gray-50 size-full p-6 border-4 rounded-2xl border-sec">
+    <h2 class="font-extrabold text-3xl text-primarycol mb-6">Top Loss Reason</h2>
+    <?php include '../../charts/piechart.php'?>
+    </div>
+    <div class="col-span-3 flex flex-col mb-4 bg-gray-50 size-full p-6 rounded-2xl border-4 border-sec">
+      <h2 class="font-extrabold text-3xl text-primarycol">Top Wasted Foods</h2>
     <?php include '../../charts/barchart.php'?>
     </div>
-
-
 </div>
-</div>
+  
 </div>
 
 

@@ -7,9 +7,6 @@ module.exports = {
         third: '#EED3B1',
         fourth: '#1F4529',
       },
-      backgroundImage: {
-        'hero-donut': "url('/assets/images/hero-donut.jpg')", 
-      },
     },
   },
   variants: {},

@@ -6,6 +6,10 @@
   <title>Homepage | WasteWise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
+  <link href="../assets/style/style.css" rel="stylesheet" type="text/css" />
   <script>
      tailwind.config = {
      theme: {
@@ -16,10 +20,9 @@
            third: '#EED3B1',
            fourth: '#1F4529',
          }
-         
+        },
        }
-     }
-   }
+      }
   </script>
 </head>
 <body>
@@ -57,8 +60,8 @@
               <li><a>Features</a></li>
             </ul>
           </div>
-          <a href="dashboard.html" class="flex ms-2 md:me-24">
-            <img src="/assets/images/Logo.png" class="h-8 me-3" alt="WasteWise Logo" />
+          <a href="homepage.php" class="flex ms-2 md:me-24">
+            <img src="../assets/images/Logo.png" class="h-8 me-3" alt="WasteWise Logo" />
             <span class="text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Wastewise</span>
           </a>
         </div>
@@ -79,8 +82,8 @@
           </ul>
         </div>
         <div class="navbar-end gap-3 mr-5">
-          <button class="btn btn-outline"> <a href="/auth/login.html">Login</a></button>
-       <button class="btn btn-active btn-neutral text-white hover:bg-transparent hover:text-black"><a href="/auth/signup.html">Signup</a></button>   
+          <button class="btn btn-outline"> <a href="../auth/login.php">Login</a></button>
+       <button class="btn btn-active btn-neutral text-white hover:bg-transparent hover:text-black"><a href="../auth/signup.php">Signup</a></button>   
         </div>
       </div>
     </nav>
@@ -101,7 +104,7 @@
   </div>
 
   <div class="hidden lg:flex items-center justify-center flex-1 b text-black">
-   <img src="/assets/images/hero-donut.jpg" alt="">
+   <img src="../assets/images/hero-donut.jpg" alt="">
   </div>
   
 </div>

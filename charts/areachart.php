@@ -7,7 +7,7 @@
       name: 'Sales',
       data: [31, 40, 28, 51, 42, 109, 100]
     }, {
-      name: 'series2',
+      name: 'Waste',
       data: [11, 32, 45, 32, 34, 52, 41]
     }],
     chart: {

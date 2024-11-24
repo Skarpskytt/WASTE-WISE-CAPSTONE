@@ -22,7 +22,7 @@
 <div class="flex h-screen">
   <div class="hidden lg:flex items-center justify-center flex-1 bg-sec text-black">
     <div class="max-w-md text-center">
-     <img src="/assets/images/memphis-biometric-authentication-and-account-login.gif" alt="">
+     <img src="../assets/images/memphis-biometric-authentication-and-account-login.gif" alt="">
     </div>
   </div>
   
@@ -51,7 +51,7 @@
         </div>
       </form>
       <div class="mt-4 text-sm text-gray-600 text-center">
-        <p>Don't have an account yet? <a href="/auth/signup.html" class="text-black hover:underline">Signup here</a>
+        <p>Don't have an account yet? <a href="../auth/signup.php" class="text-black hover:underline">Signup here</a>
         </p>
       </div>
     </div>
