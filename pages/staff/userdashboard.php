@@ -15,6 +15,8 @@
          colors: {
            primarycol: '#47663B',
            sec: '#E8ECD7',
+           third: '#EED3B1',
+          fourth: '#1F4529',
          }
        }
      }
@@ -29,112 +31,126 @@
         $('#sidebar').addClass('-translate-x-full');
     });
 });
+    function markTaskDone(button) {
+      button.parentElement.style.textDecoration = 'line-through';
+      button.disabled = true;
+    }
+
  </script>
    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 
-<body class="flex h-screen">
-<aside id="sidebar" class="bg-base-100 w-full md:w-64 lg:w-64 h-full border-r border-gray-200 fixed md:relative lg:relative transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 z-50">
-    <div class="h-full px-3 py-4 overflow-y-auto bg-white dark:bg-gray-800">
-    <button id="closeSidebar" class="btn btn-ghost block md:hidden lg:hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" class="size-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        </button>
-       <ul class="space-y-2 font-medium">
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
-                </svg>                
-                <span class="ms-3">Dashboard</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
-                </svg>                           
-                <span class="flex-1 ms-3 whitespace-nowrap">Product Data</span>      
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
-                </svg>                
-                <span class="flex-1 ms-3 whitespace-nowrap">Table</span>
-             </a>
-          </li>
-          <li>
-             <a href="#" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-                <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 18 20">
-                   <path d="M17 5.923A1 1 0 0 0 16 5h-3V4a4 4 0 1 0-8 0v1H2a1 1 0 0 0-1 .923L.086 17.846A2 2 0 0 0 2.08 20h13.84a2 2 0 0 0 1.994-2.153L17 5.923ZM7 9a1 1 0 0 1-2 0V7h2v2Zm0-5a2 2 0 1 1 4 0v1H7V4Zm6 5a1 1 0 1 1-2 0V7h2v2Z"/>
-                </svg>
-                <span class="flex-1 ms-3 whitespace-nowrap">Products</span>
-             </a>
-          </li>
-       </ul>
+<body class="flex h-auto">
+
+<?php include ('../layout/sidebaruser.php' ) ?> 
+
+<div class="grid grid-rows-2 grid-flow-col gap-5 p-8">
+  <div class="row-span-3">
+    <div class="bg-white p-6 rounded-lg shadow-md">
+      <h3 class="text-xl font-semibold mb-4">Daily Tasks</h3>
+      <h4 class="text-lg font-semibold mb-2">Production Schedule</h4>
+      <ul class="list-disc pl-5">
+        <li>
+          Task 1 - Prepare ingredients
+          <button class="ml-2 bg-primarycol text-white px-2 py-1 rounded" onclick="markTaskDone(this)">Mark as Done</button>
+        </li>
+        <li>
+          Task 2 - Bake bread
+          <button class="ml-2 bg-primarycol text-white px-2 py-1 rounded" onclick="markTaskDone(this)">Mark as Done</button>
+        </li>
+        <li>
+          Task 3 - Package products
+          <button class="ml-2 bg-primarycol text-white px-2 py-1 rounded" onclick="markTaskDone(this)">Mark as Done</button>
+        </li>
+        <li>
+          Task 4 - Waste goal for today: 50 items
+          <button class="ml-2 bg-primarycol text-white px-2 py-1 rounded" onclick="markTaskDone(this)">Mark as Done</button>
+        </li>
+      </ul>
     </div>
- </aside>
+  </div>
+  <div class="col-span-1">
+  <div class="stats shadow">
+  <div class="stat">
+    <div class="stat-figure text-black">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+</svg>
 
- 
- 
-          
-  <div class="flex-1">
- 
-   <div class="px-3 py-3 lg:px-5 lg:pl-3">
-     <div class="flex items-center justify-between">
-       <div class="flex items-center justify-start rtl:justify-end">
-         <button  id="toggleSidebar" class="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600">
-            <span class="sr-only">Open sidebar</span>
-            <svg class="w-6 h-6" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-               <path clip-rule="evenodd" fill-rule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"></path>
-            </svg>
-         </button>
-         
-         <a href="dashboard.html" class="flex ms-2 md:me-24">
-           <img src="/assets/images/Logo.png" class="h-8 me-3" alt="WasteWise"/>
-           <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Wastewise</span>
-         </a>
-       </div>
-       <div class="flex items-center">
-           <div class="flex items-center ms-3">
-            <div class="dropdown dropdown-end">
-               <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
-                 <div class="w-10 rounded-full">
-                   <img
-                     alt="Tailwind CSS Navbar component"
-                     src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" />
-                 </div>
-               </div>
-               <ul
-                 tabindex="0"
-                 class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
-                 <li>
-                   <a class="justify-between">
-                     Profile
-                     <span class="badge">New</span>
-                   </a>
-                 </li>
-                 <li><a>Settings</a></li>
-                 <li><a>Logout</a></li>
-               </ul>
-             </div>
-             
-           </div>
-         </div>
-     </div>
-   </div>
- </nav>
- <div class="p-5 bg-blue-500 w-full">
-    
-      
+    </div>
+    <div class="stat-title">Total Revenue Today</div>
+    <div class="stat-value text-primarycol">₱2,545.98</div>
+  </div>
 
+  <div class="stat">
+    <div class="stat-figure text-secondary text-black">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+</svg>
 
+    </div>
+    <div class="stat-title">Total Quantity Wasted Today</div>
+    <div class="stat-value text-primarycol">250 items</div>
+  </div>
+
+  <div class="stat">
+    <div class="stat-figure text-secondary">
+      <div class="avatar online">
+        <div class="w-16 rounded-full">
+          <img src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" />
+        </div>
+      </div>
+    </div>
+    <div class="stat-value text-primarycol">86%</div>
+    <div class="stat-title">Tasks done</div>
+    <div class="stat-desc text-secondary text-black">4 tasks remaining</div>
+  </div>
+</div>
+  </div>
  
- 
- 
+  </div>
+  <div class=" size-full p-8">
+  <h2 class="font-extrabold text-3xl text-primarycol mb-6">Product Trend</h2>
+    <?php include '../../charts/linechart.php'?>
+    <div class="overflow-x-auto">
+  <table class="table mt-2">
+    <!-- head -->
+    <thead>
+      <tr class="bg-primarycol text-white">
+        <th></th>
+        <th>Name</th>
+        <th>Daily</th>
+        <th>Weeks</th>
+        <th>Monthly</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- row 1 -->
+      <tr>
+        <th>1</th>
+        <td>Ensaymada</td>
+        <td>80</td>
+        <td>30</td>
+        <td>21</td>
+      </tr>
+      <!-- row 2 -->
+      <tr>
+        <th>2</th>
+        <td>Pandesal</td>
+        <td>100</td>
+        <td>300</td>
+        <td>800</td>
+      </tr> 
+      <tr>
+        <th>3</th>
+        <td>Muffin</td>
+        <td>40</td>
+        <td>200</td>
+        <td>520</td>
+      </tr> 
+    </tbody>
+  </table>
+</div>
 
 </body>
 </html>
