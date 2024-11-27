@@ -44,7 +44,7 @@
 
 <?php include ('../layout/sidebaruser.php' ) ?> 
 
-<div class="grid grid-rows-2 grid-flow-col gap-5 p-8">
+<div class="grid grid-rows-2 grid-flow-col gap-5 p-8 rounded-2xl border-4 border-sec mt-4">
   <div class="row-span-3">
     <div class="bg-white p-6 rounded-lg shadow-md">
       <h3 class="text-xl font-semibold mb-4">Daily Tasks</h3>
@@ -109,7 +109,7 @@
   </div>
  
   </div>
-  <div class=" size-full p-8">
+  <div class=" size-full p-8 rounded-2xl border-4 border-sec mt-4">
   <h2 class="font-extrabold text-3xl text-primarycol mb-6">Product Trend</h2>
     <?php include '../../charts/linechart.php'?>
     <div class="overflow-x-auto">

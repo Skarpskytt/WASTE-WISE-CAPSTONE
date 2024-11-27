@@ -42,14 +42,7 @@
                 <span class="flex-1 ms-3 whitespace-nowrap">Calendar</span>
              </a>
           </li>
-          <li>
-             <a href="../staff/usernotif.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                  </svg>
-                <span class="flex-1 ms-3 whitespace-nowrap">Notification</span>
-             </a>
-          </li>
+         
           <h3> <span class="font-bold">Settings</span></h3>
           <li>
              <a href="#" class="flex self-edn p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
@@ -96,7 +89,20 @@
          </a>
        </div>
        <div class="flex items-center">
-           <div class="flex items-center ms-3">
+           <div class="flex items-center ms-3 gap-4">
+           <div class="dropdown dropdown-bottom dropdown-end justify-end">
+                  <div tabindex="0" role="button">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8 mb-1">
+                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                              </svg>
+                  </div>
+               <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+                  <li><a href="#">Notification 1</a></li>
+                  <li><a href="#">Notification 2</a></li>
+                  <li><a href="#">Notification 3</a></li>
+                  <li><a href="#">Notification 4</a></li>
+               </ul>    </div>
+            <div class="dropdown dropdown-end">
             <div class="dropdown dropdown-end">
                <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
                  <div class="w-10 rounded-full">

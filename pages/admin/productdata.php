@@ -45,7 +45,7 @@
 
   <div>
     <h1 class="text-2xl font-semibold">Product Data</h1>
-    <p class="text-gray-500">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+    <p class="text-gray-500 mt-2">Add new product to sell</p>
   </div>
 
   <div class="flex flex-col mx-3 mt-6 lg:flex-row gap-4">
@@ -150,7 +150,7 @@
 
   <div>
     <h1 class="text-2xl font-semibold">Ingredient Data</h1>
-    <p class="text-gray-500">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+    <p class="text-gray-500 mt-2">Add new Ingredients</p>
   </div>
 
   <div class="flex flex-col mx-3 mt-6 lg:flex-row gap-4">

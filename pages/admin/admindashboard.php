@@ -118,6 +118,48 @@
     <?php include '../../charts/barchart.php'?>
     </div>
 </div>
+<div class=" size-full p-8">
+  <h2 class="font-extrabold text-3xl text-primarycol mb-6">Product Trend</h2>
+    <?php include '../../charts/linechart.php'?>
+    <div class="overflow-x-auto">
+  <table class="table mt-2">
+    <!-- head -->
+    <thead>
+      <tr class="bg-primarycol text-white">
+        <th></th>
+        <th>Name</th>
+        <th>Daily</th>
+        <th>Weeks</th>
+        <th>Monthly</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- row 1 -->
+      <tr>
+        <th>1</th>
+        <td>Ensaymada</td>
+        <td>80</td>
+        <td>30</td>
+        <td>21</td>
+      </tr>
+      <!-- row 2 -->
+      <tr>
+        <th>2</th>
+        <td>Pandesal</td>
+        <td>100</td>
+        <td>300</td>
+        <td>800</td>
+      </tr> 
+      <tr>
+        <th>3</th>
+        <td>Muffin</td>
+        <td>40</td>
+        <td>200</td>
+        <td>520</td>
+      </tr> 
+    </tbody>
+  </table>
+</div>
   
 </div>
 

@@ -6,7 +6,7 @@
 <script>
     
     var options = {
-          series: [44, 55, 41, 17, 15],
+          series: [44, 41, 17, 15],
           chart: {
           type: 'donut',
         },

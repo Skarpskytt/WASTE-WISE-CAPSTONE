@@ -33,21 +33,22 @@
              </a>
           </li>
           <li>
+             <a href="../admin/table.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="donate">
+               <path fill="none" stroke="#303c42" stroke-linecap="round" stroke-linejoin="round" d="M22 9C22 6.5 17.5.5 17.5.5S13 6.5 13 9s2 4.5 4.5 4.5S22 11.5 22 9zm-4.5 2.5c-1.4 0-2.5-1.1-2.5-2.5M.5 13.5l4.1.8c.5.1.9.6.8 1.1l-.7 5.2c-.1.5-.5.9-1 .9H.5v-8zm5 2c1-.3 2-.5 3-.5 1.6 0 2.5 1.1 4.5 1.5s3.5.9 3.5 2-1.6 1.6-7 0"></path>
+               <path fill="none" stroke="#303c42" stroke-linecap="round" stroke-linejoin="round" d="M16.5 19c1.5-.5 3-.8 4.5-1 1.2 0 2.5.5 2.5 1.5-1.7.8-7.7 4-10 4s-8.5-3-8.5-3"></path>
+                  </svg>            
+                <span class="flex-1 ms-3 whitespace-nowrap">Food Waste Management</span>
+             </a>
+          </li>
+          <li>
              <a href="../admin/user.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
                 </svg>
                 <span class="flex-1 ms-3 whitespace-nowrap">Users</span>
              </a>
-          </li>
-          <li>
-             <a href="../admin/notification.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                  </svg>
-                <span class="flex-1 ms-3 whitespace-nowrap">Notification</span>
-             </a>
-          </li>
+          </li> 
           <h3> <span class="font-bold">Settings</span></h3>
           
           <li>
@@ -75,10 +76,10 @@
  </aside>
 
  
- 
+
           
   <div class="flex-1">
- 
+  <nav>
    <div class="px-3 py-3 lg:px-5 lg:pl-3">
      <div class="flex items-center justify-between">
        <div class="flex items-center justify-start rtl:justify-end">
@@ -95,8 +96,22 @@
          </a>
        </div>
        <div class="flex items-center">
-           <div class="flex items-center ms-3">
+           <div class="flex items-center ms-3 gap-4">
+            
+           <div class="dropdown dropdown-bottom dropdown-end">
+                  <div tabindex="0" role="button">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-9">
+                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                              </svg>
+                  </div>
+               <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+                  <li><a href="#">Notification 1</a></li>
+                  <li><a href="#">Notification 2</a></li>
+                  <li><a href="#">Notification 3</a></li>
+                  <li><a href="#">Notification 4</a></li>
+               </ul>    </div>
             <div class="dropdown dropdown-end">
+               
                <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
                  <div class="w-10 rounded-full">
                    <img
