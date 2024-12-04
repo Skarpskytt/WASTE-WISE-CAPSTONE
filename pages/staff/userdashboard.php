@@ -1,4 +1,15 @@
-<?php ?>
+<?php
+// staffdashboard.php
+session_start();
+
+// Check if user is logged in and is a staff member
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
+    header('Location: ../auth/login.php');
+    exit();
+}
+
+// ... rest of your staff dashboard code ...
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

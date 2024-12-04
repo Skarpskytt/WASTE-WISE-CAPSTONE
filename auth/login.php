@@ -22,7 +22,7 @@
 <div class="flex h-screen">
   <div class="hidden lg:flex items-center justify-center flex-1 bg-sec text-black">
     <div class="max-w-md text-center">
-     <img src="../assets/images/login.gif" alt="">
+     <img src="../assets/images/login.gif" alt="Login Animation">
     </div>
   </div>
   
@@ -30,21 +30,40 @@
     <div class="max-w-md w-full p-6">
       <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign in</h1>
       <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Welcome to Wastewise: A Food Waste Management System</h1>
-      <div class="mt-4 flex flex-col lg:flex-row items-center justify-between">
-      </div>
-      <div class="mt-4 text-sm text-gray-600 text-center">
-      </div>
-      <form action="#" method="POST" class="space-y-4">
+      
+      <?php
+      session_start();
+      if (isset($_SESSION['error'])) {
+          echo '<div class="mb-4 text-red-500">' . $_SESSION['error'] . '</div>';
+          unset($_SESSION['error']);
+      }
+      if (isset($_SESSION['success'])) {
+          echo '<div class="mb-4 text-green-500">' . $_SESSION['success'] . '</div>';
+          unset($_SESSION['success']);
+      }
+      ?>
+      
+      <form action="save_login.php" method="POST" class="space-y-4">
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-          <input type="text" id="email" name="email" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
+          <input type="email" id="email" name="email" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
         </div>
-        <div>
+        <div class="relative">
           <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-          <input type="password" id="password" name="password" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
+          <input type="password" id="password" name="password" class="mt-1 p-2 pr-10 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+          <span class="absolute inset-y-0 right-3 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" 
+             onmouseover="document.getElementById('password').type='text'" 
+             onmouseout="document.getElementById('password').type='password'">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          </span>
           <a href="#"
-            class="text-xs text-gray-600 hover:text-gray-800 focus:underline">Forgot
-            Password?</a>
+          class="text-xs text-gray-600 hover:text-gray-800 focus:underline">Forgot
+          Password?</a>
         </div>
         <div class="flex items-center">
           <input type="checkbox" id="remember" name="remember" class="h-4 w-4 text-primarycol focus:ring-sec border-gray-300 rounded">

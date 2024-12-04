@@ -1,23 +1,22 @@
 <?php
 // config.php
 
-// Database configuration
-$servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "waste";
+$host = 'localhost';
+$db   = 'wastewise'; // Replace with your database name
+$user = 'root';     // Replace with your database user
+$pass = '';     // Replace with your database password
+$charset = 'utf8mb4';
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+];
 
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+} catch (\PDOException $e) {
+    die('Database connection failed: ' . $e->getMessage());
 }
-
-// Set the charset to utf8mb4 for better Unicode support
-$conn->set_charset("utf8mb4");
-
-// Error reporting for debugging (disable in production)
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 ?>

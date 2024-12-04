@@ -55,7 +55,7 @@
              </a>
           </li>
           <li>
-             <a href="#" class="flex self-edn p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+             <a href="./../../auth/logout.php" class="flex self-edn p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />  
                </svg>
@@ -121,7 +121,7 @@
                    </a>
                  </li>
                  <li><a>Settings</a></li>
-                 <li><a>Logout</a></li>
+                 <li><a href="./../../auth/logout.php">Logout</a></li>
                </ul>
              </div>
              
