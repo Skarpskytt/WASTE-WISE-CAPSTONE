@@ -1,7 +1,7 @@
 <?php
 // save_login.php
 session_start();
-include('../config/config.php');
+include('../config/db_connect.php');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Retrieve and sanitize input data
