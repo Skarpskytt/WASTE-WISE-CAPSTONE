@@ -6,7 +6,7 @@ session_start();
 include('../../config/db_connect.php'); // Ensure the path is correct
 
 // Initialize variables
-$productName = $productPrice = $productType = $productDescription = "";
+$productName = $unitPrice = $productType = $productDescription = "";
 $productImage = "";
 $errors = [];
 
@@ -14,7 +14,7 @@ $errors = [];
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Validate and sanitize inputs
     $productName = htmlspecialchars($_POST['productname']);
-    $productPrice = floatval($_POST['productprice']);
+    $unitPrice = floatval($_POST['unitprice']);
     $productType = htmlspecialchars($_POST['producttype']);
     $productDescription = htmlspecialchars($_POST['description']);
 
@@ -63,7 +63,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt = $pdo->prepare("INSERT INTO products (name, price, type, description, image) VALUES (:name, :price, :type, :description, :image)");
             $stmt->execute([
                 ':name' => $productName,
-                ':price' => $productPrice,
+                ':price' => $unitPrice,
                 ':type' => $productType,
                 ':description' => $productDescription,
                 ':image' => $productImage
@@ -91,7 +91,7 @@ try {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Product Data - Bea Bakes</title>
+  <title>Product Data</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -165,9 +165,9 @@ try {
                 <!-- Product Price -->
                 <div class="flex flex-1">
                   <div class="w-full md:w/full px-3 mb-6">
-                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="productprice">Product Price</label>
+                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="unitprice">Unit Price</label>
                     <input type="number" step="0.01" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
-                    id="productprice" name="productprice" placeholder="Product Price" required />
+                    id="unitprice" name="unitprice" placeholder="Product Price" required />
                 </div>
                 <!-- Product Type -->
                 <div class="w-full md:w/full px-3 mb-6">

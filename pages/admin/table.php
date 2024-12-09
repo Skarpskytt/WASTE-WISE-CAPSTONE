@@ -1,12 +1,38 @@
 <?php
+session_start();
 
+// Check if user is logged in and is an admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header('Location: ../auth/login.php');
+    exit();
+}
+
+// Include the database connection
+include('../../config/db_connect.php'); // Ensure the path is correct
+
+// Fetch inventory data
+try {
+    $stmt = $pdo->query("SELECT * FROM inventory");
+    $inventory = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Error fetching inventory data: " . $e->getMessage());
+}
+
+// Fetch waste data
+try {
+    $stmt = $pdo->query("SELECT waste.*, inventory.name AS inventory_name FROM waste JOIN inventory ON waste.inventory_id = inventory.id");
+    $wasteRecords = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Error fetching waste data: " . $e->getMessage());
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Table</title>
+  <title>Inventory and Waste Data - WasteWise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -40,7 +66,7 @@
 <body class="flex h-screen">
 <?php include '../layout/nav.php'?>
 
-  <div class="p-6">
+  <div class="p-7">
    
     <div class="overflow-x-auto">
       <h2 class="text-2xl font-semibold mb-10">Sales Data</h2>
@@ -179,6 +205,3 @@
 
 </body>
 </html>
-
-
- 
