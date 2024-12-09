@@ -10,29 +10,55 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 // Include the database connection
 include('../../config/db_connect.php'); // Ensure the path is correct
 
-// Fetch inventory data
+// Fetch Sales Data
 try {
-    $stmt = $pdo->query("SELECT * FROM inventory");
-    $inventory = $stmt->fetchAll();
+    $stmt = $pdo->query("
+        SELECT sales.*, products.name AS product_name, products.image 
+        FROM sales 
+        LEFT JOIN products ON sales.product_id = products.id 
+        ORDER BY sales.date DESC
+    ");
+    $salesData = $stmt->fetchAll();
 } catch (PDOException $e) {
-    die("Error fetching inventory data: " . $e->getMessage());
+    die("Error fetching sales data: " . $e->getMessage());
 }
 
-// Fetch waste data
+// Fetch Waste Data
 try {
-    $stmt = $pdo->query("SELECT waste.*, inventory.name AS inventory_name FROM waste JOIN inventory ON waste.inventory_id = inventory.id");
-    $wasteRecords = $stmt->fetchAll();
+    $stmt = $pdo->query("
+        SELECT waste.*, 
+               CASE 
+                   WHEN waste.classification = 'product' THEN products.name 
+                   ELSE inventory.name 
+               END AS item_name,
+               CASE 
+                   WHEN waste.classification = 'product' THEN products.image 
+                   ELSE inventory.image 
+               END AS item_image
+        FROM waste 
+        LEFT JOIN products ON waste.inventory_id = products.id AND waste.classification = 'product'
+        LEFT JOIN inventory ON waste.inventory_id = inventory.id AND waste.classification = 'inventory'
+        ORDER BY waste.waste_date DESC
+    ");
+    $wasteData = $stmt->fetchAll();
 } catch (PDOException $e) {
     die("Error fetching waste data: " . $e->getMessage());
 }
-?>
 
+// Fetch Inventory Data
+try {
+    $stmt = $pdo->query("SELECT * FROM inventory ORDER BY created_at DESC");
+    $inventoryData = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Error fetching inventory data: " . $e->getMessage());
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventory and Waste Data - WasteWise</title>
+  <title>Table</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -66,142 +92,87 @@ try {
 <body class="flex h-screen">
 <?php include '../layout/nav.php'?>
 
-  <div class="p-7">
+  <div class="p-6 overflow-y-auto w-full">
    
-    <div class="overflow-x-auto">
-      <h2 class="text-2xl font-semibold mb-10">Sales Data</h2>
-      <table class="table table-zebra">
-        <!-- head -->
-        <thead>
-          <tr class="bg-sec">
-            <th class="flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-            </svg>
-            </th>
-            <th>Date</th>
-            <th>Product Name</th>
-            <th>Quantity Sold</th>
-            <th>Revenue</th>
-            <th>Inventory Level</th>
-            <th>Staff Member</th>
-            <th>Comments</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- row 1 -->
-          <tr>
-            <td><img src="https://gregoryscoffee.com/cdn/shop/files/chocolate-croissant-gregorys-coffee-538041.jpg?v=1717580418" class="w-8 h-8 mx-auto"></td>
-            <td>2023-10-01</td>
-            <td>Chocolate Croissant</td>
-            <td>50</td>
-            <td>$150.00</td>
-            <td>200</td>
-            <td>John Doe</td>
-            <td>High demand in the morning</td>
-          </tr>
-          <!-- row 2 -->
-          <tr>
-            <td><img src="https://sugarspunrun.com/wp-content/uploads/2021/05/Best-Blueberry-Muffins-Recipe-1-of-1.jpg" class="w-8 h-8 mx-auto"></td>
-            <td>2023-10-01</td>
-            <td>Blueberry Muffin</td>
-            <td>30</td>
-            <td>$90.00</td>
-            <td>300</td>
-            <td>Jane Smith</td>
-            <td>Low stock in the afternoon</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Sales Data Table -->
+    <div class="overflow-x-auto mb-10">
+        <h2 class="text-2xl font-semibold mb-5">Sales Data</h2>
+        <table class="table table-zebra w-full">
+            <thead>
+                <tr class="bg-sec">
+                    <th class="flex justify-center">Image</th>
+                    <th>Date</th>
+                    <th>Product Name</th>
+                    <th>Quantity Sold</th>
+                    <th>Revenue (₱)</th>
+                    <th>Inventory Level</th>
+                    <th>Staff Member</th>
+                    <th>Comments</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($salesData as $sale): ?>
+                    <tr>
+                        <td>
+                            <?php if (!empty($sale['image'])): ?>
+                                <img src="<?php echo htmlspecialchars($sale['image']); ?>" class="w-8 h-8 mx-auto" alt="<?php echo htmlspecialchars($sale['product_name'] ?? 'No Name'); ?>">
+                            <?php else: ?>
+                                <img src="../../assets/default-product.jpg" class="w-8 h-8 mx-auto" alt="No Image Available">
+                            <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($sale['date']); ?></td>
+                        <td><?php echo htmlspecialchars($sale['product_name'] ?? 'No Name'); ?></td>
+                        <td><?php echo htmlspecialchars($sale['quantity_sold']); ?></td>
+                        <td>₱<?php echo htmlspecialchars(number_format($sale['revenue'], 2)); ?></td>
+                        <td><?php echo htmlspecialchars($sale['inventory_level']); ?></td>
+                        <td><?php echo htmlspecialchars($sale['staff_member']); ?></td>
+                        <td><?php echo htmlspecialchars($sale['comments'] ?? 'N/A'); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
     </div>
 
-    <div class="overflow-x-auto mt-3">
-      <h2 class="text-2xl font-semibold mb-10">Waste Data</h2>
-      <table class="table table-zebra">
-        <!-- head -->
-        <thead>
-          <tr class="bg-sec">
-            <th class="flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-            </svg>
-            </th>
-            <th>Date</th>
-            <th>Product Name</th>
-            <th>Waste Ranking</th>
-            <th>Quantity Wasted</th>
-            <th>Waste Value</th>
-            <th>Staff Member</th>
-            <th>Comments</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- row 1 -->
-          <tr>
-            <td><img src="https://gregoryscoffee.com/cdn/shop/files/chocolate-croissant-gregorys-coffee-538041.jpg?v=1717580418" class="w-8 h-8 mx-auto"></td>
-            <td>2023-10-01</td>
-            <td>Chocolate Croissant</td>
-            <td>5</td>
-            <td>50</td>
-            <td>₱400.00</td>
-            <td>John Doe</td>
-            <td>High demand in the morning</td>
-          </tr>
-          <!-- row 2 -->
-          <tr>
-            <td><img src="https://sugarspunrun.com/wp-content/uploads/2021/05/Best-Blueberry-Muffins-Recipe-1-of-1.jpg" class="w-8 h-8 mx-auto"></td>
-            <td>2023-10-01</td>
-            <td>Blueberry Muffin</td>
-            <td>1</td>
-            <td>30</td>
-            <td>₱300.00</td>
-            <td>Jane Smith</td>
-            <td>More sells on winter</td>
-          </tr>
-        </tbody>
-      </table>
-    <div class="overflow-x-auto">
-      <h2 class="text-2xl font-semibold mb-10">Inventory Data</h2>
-      <table class="table table-zebra">
-        <!-- head -->
-        <thead>
-          <tr class="bg-sec">
-            <th class="flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-            </svg>
-            </th>
-            <th>Date</th>
-            <th>Product Name</th>
-            <th>Price</th>
-            <th>Inventory Level</th>
-            <th>Staff Member</th>
-            <th>Comments</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- row 1 -->
-          <tr>
-            <td><img src="https://hips.hearstapps.com/hmg-prod/images/active-dry-baking-yeast-granules-in-wooden-spoon-royalty-free-image-1697143125.jpg" class="w-8 h-8 mx-auto"></td>
-            <td>2023-10-01</td>
-            <td>Yeast</td>
-            <td>₱1,000</td>
-            <td>15 grams</td>
-            <td>John Doe</td>
-            <td>More use when morning</td>
-          </tr>
-          <!-- row 2 -->
-          <tr>
-            <td><img src="https://bakerpedia.com/wp-content/uploads/2019/08/Flour_baking-ingredients-e1565912286151.jpg" class="w-8 h-8 mx-auto"></td>
-            <td>2023-10-01</td>
-            <td>Flour</td>
-            <td>₱3,000.00</td>
-            <td>20 kilograms</td>
-            <td>Jane Smith</td>
-            <td>Expiring in 7 days</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Waste Data Table -->
+    <div class="overflow-x-auto mb-10">
+        <h2 class="text-2xl font-semibold mb-5">Waste Data</h2>
+        <table class="table table-zebra w-full">
+            <thead>
+                <tr class="bg-sec">
+                    <th class="flex justify-center">Image</th>
+                    <th>Date</th>
+                    <th>Item Name</th>
+                    <th>Waste Quantity</th>
+                    <th>Waste Value (₱)</th>
+                    <th>Waste Reason</th>
+                    <th>Classification</th>
+                    <th>Responsible Person</th>
+                    <th>Comments</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($wasteData as $waste): ?>
+                    <tr>
+                        <td>
+                            <?php if (!empty($waste['item_image'])): ?>
+                                <img src="<?php echo htmlspecialchars($waste['item_image']); ?>" class="w-8 h-8 mx-auto" alt="<?php echo htmlspecialchars($waste['item_name'] ?? 'No Name'); ?>">
+                            <?php else: ?>
+                                <img src="../../assets/default-product.jpg" class="w-8 h-8 mx-auto" alt="No Image Available">
+                            <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($waste['waste_date']); ?></td>
+                        <td><?php echo htmlspecialchars($waste['item_name'] ?? 'No Name'); ?></td>
+                        <td><?php echo htmlspecialchars($waste['waste_quantity']); ?></td>
+                        <td>₱<?php echo htmlspecialchars(number_format($waste['waste_value'], 2)); ?></td>
+                        <td><?php echo ucfirst(htmlspecialchars($waste['waste_reason'])); ?></td>
+                        <td><?php echo ucfirst(htmlspecialchars($waste['classification'])); ?></td>
+                        <td><?php echo htmlspecialchars($waste['responsible_person']); ?></td>
+                        <td><?php echo htmlspecialchars($waste['comments'] ?? 'N/A'); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
     </div>
-
   </div>
-
 </body>
 </html>

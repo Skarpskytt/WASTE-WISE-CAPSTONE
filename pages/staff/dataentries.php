@@ -1,4 +1,23 @@
-<?php ?>
+<?php
+session_start();
+
+// Check if user is logged in and is a staff member
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
+    header('Location: ../auth/login.php');
+    exit();
+}
+
+// Include the database connection
+include('../../config/db_connect.php'); // Adjust the path as needed
+
+// Fetch product data
+try {
+    $stmt = $pdo->query("SELECT * FROM products ORDER BY created_at DESC");
+    $products = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Error retrieving products: " . $e->getMessage());
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,86 +58,152 @@
 
 <?php include ('../layout/sidebaruser.php' ) ?> 
 
-<div class="grid grid-cols-3 size-auto p-7">
-<div>
-<h3 class="text-xl font-semibold mb-4">Sales Input</h3>
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <form id="salesEntryForm">
-        <div class="mb-4">
-          <label for="salesDate" class="block text-sm font-medium text-gray-700">Date</label>
-          <input type="date" id="salesDate" name="salesDate" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="productName" class="block text-sm font-medium text-gray-700">Product Name</label>
-          <input type="text" id="productName" name="productName" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="quantitySold" class="block text-sm font-medium text-gray-700">Quantity Sold</label>
-          <input type="number" id="quantitySold" name="quantitySold" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="revenue" class="block text-sm font-medium text-gray-700">Revenue</label>
-          <input type="number" id="revenue" name="revenue" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <button type="submit" class="bg-blue-500 text-white p-2 rounded-md">Submit</button>
-      </form>
+<!-- Main Content -->
+<div class="p-6 overflow-y-auto w-full">
+
+    <!-- Notification Container -->
+    <div id="notification"></div>
+
+    <h2 class="text-2xl font-semibold mb-5">Sales Data Entry</h2>
+
+    <!-- Product Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+        <?php foreach ($products as $product): ?>
+            <div class="bg-white shadow-md rounded-lg p-3 card">
+                <!-- Product Details -->
+                <img src="'../../pages/admin/uploads/'<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="h-32 w-full object-cover rounded-md">
+                <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($product['name']); ?></h2>
+                <p class="text-gray-600">Price: ₱<?php echo htmlspecialchars(number_format($product['price'], 2)); ?></p>
+
+                <!-- Sales Input Form -->
+                <form class="sales-form mt-3">
+                    <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($product['id']); ?>">
+
+                    <!-- Date -->
+                    <div class="mb-2">
+                        <label for="date_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Date</label>
+                        <input type="date" name="date" id="date_<?php echo $product['id']; ?>" required
+                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none">
+                    </div>
+
+                    <!-- Quantity Sold -->
+                    <div class="mb-2">
+                        <label for="quantity_sold_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Quantity Sold</label>
+                        <input type="number" name="quantity_sold" id="quantity_sold_<?php echo $product['id']; ?>" min="0" step="1" required
+                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none">
+                    </div>
+
+                    <!-- Revenue -->
+                    <div class="mb-2">
+                        <label for="revenue_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Revenue</label>
+                        <input type="number" name="revenue" id="revenue_<?php echo $product['id']; ?>" min="0" step="0.01" required
+                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none">
+                    </div>
+
+                    <!-- Inventory Level -->
+                    <div class="mb-2">
+                        <label for="inventory_level_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Inventory Level</label>
+                        <input type="number" name="inventory_level" id="inventory_level_<?php echo $product['id']; ?>" min="0" step="1" required
+                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none">
+                    </div>
+
+                    <!-- Staff Member -->
+                    <div class="mb-2">
+                        <label for="staff_member_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Staff Member</label>
+                        <input type="text" name="staff_member" id="staff_member_<?php echo $product['id']; ?>" required
+                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none">
+                    </div>
+
+                    <!-- Comments -->
+                    <div class="mb-2">
+                        <label for="comments_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Comments</label>
+                        <textarea name="comments" id="comments_<?php echo $product['id']; ?>" rows="2"
+                                  class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none"></textarea>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="w-full bg-green-600 text-white py-1.5 px-3 rounded hover:bg-green-700">Submit Sales Data</button>
+                </form>
+            </div>
+        <?php endforeach; ?>
     </div>
 </div>
-<div>
-<h3 class="text-xl font-semibold mb-4">Waste Input</h3>
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <form id="wasteEntryForm">
-        <div class="mb-4">
-          <label for="wasteDate" class="block text-sm font-medium text-gray-700">Date</label>
-          <input type="date" id="wasteDate" name="wasteDate" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="wasteProductName" class="block text-sm font-medium text-gray-700">Product Name</label>
-          <input type="text" id="wasteProductName" name="wasteProductName" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="quantityWasted" class="block text-sm font-medium text-gray-700">Quantity Wasted</label>
-          <input type="number" id="quantityWasted" name="quantityWasted" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="wasteReason" class="block text-sm font-medium text-gray-700">Reason for Waste</label>
-          <input type="text" id="wasteReason" name="wasteReason" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <button type="submit" class="bg-red-500 text-white p-2 rounded-md">Submit</button>
-      </form>
-    </div>
-</div>
-<div>
-<h3 class="text-xl font-semibold mb-4">Inventory Management</h3>
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <form id="inventoryUpdateForm">
-        <div class="mb-4">
-          <label for="ingredientName" class="block text-sm font-medium text-gray-700">Ingredient Name</label>
-          <input type="text" id="ingredientName" name="ingredientName" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="quantityUsed" class="block text-sm font-medium text-gray-700">Quantity Used</label>
-          <input type="number" id="quantityUsed" name="quantityUsed" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="quantityRemaining" class="block text-sm font-medium text-gray-700">Quantity Remaining</label>
-          <input type="number" id="quantityRemaining" name="quantityRemaining" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <div class="mb-4">
-          <label for="expirationDate" class="block text-sm font-medium text-gray-700">Expiration Date</label>
-          <input type="date" id="expirationDate" name="expirationDate" class="mt-1 p-2 w-full border rounded-md" required>
-        </div>
-        <button type="submit" class="bg-green-500 text-white p-2 rounded-md">Update</button>
-      </form>
-    </div>
 
-</div>
-</div>
+<!-- Include your scripts -->
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
 
+<!-- Custom Script -->
+<script>
+    $(document).ready(function() {
+        // Handle AJAX form submission
+        $('.sales-form').on('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
 
+            let form = $(this);
+            let formData = form.serialize();
 
+            $.ajax({
+                type: 'POST',
+                url: 'process_sales.php',
+                data: formData,
+                dataType: 'json',
+                success: function(response) {
+                    console.log(response); // For debugging
+
+                    if (response.success) {
+                        // Display success notification
+                        showNotification(response.message, true);
+
+                        // Optionally, clear the form fields
+                        form[0].reset();
+                    } else {
+                        // Display error notification
+                        showNotification(response.message, false);
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('AJAX Error:', textStatus, errorThrown);
+                    showNotification('An unexpected error occurred.', false);
+                }
+            });
+        });
+
+        // Notification Function
+        function showNotification(message, isSuccess) {
+            let notification = $('#notification');
+            notification.removeClass('bg-green-500 bg-red-500');
+
+            if (isSuccess) {
+                notification.addClass('bg-green-500');
+            } else {
+                notification.addClass('bg-red-500');
+            }
+
+            notification.text(message).fadeIn();
+
+            setTimeout(function() {
+                notification.fadeOut();
+            }, 3000); // Hide after 3 seconds
+        }
+    });
+</script>
+
+<style>
+    /* Notification Styles */
+    #notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 10px 20px;
+        border-radius: 5px;
+        color: white;
+        display: none;
+        z-index: 1000;
+    }
+</style>
 
 </body> 
 </html>
-
-

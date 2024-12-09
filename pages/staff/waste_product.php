@@ -1,9 +1,8 @@
 <?php
-// waste_input.php
 session_start();
 
-// Check if user is logged in and is an admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+// Check if user is logged in and is a staff member
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
     header('Location: ../auth/login.php');
     exit();
 }
@@ -11,12 +10,26 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 // Include the database connection
 include('../../config/db_connect.php');
 
-// Fetch inventory items
+// Fetch product data
 try {
-    $stmt = $pdo->query("SELECT * FROM inventory ORDER BY created_at DESC");
-    $inventory = $stmt->fetchAll();
+    $stmt = $pdo->query("SELECT * FROM products ORDER BY created_at DESC");
+    $products = $stmt->fetchAll();
 } catch (PDOException $e) {
-    die("Error retrieving inventory: " . $e->getMessage());
+    die("Error retrieving products: " . $e->getMessage());
+}
+
+// Fetch waste data for products
+try {
+    $stmt = $pdo->query("
+        SELECT waste.*, products.name AS product_name, products.image 
+        FROM waste 
+        LEFT JOIN products ON waste.inventory_id = products.id 
+        WHERE waste.classification = 'product'
+        ORDER BY waste.waste_date DESC
+    ");
+    $wasteData = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Error fetching waste data: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -24,7 +37,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waste Input - WasteWise</title>
+    <title>Waste Product - WasteWise</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -123,44 +136,44 @@ try {
 
 <body class="flex min-h-screen">
 
-<?php include '../layout/nav.php' ?>
+<?php include '../layout/sidebaruser.php' ?>
 
 <div class="p-5 flex-grow">
     <div>
-        <h1 class="text-2xl font-semibold">Waste Input</h1>
-        <p class="text-gray-500 mt-2">Manage waste entries</p>
+        <h1 class="text-2xl font-semibold">Waste Product</h1>
+        <p class="text-gray-500 mt-2">Manage waste entries for products</p>
     </div>
 
     <!-- Notification Container -->
     <div id="notification"></div>
 
-    <!-- Inventory Cards -->
+    <!-- Product Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-        <?php foreach ($inventory as $item): ?>
+        <?php foreach ($products as $product): ?>
             <div class="bg-white shadow-md rounded-lg p-3 card">
-                <img src="<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" class="h-32 w-full object-cover rounded-md">
-                <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($item['name']); ?></h2>
-                <p class="text-gray-600">Quantity: <?php echo htmlspecialchars($item['quantity']); ?> <?php echo htmlspecialchars($item['unit']); ?></p>
+                <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="h-32 w-full object-cover rounded-md">
+                <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($product['name']); ?></h2>
+                <p class="text-gray-600">Price: ₱<?php echo htmlspecialchars(number_format($product['price'], 2)); ?></p>
                 
                 <!-- Waste Input Form -->
                 <form class="waste-form mt-3">
-                    <input type="hidden" name="item_id" value="<?php echo htmlspecialchars($item['id']); ?>">
+                    <input type="hidden" name="item_id" value="<?php echo htmlspecialchars($product['id']); ?>">
 
                     <div class="mb-2">
-                        <label for="waste_quantity_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Quantity</label>
-                        <input type="number" name="waste_quantity" id="waste_quantity_<?php echo $item['id']; ?>" min="0" step="any" required
+                        <label for="waste_quantity_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Quantity</label>
+                        <input type="number" name="waste_quantity" id="waste_quantity_<?php echo $product['id']; ?>" min="0" step="any" required
                                class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                     </div>
 
                     <div class="mb-2">
-                        <label for="waste_value_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Value</label>
-                        <input type="text" name="waste_value" id="waste_value_<?php echo $item['id']; ?>" required
+                        <label for="waste_value_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Value</label>
+                        <input type="text" name="waste_value" id="waste_value_<?php echo $product['id']; ?>" required
                                class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                     </div>
 
                     <div class="mb-2">
-                        <label for="waste_reason_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Reason</label>
-                        <select name="waste_reason" id="waste_reason_<?php echo $item['id']; ?>" required
+                        <label for="waste_reason_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Reason</label>
+                        <select name="waste_reason" id="waste_reason_<?php echo $product['id']; ?>" required
                                 class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                             <option value="">Select Reason</option>
                             <option value="overproduction">Overproduction</option>
@@ -172,25 +185,17 @@ try {
                     </div>
 
                     <!-- Classification -->
-                    <div class="mb-2">
-                        <label for="classification_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Classification</label>
-                        <select name="classification" id="classification_<?php echo $item['id']; ?>" required
-                                class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
-                            <option value="">Select Classification</option>
-                            <option value="product">Product</option>
-                            <option value="inventory">Inventory</option>
-                        </select>
-                    </div>
+                    <input type="hidden" name="classification" value="product">
 
                     <div class="mb-2">
-                        <label for="waste_date_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Date</label>
-                        <input type="date" name="waste_date" id="waste_date_<?php echo $item['id']; ?>" required
+                        <label for="waste_date_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Date</label>
+                        <input type="date" name="waste_date" id="waste_date_<?php echo $product['id']; ?>" required
                                class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                     </div>
 
                     <div class="mb-2">
-                        <label for="responsible_person_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Responsible Person</label>
-                        <input type="text" name="responsible_person" id="responsible_person_<?php echo $item['id']; ?>" required
+                        <label for="responsible_person_<?php echo $product['id']; ?>" class="block text-sm font-medium text-gray-700">Responsible Person</label>
+                        <input type="text" name="responsible_person" id="responsible_person_<?php echo $product['id']; ?>" required
                                class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                     </div>
 
@@ -199,6 +204,7 @@ try {
             </div>
         <?php endforeach; ?>
     </div>
-</div>
+
 </body>
+
 </html>
