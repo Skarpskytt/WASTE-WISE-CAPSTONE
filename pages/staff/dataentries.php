@@ -71,7 +71,7 @@ try {
         <?php foreach ($products as $product): ?>
             <div class="bg-white shadow-md rounded-lg p-3 card">
                 <!-- Product Details -->
-                <img src="'../../pages/admin/uploads/'<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="h-32 w-full object-cover rounded-md">
+                <img src="'../admin/uploads/'<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="h-32 w-full object-cover rounded-md">
                 <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($product['name']); ?></h2>
                 <p class="text-gray-600">Price: ₱<?php echo htmlspecialchars(number_format($product['price'], 2)); ?></p>
 

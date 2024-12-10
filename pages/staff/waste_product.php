@@ -10,10 +10,15 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
 // Include the database connection
 include('../../config/db_connect.php');
 
-// Fetch product data
+// Fetch product data along with inventory level from the sales table
 try {
-    $stmt = $pdo->query("SELECT * FROM products ORDER BY created_at DESC");
-    $products = $stmt->fetchAll();
+    $stmt = $pdo->query("
+        SELECT products.*, sales.inventory_level
+        FROM products
+        LEFT JOIN sales ON products.id = sales.product_id
+        ORDER BY products.created_at DESC
+    ");
+    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error retrieving products: " . $e->getMessage());
 }
@@ -27,7 +32,7 @@ try {
         WHERE waste.classification = 'product'
         ORDER BY waste.waste_date DESC
     ");
-    $wasteData = $stmt->fetchAll();
+    $wasteData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error fetching waste data: " . $e->getMessage());
 }
@@ -154,6 +159,7 @@ try {
                 <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="h-32 w-full object-cover rounded-md">
                 <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($product['name']); ?></h2>
                 <p class="text-gray-600">Price: ₱<?php echo htmlspecialchars(number_format($product['price'], 2)); ?></p>
+                <p class="text-gray-600">Inventory Level: <?php echo htmlspecialchars($product['inventory_level']); ?></p>
                 
                 <!-- Waste Input Form -->
                 <form class="waste-form mt-3">
@@ -204,7 +210,6 @@ try {
             </div>
         <?php endforeach; ?>
     </div>
-
+</div>
 </body>
-
 </html>
