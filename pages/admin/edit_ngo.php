@@ -5,7 +5,7 @@ include('../../config/db_connect.php');
 $id = $_GET['id'] ?? null;
 
 if (!$id) {
-    header('Location: foodwaste.php');
+    header('Location: ngo.php');
     exit();
 }
 
@@ -15,7 +15,7 @@ $stmt->execute([$id]);
 $ngo = $stmt->fetch();
 
 if (!$ngo) {
-    header('Location: foodwaste.php');
+    header('Location: ngo.php');
     exit();
 }
 
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = $pdo->prepare("UPDATE ngos SET name = ?, contact_email = ?, contact_phone = ?, address = ?, category = ?, operating_hours = ?, capacity = ? WHERE id = ?");
     $stmt->execute([$name, $contact_email, $contact_phone, $address, $category, $operating_hours, $capacity, $id]);
 
-    header('Location: foodwaste.php');
+    header('Location: ngo.php');
     exit();
 }
 ?>

@@ -7,6 +7,6 @@ if ($id) {
     $stmt->execute([$id]);
 }
 
-header('Location: foodwaste.php');
+header('Location: ngo.php');
 exit();
 ?>

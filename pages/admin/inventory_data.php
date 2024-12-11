@@ -22,6 +22,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $itemQuantity = floatval($_POST['itemquantity']);
     $unit = htmlspecialchars(trim($_POST['unit']));
     $location = htmlspecialchars(trim($_POST['itemlocation']));
+    $pricePerUnit = floatval($_POST['price_per_unit']);
 
     // Validate Stock Date
     if (!DateTime::createFromFormat('Y-m-d', $stockDate)) {
@@ -76,7 +77,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // If no errors, insert into database using PDO
     if (empty($errors)) {
         try {
-            $stmt = $pdo->prepare("INSERT INTO inventory (name, category, quantity, unit, location, stock_date, image) VALUES (:name, :category, :quantity, :unit, :location, :stock_date, :image)");
+            $stmt = $pdo->prepare("INSERT INTO inventory (name, category, quantity, unit, location, stock_date, image, price_per_unit) VALUES (:name, :category, :quantity, :unit, :location, :stock_date, :image, :price_per_unit)");
             $stmt->execute([
                 ':name' => $itemName,
                 ':category' => $category,
@@ -84,7 +85,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ':unit' => $unit,
                 ':location' => $location,
                 ':stock_date' => $stockDate,
-                ':image' => $itemImage
+                ':image' => $itemImage,
+                ':price_per_unit' => $pricePerUnit
             ]);
             $_SESSION['success'] = "Inventory item added successfully.";
             header("Location: inventory_data.php");
@@ -222,8 +224,12 @@ try {
                     <input type="text" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
                      id="itemlocation" name="itemlocation" placeholder="Location" required />
                 </div>
-                <!-- Waste Quantity -->
-                
+                <!-- Price per Unit -->
+                <div class="w-full md:w-full px-3 mb-6">
+                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price_per_unit">Price per Unit</label>
+                    <input type="number" step="0.01" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                    id="price_per_unit" name="price_per_unit" placeholder="Price per Unit" required />
+                </div>
             </div>
             
             <!-- Add Inventory Button -->

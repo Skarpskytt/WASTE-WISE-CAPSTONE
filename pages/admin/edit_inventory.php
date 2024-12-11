@@ -37,6 +37,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $itemQuantity = floatval($_POST['itemquantity']);
     $unit = htmlspecialchars(trim($_POST['unit']));
     $location = htmlspecialchars(trim($_POST['itemlocation']));
+    $pricePerUnit = floatval($_POST['price_per_unit']);
 
     // Handle image upload (optional)
     if (isset($_FILES['item_image']) && $_FILES['item_image']['error'] == 0) {
@@ -98,25 +99,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $errors[] = "Error: Invalid unit selected.";
     }
 
+    // After handling inputs and image upload, update the inventory including 'price_per_unit'
     if (empty($errors)) {
-        // Update inventory in the database
         try {
-            $stmt = $pdo->prepare("UPDATE inventory SET name = :name, category = :category, stock_date = :stock_date, quantity = :quantity, unit = :unit, location = :location, image = :image WHERE id = :id");
-            $stmt->execute([
-                ':name' => $itemName,
-                ':category' => $category,
-                ':stock_date' => $stockDate,
-                ':quantity' => $itemQuantity,
-                ':unit' => $unit,
-                ':location' => $location,
-                ':image' => $imagePath,
-                ':id' => $inventory_id
-            ]);
+            if (isset($imagePath)) {
+                $stmt = $pdo->prepare("UPDATE inventory SET name = ?, category = ?, stock_date = ?, quantity = ?, unit = ?, location = ?, image = ?, price_per_unit = ? WHERE id = ?");
+                $stmt->execute([$itemName, $category, $stockDate, $itemQuantity, $unit, $location, $imagePath, $pricePerUnit, $inventory_id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE inventory SET name = ?, category = ?, stock_date = ?, quantity = ?, unit = ?, location = ?, price_per_unit = ? WHERE id = ?");
+                $stmt->execute([$itemName, $category, $stockDate, $itemQuantity, $unit, $location, $pricePerUnit, $inventory_id]);
+            }
             $_SESSION['success'] = "Inventory item updated successfully.";
             header("Location: inventory_data.php");
             exit();
         } catch (PDOException $e) {
-            $errors[] = "Error: Could not update the inventory item. " . $e->getMessage();
+            $errors[] = "Error updating inventory: " . $e->getMessage();
         }
     }
 }
@@ -193,31 +190,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <form class="w-full bg-white shadow-xl p-6 border" action="edit_inventory.php?id=<?php echo htmlspecialchars($inventory_id); ?>" method="POST" enctype="multipart/form-data">
             <div class="flex flex-wrap -mx-3 mb-6">
                 <!-- Item Name -->
-                <div class="w-full md:w-full px-3 mb-6">
+                <div class="w-full md:w/full px-3 mb-6">
                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemname">Item Name</label>
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-primarycol" 
                     id="itemname" type="text" name="itemname" placeholder="Item Name" value="<?php echo htmlspecialchars($inventory['name']); ?>" required />
                 </div>
                 <!-- Category -->
-                <div class="w-full md:w-full px-3 mb-6">
+                <div class="w-full md:w/full px-3 mb-6">
                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="category">Category</label>
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-primarycol" 
                     id="category" type="text" name="category" placeholder="Category" value="<?php echo htmlspecialchars($inventory['category']); ?>" required />
                 </div>
                 <!-- Stock Date -->
-                <div class="w-full md:w-full px-3 mb-6">
+                <div class="w-full md:w/full px-3 mb-6">
                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">Stock Date</label>
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-primarycol" 
                     id="stockdate" type="date" name="stockdate" value="<?php echo htmlspecialchars($inventory['stock_date']); ?>" required />
                 </div>
                 <!-- Quantity -->
-                <div class="w-full md:w-full px-3 mb-6">
+                <div class="w-full md:w/full px-3 mb-6">
                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemquantity">Quantity</label>
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-primarycol" 
                     id="itemquantity" type="number" step="0.01" name="itemquantity" placeholder="Quantity" value="<?php echo htmlspecialchars($inventory['quantity']); ?>" required />
                 </div>
                 <!-- Unit -->
-                <div class="w-full md:w-full px-3 mb-6">
+                <div class="w-full md:w/full px-3 mb-6">
                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="unit">Unit</label>
                     <select class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-primarycol" 
                     id="unit" name="unit" required>
@@ -229,8 +226,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <option value="pieces" <?php if($inventory['unit'] == 'pieces') echo 'selected'; ?>>Pieces</option>
                     </select>
                 </div>
+                <!-- Price per Unit -->
+                <div class="w-full md:w/full px-3 mb-6">
+                    <label for="price_per_unit" class="block text-sm font-bold mb-2">Price per Unit</label>
+                    <input type="number" step="0.01" id="price_per_unit" name="price_per_unit" value="<?= htmlspecialchars($inventory['price_per_unit']) ?>" required class="...">
+                </div>
                 <!-- Location -->
-                <div class="w-full md:w-full px-3 mb-6">
+                <div class="w-full md:w/full px-3 mb-6">
                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemlocation">Location</label>
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-primarycol" 
                     id="itemlocation" type="text" name="itemlocation" placeholder="Location" value="<?php echo htmlspecialchars($inventory['location']); ?>" required />
@@ -238,7 +240,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             
             <!-- Update Inventory Button -->
-            <div class="w-full md:w-full px-3 mb-6">
+            <div class="w-full md:w/full px-3 mb-6">
                 <button type="submit" class="appearance-none block w-full bg-yellow-500 text-gray-100 font-bold border border-gray-200 rounded-lg py-3 px-3 leading-tight 
                 hover:bg-yellow-600 focus:outline-none focus:bg-white focus:border-gray-500">Update Inventory</button>
             </div>
