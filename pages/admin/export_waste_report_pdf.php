@@ -16,8 +16,7 @@ try {
             waste.waste_quantity,
             waste.waste_value,
             waste.waste_reason,
-            waste.responsible_person,
-            waste.comments
+            waste.responsible_person
         FROM 
             waste
         LEFT JOIN 
@@ -46,13 +45,23 @@ $pdf->Ln(10);
 $pdf->SetFont('Arial', 'B', 12);
 $pdf->SetFillColor(22, 70, 34); // Matches 'primarycol' #47663B
 $pdf->SetTextColor(255, 255, 255);
-$pdf->Cell(10, 10, '#', 1, 0, 'C', true);
-$pdf->Cell(30, 10, 'Waste Date', 1, 0, 'C', true);
-$pdf->Cell(40, 10, 'Item Name', 1, 0, 'C', true);
-$pdf->Cell(30, 10, 'Quantity', 1, 0, 'C', true);
-$pdf->Cell(30, 10, 'Value (₱)', 1, 0, 'C', true);
-$pdf->Cell(30, 10, 'Reason', 1, 0, 'C', true);
-$pdf->Cell(30, 10, 'Responsible', 1, 1, 'C', true);
+
+// Define the table headers
+$headers = [
+    ['width' => 10, 'title' => '#'],
+    ['width' => 30, 'title' => 'Waste Date'],
+    ['width' => 40, 'title' => 'Item Name'],
+    ['width' => 30, 'title' => 'Quantity'],
+    ['width' => 30, 'title' => 'Value (₱)'],
+    ['width' => 30, 'title' => 'Reason'],
+    ['width' => 30, 'title' => 'Responsible'],
+];
+
+// Output the table headers
+foreach ($headers as $header) {
+    $pdf->Cell($header['width'], 10, $header['title'], 1, 0, 'C', true);
+}
+$pdf->Ln();
 
 // Table Body
 $pdf->SetFont('Arial', '', 12);

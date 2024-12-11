@@ -14,8 +14,7 @@ try {
             waste.waste_quantity,
             waste.waste_value,
             waste.waste_reason,
-            waste.responsible_person,
-            waste.comments
+            waste.responsible_person
         FROM 
             waste
         LEFT JOIN 
@@ -42,10 +41,9 @@ fputcsv($output, [
     'Waste Date',
     'Item Name',
     'Waste Quantity',
-    'Waste Value',
+    'Waste Value (₱)',
     'Waste Reason',
     'Responsible Person',
-    'Comments'
 ]);
 
 // Output the data
@@ -54,11 +52,10 @@ foreach ($wasteData as $row) {
         $row['id'],
         $row['waste_date'],
         $row['item_name'],
-        $row['waste_quantity'],
-        $row['waste_value'],
-        $row['waste_reason'],
+        number_format($row['waste_quantity'], 2),
+        number_format($row['waste_value'], 2),
+        ucfirst($row['waste_reason']),
         $row['responsible_person'],
-        $row['comments']
     ]);
 }
 

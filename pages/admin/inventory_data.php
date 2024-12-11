@@ -271,6 +271,7 @@ try {
               <th>Unit</th>
               <th>Location</th>
               <th>Stock Date</th>
+              <th>Price per Unit</th> <!-- New Column Added -->
               <th class="text-center">Action</th>
             </tr>
           </thead>
@@ -288,6 +289,7 @@ try {
                       echo "<td>" . htmlspecialchars($item['unit']) . "</td>";
                       echo "<td>" . htmlspecialchars($item['location']) . "</td>";
                       echo "<td>" . htmlspecialchars($item['stock_date']) . "</td>";
+                      echo "<td>" . htmlspecialchars($item['price_per_unit']) . "</td>"; // New Column Data
                       echo "<td class='p-2'>
                               <div class='flex justify-center space-x-2'>
                                   <a href='edit_inventory.php?id=" . urlencode($item['id']) . "' class='rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
@@ -309,7 +311,7 @@ try {
                       echo "</tr>";
                   }
               } else {
-                  echo "<tr><td colspan='9' class='text-center'>No inventory items found.</td></tr>";
+                  echo "<tr><td colspan='10' class='text-center'>No inventory items found.</td></tr>";
               }
             ?>
           </tbody>

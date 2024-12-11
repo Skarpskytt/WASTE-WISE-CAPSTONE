@@ -26,11 +26,10 @@ $query = "
         waste.waste_date,
         inventory.name AS item_name,
         inventory.quantity,
-        IFNULL(SUM(waste.waste_quantity), 0) AS total_waste,
+        waste.waste_quantity AS total_waste,
         waste.waste_value,
         waste.waste_reason,
         waste.responsible_person,
-        waste.comments,
         inventory.image
     FROM 
         waste
@@ -47,55 +46,46 @@ if ($startDate && $endDate) {
     $params[':end_date'] = $endDate;
 }
 
-$query .= " GROUP BY 
-            waste.id, inventory.name, inventory.quantity, waste.waste_date, waste.waste_value, waste.waste_reason, waste.responsible_person, waste.comments, inventory.image
-        ORDER BY 
-            waste.waste_date DESC
-        LIMIT :limit OFFSET :offset";
+// Group by waste.id if necessary
+$query .= " ORDER BY waste.waste_date DESC LIMIT :limit OFFSET :offset";
 
-$params[':limit'] = $limit;
-$params[':offset'] = $offset;
+$stmt = $pdo->prepare($query);
 
-try {
-    $stmt = $pdo->prepare($query);
-    // Bind parameters
-    foreach ($params as $key => &$val) {
-        if ($key === ':limit' || $key === ':offset') {
-            $stmt->bindParam($key, $val, PDO::PARAM_INT);
-        } else {
-            $stmt->bindParam($key, $val);
-        }
-    }
-    $stmt->execute();
-    $wasteData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Fetch total records for pagination
-    $countQuery = "
-        SELECT COUNT(*) FROM (
-            SELECT waste.id
-            FROM waste
-            LEFT JOIN inventory ON waste.inventory_id = inventory.id
-            WHERE 1=1
-    ";
-    if ($startDate && $endDate) {
-        $countQuery .= " AND waste.waste_date BETWEEN :start_date AND :end_date";
-    }
-    $countQuery .= "
-        GROUP BY waste.id
-    ) AS subquery
-    ";
-
-    $countStmt = $pdo->prepare($countQuery);
-    if ($startDate && $endDate) {
-        $countStmt->bindParam(':start_date', $startDate);
-        $countStmt->bindParam(':end_date', $endDate);
-    }
-    $countStmt->execute();
-    $totalRecords = $countStmt->rowCount();
-    $totalPages = ceil($totalRecords / $limit);
-} catch (PDOException $e) {
-    die("Error fetching waste data: " . $e->getMessage());
+// Bind parameters
+if ($startDate && $endDate) {
+    $stmt->bindParam(':start_date', $params[':start_date']);
+    $stmt->bindParam(':end_date', $params[':end_date']);
 }
+$stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+$stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+
+$stmt->execute();
+$wasteData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch total records for pagination
+$countQuery = "
+    SELECT COUNT(*) FROM (
+        SELECT waste.id
+        FROM waste
+        LEFT JOIN inventory ON waste.inventory_id = inventory.id
+        WHERE 1=1
+";
+if ($startDate && $endDate) {
+    $countQuery .= " AND waste.waste_date BETWEEN :start_date AND :end_date";
+}
+$countQuery .= "
+    GROUP BY waste.id
+) AS subquery
+";
+
+$countStmt = $pdo->prepare($countQuery);
+if ($startDate && $endDate) {
+    $countStmt->bindParam(':start_date', $startDate);
+    $countStmt->bindParam(':end_date', $endDate);
+}
+$countStmt->execute();
+$totalRecords = $countStmt->rowCount();
+$totalPages = ceil($totalRecords / $limit);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -191,7 +181,6 @@ try {
                     <th>Waste Value</th>
                     <th>Waste Reason</th>
                     <th>Responsible Person</th>
-                    <th>Comments</th>
                     <th class="text-center">Action</th>
                 </tr>
             </thead>
@@ -214,7 +203,6 @@ try {
                             <td>₱<?= htmlspecialchars(number_format($waste['waste_value'], 2)); ?></td>
                             <td><?= ucfirst(htmlspecialchars($waste['waste_reason'])); ?></td>
                             <td><?= htmlspecialchars($waste['responsible_person']); ?></td>
-                            <td><?= htmlspecialchars($waste['comments'] ?? 'N/A'); ?></td>
                             <td class="flex justify-center space-x-2">
                                 <button class="btn btn-sm btn-secondary edit-waste-btn" data-id="<?= htmlspecialchars($waste['id']) ?>">Edit</button>
                                 <button class="btn btn-sm btn-error delete-waste-btn" data-id="<?= htmlspecialchars($waste['id']) ?>">Delete</button>
