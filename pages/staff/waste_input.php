@@ -137,7 +137,7 @@ try {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
         <?php foreach ($inventory as $item): ?>
             <div class="bg-white shadow-md rounded-lg p-3 card">
-                <img src="<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" class="h-32 w-full object-cover rounded-md">
+                <img src="../admin/<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" class="h-32 w-full object-cover rounded-md">
                 <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($item['name']); ?></h2>
                 <p class="text-gray-600">
                     Quantity: <?php echo htmlspecialchars($item['quantity']); ?> <?php echo htmlspecialchars($item['unit']); ?>

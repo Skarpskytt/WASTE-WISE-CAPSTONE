@@ -117,6 +117,28 @@ $totalWasteValue = $totalWaste['total_value'] ?? 0;
 $thresholdQuantity = 1000; // Example threshold for quantity
 $thresholdValue = 50000;   // Example threshold for value
 
+// In your admindashboard.php where you check thresholds
+if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdValue) {
+    // Create notification messages
+    if ($totalWasteQuantity > $thresholdQuantity) {
+        $message = "Warning: Total Waste Quantity exceeds the threshold of {$thresholdQuantity} units.";
+        $insertNotification = $pdo->prepare("
+            INSERT INTO notifications (message, type) 
+            VALUES (:message, 'warning')
+        ");
+        $insertNotification->execute([':message' => $message]);
+    }
+    
+    if ($totalWasteValue > $thresholdValue) {
+        $message = "Warning: Total Waste Value exceeds the threshold of ₱" . number_format($thresholdValue, 2) . ".";
+        $insertNotification = $pdo->prepare("
+            INSERT INTO notifications (message, type) 
+            VALUES (:message, 'warning')
+        ");
+        $insertNotification->execute([':message' => $message]);
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">

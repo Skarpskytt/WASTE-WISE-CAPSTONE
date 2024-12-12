@@ -1,6 +1,66 @@
 <?php
+session_start();
+include('../../config/db_connect.php');
 
+// Check if user is logged in and is an admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header('Location: ../auth/login.php');
+    exit();
+}
+
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fname = trim($_POST['fname']);
+    $lname = trim($_POST['lname']);
+    $email = trim($_POST['email']);
+    $role = trim($_POST['role']);
+    $password = $_POST['password'];
+    $conpassword = $_POST['conpassword'];
+    $errors = [];
+
+    // Validate inputs
+    if (empty($fname)) $errors[] = "First name is required";
+    if (empty($lname)) $errors[] = "Last name is required";
+    if (empty($email)) $errors[] = "Email is required";
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Invalid email format";
+    if (empty($role)) $errors[] = "Role is required";
+    if (empty($password)) $errors[] = "Password is required";
+    if ($password !== $conpassword) $errors[] = "Passwords do not match";
+
+    // Check if email already exists
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    if ($stmt->fetchColumn() > 0) {
+        $errors[] = "Email already exists";
+    }
+
+    if (empty($errors)) {
+        try {
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            
+            $stmt = $pdo->prepare("
+                INSERT INTO users (fname, lname, email, role, password) 
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            
+            $stmt->execute([$fname, $lname, $email, $role, $hashedPassword]);
+            $success = "User created successfully!";
+            
+            // Create notification
+            $notification = "New user {$fname} {$lname} ({$role}) has been created.";
+            $notifStmt = $pdo->prepare("
+                INSERT INTO notifications (message, type) 
+                VALUES (?, 'info')
+            ");
+            $notifStmt->execute([$notification]);
+            
+        } catch (PDOException $e) {
+            $errors[] = "Database error: " . $e->getMessage();
+        }
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -36,8 +96,6 @@
  </script>
    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
-
-
 
 <body class="flex h-screen">
 
@@ -148,4 +206,3 @@
 
 </body>
 </html>
-      

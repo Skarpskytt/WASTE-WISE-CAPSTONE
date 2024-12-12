@@ -181,7 +181,7 @@ $totalPages = ceil($totalRecords / $limit);
                     <th>Waste Value</th>
                     <th>Waste Reason</th>
                     <th>Responsible Person</th>
-                    <th class="text-center">Action</th>
+                    
                 </tr>
             </thead>
             <tbody>
@@ -203,10 +203,7 @@ $totalPages = ceil($totalRecords / $limit);
                             <td>₱<?= htmlspecialchars(number_format($waste['waste_value'], 2)); ?></td>
                             <td><?= ucfirst(htmlspecialchars($waste['waste_reason'])); ?></td>
                             <td><?= htmlspecialchars($waste['responsible_person']); ?></td>
-                            <td class="flex justify-center space-x-2">
-                                <button class="btn btn-sm btn-secondary edit-waste-btn" data-id="<?= htmlspecialchars($waste['id']) ?>">Edit</button>
-                                <button class="btn btn-sm btn-error delete-waste-btn" data-id="<?= htmlspecialchars($waste['id']) ?>">Delete</button>
-                            </td>
+                            
                         </tr>
                 <?php endforeach; 
                 } else { ?>
