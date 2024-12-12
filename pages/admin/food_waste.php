@@ -1,49 +1,156 @@
 <?php
+// Include necessary files and start session
+session_start();
 include('../../config/db_connect.php');
 
-// Fetch NGOs for the dropdown
-$stmt = $pdo->query("SELECT id, name FROM ngos");
-$ngos = $stmt->fetchAll();
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $ngo_id = $_POST['ngo_id'] ?? null;
-    $food_type = $_POST['food_type'] ?? '';
-    $quantity = $_POST['quantity'] ?? 0;
-    $preferred_date = $_POST['preferred_date'] ?? '';
-    $preferred_time = $_POST['preferred_time'] ?? '';
-    $notes = $_POST['notes'] ?? '';
-    $expiry_date = $_POST['expiry_date'] ?? null;
-
-    if (!$ngo_id || !$food_type || !$quantity || !$preferred_date || !$preferred_time) {
-        die('Please fill in all required fields.');
-    }
-
-    $stmt = $pdo->prepare("INSERT INTO donations (ngo_id, food_type, quantity, preferred_date, preferred_time, notes, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$ngo_id, $food_type, $quantity, $preferred_date, $preferred_time, $notes, $expiry_date]);
-
-    // Fetch the last inserted donation ID
-    $donation_id = $pdo->lastInsertId();
-
-    // Send notification to the NGO
-    // Include your notification logic here (e.g., send_email.php)
-    // Example:
-    // sendEmailNotification($ngo_email, $subject, $message);
-
-    header('Location: donations.php');
+// Check if user is logged in and is an admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header('Location: ../auth/login.php');
     exit();
 }
-?>
 
+// Fetch NGOs
+$ngoQuery = "SELECT id, name FROM ngos";
+$ngoStmt = $pdo->prepare($ngoQuery);
+$ngoStmt->execute();
+$ngos = $ngoStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch Wasted Items for Donation with correct food_type and positive quantity
+$wasteQuery = "
+    SELECT 
+        waste.id, 
+        inventory.name AS food_type, 
+        waste.waste_quantity, 
+        inventory.image
+    FROM waste
+    JOIN inventory ON waste.inventory_id = inventory.id
+    WHERE waste.waste_reason = 'donation' AND waste.waste_quantity > 0
+";
+$wasteStmt = $pdo->prepare($wasteQuery);
+$wasteStmt->execute();
+$wastedItems = $wasteStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Initialize variables for notifications
+$success = '';
+$error = '';
+
+// Handle Form Submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $selectedItems = $_POST['items'] ?? [];
+    $quantities = $_POST['quantity_to_donate'] ?? [];
+    $ngo_id = $_POST['ngo_id'] ?? null;
+    $preferred_date = $_POST['preferred_date'] ?? null;
+    $preferred_time = $_POST['preferred_time'] ?? null;
+    $notes = $_POST['notes'] ?? null;
+    $expiry_date = $_POST['expiry_date'] ?? null;
+
+    // Initialize an array to collect errors
+    $errors = [];
+
+    if ($selectedItems && $ngo_id) {
+        $pdo->beginTransaction();
+        try {
+            foreach ($selectedItems as $item_id) {
+                $quantity = floatval($quantities[$item_id] ?? 0);
+                if ($quantity <= 0) {
+                    continue; // Skip invalid quantities
+                }
+
+                // Check available waste quantity and get inventory_id
+                $wasteCheckStmt = $pdo->prepare("SELECT waste_quantity, inventory_id FROM waste WHERE id = ?");
+                $wasteCheckStmt->execute([$item_id]);
+                $waste = $wasteCheckStmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($waste && $waste['waste_quantity'] >= $quantity) {
+                    $inventory_id = $waste['inventory_id'];
+
+                    // Fetch food_type from inventory
+                    $foodTypeStmt = $pdo->prepare("SELECT name FROM inventory WHERE id = ?");
+                    $foodTypeStmt->execute([$inventory_id]);
+                    $foodType = $foodTypeStmt->fetchColumn();
+
+                    if (!$foodType) {
+                        throw new Exception("Inventory item not found for waste ID: {$item_id}");
+                    }
+
+                    // Insert donation record
+                    $insertStmt = $pdo->prepare("
+                        INSERT INTO donations (
+                            ngo_id, 
+                            waste_id, 
+                            quantity, 
+                            preferred_date, 
+                            preferred_time, 
+                            notes, 
+                            expiry_date, 
+                            status, 
+                            created_at, 
+                            food_type
+                        ) VALUES (
+                            :ngo_id, 
+                            :waste_id, 
+                            :quantity, 
+                            :preferred_date, 
+                            :preferred_time, 
+                            :notes, 
+                            :expiry_date, 
+                            'Pending', 
+                            NOW(), 
+                            :food_type
+                        )
+                    ");
+                    $insertStmt->execute([
+                        ':ngo_id' => $ngo_id,
+                        ':waste_id' => $item_id,
+                        ':quantity' => $quantity,
+                        ':preferred_date' => $preferred_date,
+                        ':preferred_time' => $preferred_time,
+                        ':notes' => $notes,
+                        ':expiry_date' => $expiry_date,
+                        ':food_type' => $foodType
+                    ]);
+
+                    // Update waste quantity
+                    $updateWasteStmt = $pdo->prepare("UPDATE waste SET waste_quantity = waste_quantity - :quantity WHERE id = :waste_id");
+                    $updateWasteStmt->execute([
+                        ':quantity' => $quantity,
+                        ':waste_id' => $item_id
+                    ]);
+                } else {
+                    $errors[] = "Insufficient quantity for item ID: {$item_id}";
+                }
+            }
+
+            if (empty($errors)) {
+                $pdo->commit();
+                $success = 'Donation successfully created!';
+            } else {
+                $pdo->rollBack();
+                $error = implode('<br>', $errors);
+            }
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            // Temporarily display the error message for debugging
+            $error = 'An unexpected error occurred while creating the donation: ' . htmlspecialchars($e->getMessage());
+            // For production, use:
+            // error_log("Donation Creation Error: " . $e->getMessage());
+            // $error = 'An unexpected error occurred while creating the donation.';
+        }
+    } else {
+        $error = 'Please select at least one item and specify a valid NGO.';
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Donation Request</title>
+    <title>Food Waste Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
@@ -66,6 +173,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $('#closeSidebar').on('click', function() {
                 $('#sidebar').addClass('-translate-x-full');
             });
+
+            // Enable/disable quantity input based on checkbox selection
+            $('.select-item').on('change', function() {
+                var waste_id = $(this).data('id');
+                var max_quantity = $(this).data('max');
+                var quantityInput = $('#quantity_to_donate_' + waste_id);
+
+                if ($(this).is(':checked')) {
+                    quantityInput.prop('disabled', false);
+                    quantityInput.attr('max', max_quantity);
+                    quantityInput.focus();
+                } else {
+                    quantityInput.prop('disabled', true);
+                    quantityInput.val('');
+                }
+            });
         });
     </script>
 </head>
@@ -74,58 +197,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <?php include '../layout/nav.php' ?>
 
-    <div class="flex-1 p-7">
-        <div class="space-y-8">
-            <!-- Create Donation Request Form -->
-            <div class="bg-white shadow-lg rounded-lg p-6 border border-gray-200">
-                <h2 class="text-2xl font-semibold mb-4">Create Donation Request</h2>
-                <form method="POST" class="space-y-6">
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="ngo_id">Select NGO</label>
-                        <select name="ngo_id" class="select select-bordered w-full" required>
-                            <option disabled selected>Select NGO</option>
-                            <?php foreach($ngos as $ngo): ?>
-                                <option value="<?= htmlspecialchars($ngo['id']) ?>"><?= htmlspecialchars($ngo['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="food_type">Type of Food</label>
-                        <input type="text" name="food_type" placeholder="Type of Food" class="input input-bordered w-full" required>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="quantity">Quantity</label>
-                        <input type="number" name="quantity" placeholder="Quantity" class="input input-bordered w-full" required>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="preferred_date">Preferred Date</label>
-                        <input type="date" name="preferred_date" class="input input-bordered w-full" required>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="preferred_time">Preferred Time</label>
-                        <input type="time" name="preferred_time" class="input input-bordered w-full" required>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="notes">Notes or Instructions</label>
-                        <textarea name="notes" placeholder="Notes or Instructions" class="textarea textarea-bordered w-full"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="expiry_date">Expiry Date</label>
-                        <input type="date" name="expiry_date" class="input input-bordered w-full" placeholder="Expiry Date">
-                    </div>
-                    <div>
-                        <button type="submit" class="btn btn-primary w-full">Create Donation</button>
-                    </div>
-                </form>
-            </div>
+    <div class="flex-1 p-6 overflow-auto">
+        <h1 class="text-3xl font-bold mb-6 text-primarycol">Create Donation</h1>
 
-            <!-- Donation Management Table -->
-            <div class="bg-white shadow-lg rounded-lg p-6 border border-gray-200">
-                <h2 class="text-2xl font-semibold mb-4">Donation Management</h2>
-                <a href="donations.php" class="btn btn-secondary mb-4">View Donations</a>
+        <!-- Notification Section -->
+        <?php if($error): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
+                <span><?= $error ?></span>
             </div>
+        <?php elseif($success): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert">
+                <span><?= $success ?></span>
+            </div>
+        <?php endif; ?>
+
+        <div class="bg-white shadow-lg rounded-lg p-8 border border-gray-200">
+            <form method="POST" class="space-y-8">
+                <!-- Donation Request Details -->
+                <div>
+                    <h2 class="text-2xl font-semibold mb-4 text-primarycol">Donation Request Details</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="ngo_id" class="block text-sm font-medium text-gray-700">Select NGO</label>
+                            <select id="ngo_id" name="ngo_id" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primarycol focus:border-primarycol">
+                                <option value="">-- Select NGO --</option>
+                                <?php foreach($ngos as $ngo): ?>
+                                    <option value="<?= htmlspecialchars($ngo['id']) ?>"><?= htmlspecialchars($ngo['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="preferred_date" class="block text-sm font-medium text-gray-700">Preferred Date</label>
+                            <input type="date" id="preferred_date" name="preferred_date" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primarycol focus:border-primarycol">
+                        </div>
+                        <div>
+                            <label for="preferred_time" class="block text-sm font-medium text-gray-700">Preferred Time</label>
+                            <input type="time" id="preferred_time" name="preferred_time" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primarycol focus:border-primarycol">
+                        </div>
+                        <div>
+                            <label for="expiry_date" class="block text-sm font-medium text-gray-700">Expiry Date</label>
+                            <input type="date" id="expiry_date" name="expiry_date" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primarycol focus:border-primarycol">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Select Items to Donate -->
+                <div>
+                    <h2 class="text-2xl font-semibold mb-4 text-primarycol">Select Items to Donate</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <?php foreach($wastedItems as $item): ?>
+                            <div class="border border-gray-300 rounded-lg p-4 flex items-center">
+                                <img src="<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['food_type']) ?>" class="w-16 h-16 object-cover rounded mr-4">
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-medium text-gray-800"><?= htmlspecialchars($item['food_type']) ?></h3>
+                                    <p class="text-sm text-gray-600">Available: <?= htmlspecialchars($item['waste_quantity']) ?></p>
+                                    <input type="number" name="quantity_to_donate[<?= htmlspecialchars($item['id']) ?>]" min="1" max="<?= htmlspecialchars($item['waste_quantity']) ?>" placeholder="Quantity" class="mt-2 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primarycol focus:border-primarycol">
+                                </div>
+                                <div class="ml-4">
+                                    <input 
+                                        type="checkbox" 
+                                        name="items[]" 
+                                        value="<?= htmlspecialchars($item['id']) ?>" 
+                                        class="checkbox checkbox-primary"
+                                        data-id="<?= htmlspecialchars($item['id']) ?>"
+                                        data-max="<?= htmlspecialchars($item['waste_quantity']) ?>"
+                                    >
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- Additional Notes -->
+                <div>
+                    <label for="notes" class="block text-sm font-medium text-gray-700">Additional Notes</label>
+                    <textarea id="notes" name="notes" rows="4" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primarycol focus:border-primarycol" placeholder="Enter any additional information..."></textarea>
+                </div>
+
+                <!-- Submit Button -->
+                <div>
+                    <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">
+                        Create Donation
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
-
 </body>
 </html>
