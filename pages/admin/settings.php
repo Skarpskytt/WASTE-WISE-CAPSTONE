@@ -101,7 +101,7 @@ while ($row = $stmt->fetch()) {
                         Website Icon
                     </label>
                     <?php if (!empty($settings['website_icon'])): ?>
-                        <img src="../../assets/images/<?= htmlspecialchars($settings['website_icon']) ?>" 
+                        <img src="../../images/<?= htmlspecialchars($settings['website_icon']) ?>" 
                              alt="Current Icon" 
                              class="w-16 h-16 mb-2 object-contain">
                     <?php endif; ?>

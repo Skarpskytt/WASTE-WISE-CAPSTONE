@@ -19,23 +19,41 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 $success = '';
 $error = '';
 
-// CSV Export Function (doesn't require additional extensions)
+// Excel/CSV Export Function
 if (isset($_POST['export_excel'])) {
     try {
         // Set headers for CSV download
         header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="donations.csv"');
+        header('Content-Disposition: attachment; filename="donations_' . date('Y-m-d') . '.csv"');
         
         // Create output stream
         $output = fopen('php://output', 'w');
         
         // Add headers
-        fputcsv($output, ['ID', 'NGO', 'Food Type', 'Quantity', 'Preferred Date', 'Status', 'Created At']);
+        fputcsv($output, [
+            'ID', 
+            'NGO', 
+            'Food Type', 
+            'Quantity', 
+            'Preferred Date',
+            'Preferred Time', 
+            'Status', 
+            'Expiry Date',
+            'Created At'
+        ]);
         
-        // Fetch donations
+        // Fetch donations with NGO details
         $stmt = $pdo->query("
-            SELECT d.id, n.name as ngo_name, d.food_type, d.quantity, 
-                   d.preferred_date, d.status, d.created_at
+            SELECT 
+                d.id,
+                n.name as ngo_name,
+                d.food_type,
+                d.quantity,
+                d.preferred_date,
+                d.preferred_time,
+                d.status,
+                d.expiry_date,
+                d.created_at
             FROM donations d
             JOIN ngos n ON d.ngo_id = n.id
             ORDER BY d.created_at DESC
@@ -49,7 +67,9 @@ if (isset($_POST['export_excel'])) {
                 $row['food_type'],
                 $row['quantity'],
                 $row['preferred_date'],
+                $row['preferred_time'],
                 $row['status'],
+                $row['expiry_date'],
                 $row['created_at']
             ]);
         }
@@ -66,62 +86,112 @@ if (isset($_POST['export_pdf'])) {
     require_once '../../vendor/autoload.php';
     
     try {
+        // Extend TCPDF with custom header
+        class MYPDF extends TCPDF {
+            public function Header() {
+                // Logo
+                $image_file = '../../assets/images/Logo.png'; // Adjust path to your logo
+                $this->Image($image_file, 10, 10, 30, '', 'PNG', '', 'T', false, 300, '', false, false, 0, false, false, false);
+                
+                // Set font
+                $this->SetFont('helvetica', 'B', 20);
+                
+                // Title
+                $this->Cell(0, 30, 'WasteWise Management System', 0, false, 'C', 0, '', 0, false, 'M', 'M');
+                
+                // Line break
+                $this->Ln(20);
+                
+                // Subtitle
+                $this->SetFont('helvetica', 'B', 15);
+                $this->Cell(0, 10, 'Donations Report', 0, false, 'C', 0, '', 0, false, 'M', 'M');
+                
+                // Line break
+                $this->Ln(15);
+            }
+        }
+
         // Create new PDF document
-        $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf = new MYPDF('L', 'mm', 'A4', true, 'UTF-8', false);
         
         // Set document information
         $pdf->SetCreator('WasteWise');
-        $pdf->SetAuthor('Admin');
+        $pdf->SetAuthor('WasteWise Admin');
         $pdf->SetTitle('Donations Report');
         
-        // Remove default header/footer
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
+        // Set default header data
+        $pdf->SetHeaderData(PDF_HEADER_LOGO, PDF_HEADER_LOGO_WIDTH, PDF_HEADER_TITLE, PDF_HEADER_STRING);
+        
+        // Set header and footer fonts
+        $pdf->setHeaderFont(Array(PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN));
         
         // Set margins
-        $pdf->SetMargins(15, 15, 15);
+        $pdf->SetMargins(15, 50, 15);
+        
+        // Set auto page breaks
+        $pdf->SetAutoPageBreak(TRUE, PDF_MARGIN_BOTTOM);
         
         // Add a page
         $pdf->AddPage();
         
-        // Set font
-        $pdf->SetFont('helvetica', '', 12);
+        // Set font for the content
+        $pdf->SetFont('helvetica', '', 10);
         
-        // Title
-        $pdf->Cell(0, 10, 'Donations Report', 0, 1, 'C');
-        $pdf->Ln(10);
+        // Add date of report
+        $pdf->Cell(0, 10, 'Generated on: ' . date('F j, Y, g:i a'), 0, 1, 'R');
+        $pdf->Ln(5);
         
-        // Table headers
-        $headers = ['ID', 'NGO', 'Food Type', 'Quantity', 'Preferred Date', 'Status'];
-        $width = [20, 40, 35, 25, 35, 30];
+        // Create the table
+        $html = '<table border="1" cellpadding="4">
+            <tr style="background-color: #47663B; color: white;">
+                <th>ID</th>
+                <th>NGO</th>
+                <th>Food Type</th>
+                <th>Quantity</th>
+                <th>Preferred Date</th>
+                <th>Status</th>
+                <th>Created At</th>
+            </tr>';
         
-        // Header row
-        for($i = 0; $i < count($headers); $i++) {
-            $pdf->Cell($width[$i], 10, $headers[$i], 1, 0, 'C');
-        }
-        $pdf->Ln();
-        
-        // Data rows
+        // Fetch donations
         $stmt = $pdo->query("
-            SELECT d.id, n.name as ngo_name, d.food_type, d.quantity, 
-                   d.preferred_date, d.status
+            SELECT 
+                d.id,
+                n.name as ngo_name,
+                d.food_type,
+                d.quantity,
+                d.preferred_date,
+                d.status,
+                d.created_at
             FROM donations d
             JOIN ngos n ON d.ngo_id = n.id
             ORDER BY d.created_at DESC
         ");
         
         while($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $pdf->Cell($width[0], 10, $row['id'], 1, 0, 'C');
-            $pdf->Cell($width[1], 10, $row['ngo_name'], 1, 0, 'L');
-            $pdf->Cell($width[2], 10, $row['food_type'], 1, 0, 'L');
-            $pdf->Cell($width[3], 10, $row['quantity'], 1, 0, 'R');
-            $pdf->Cell($width[4], 10, $row['preferred_date'], 1, 0, 'C');
-            $pdf->Cell($width[5], 10, $row['status'], 1, 0, 'C');
-            $pdf->Ln();
+            $html .= '<tr>
+                <td>' . htmlspecialchars($row['id']) . '</td>
+                <td>' . htmlspecialchars($row['ngo_name']) . '</td>
+                <td>' . htmlspecialchars($row['food_type']) . '</td>
+                <td>' . htmlspecialchars($row['quantity']) . '</td>
+                <td>' . htmlspecialchars($row['preferred_date']) . '</td>
+                <td>' . htmlspecialchars($row['status']) . '</td>
+                <td>' . htmlspecialchars($row['created_at']) . '</td>
+            </tr>';
         }
         
+        $html .= '</table>';
+        
+        // Add table to PDF
+        $pdf->writeHTML($html, true, false, true, false, '');
+        
+        // Add footer text
+        $pdf->SetY(-15);
+        $pdf->SetFont('helvetica', 'I', 8);
+        $pdf->Cell(0, 10, 'WasteWise Management System - Page '.$pdf->getAliasNumPage().'/'.$pdf->getAliasNbPages(), 0, false, 'C');
+        
         // Output PDF
-        $pdf->Output('donations_report.pdf', 'D');
+        $pdf->Output('donations_report_' . date('Y-m-d') . '.pdf', 'D');
         exit;
     } catch (Exception $e) {
         $error = "Failed to generate PDF: " . $e->getMessage();

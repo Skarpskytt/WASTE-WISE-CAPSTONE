@@ -9,6 +9,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 
 // Include the database connection
 include('../../config/db_connect.php'); // Ensure the path is correct
+require_once '../../vendor/autoload.php';
 
 // Fetch Waste Data with Quantity Sold and Date Filters
 $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : null;
@@ -86,6 +87,113 @@ if ($startDate && $endDate) {
 $countStmt->execute();
 $totalRecords = $countStmt->rowCount();
 $totalPages = ceil($totalRecords / $limit);
+
+// Add PDF Export Function
+if (isset($_POST['export_pdf'])) {
+    try {
+        // Create custom PDF class with header
+        class MYPDF extends TCPDF {
+            public function Header() {
+                // Logo
+                $image_file = '../../assets/images/Logo.png';
+                $this->Image($image_file, 10, 10, 30, '', 'PNG', '', 'T', false, 300, '', false, false, 0, false, false, false);
+                
+                // Set font
+                $this->SetFont('helvetica', 'B', 20);
+                
+                // Title
+                $this->Cell(0, 30, 'WasteWise Management System', 0, false, 'C', 0, '', 0, false, 'M', 'M');
+                
+                // Line break
+                $this->Ln(20);
+                
+                // Subtitle
+                $this->SetFont('helvetica', 'B', 15);
+                $this->Cell(0, 10, 'Waste Records Report', 0, false, 'C', 0, '', 0, false, 'M', 'M');
+                
+                // Line break
+                $this->Ln(15);
+            }
+        }
+
+        // Initialize PDF
+        $pdf = new MYPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+        
+        // Set document information
+        $pdf->SetCreator('WasteWise');
+        $pdf->SetAuthor('WasteWise Admin');
+        $pdf->SetTitle('Waste Records Report');
+        
+        // Set margins
+        $pdf->SetMargins(15, 50, 15);
+        $pdf->SetAutoPageBreak(TRUE, PDF_MARGIN_BOTTOM);
+        
+        // Add a page
+        $pdf->AddPage();
+        
+        // Set font
+        $pdf->SetFont('helvetica', '', 10);
+        
+        // Add report generation date
+        $pdf->Cell(0, 10, 'Generated on: ' . date('F j, Y, g:i a'), 0, 1, 'R');
+        $pdf->Ln(5);
+        
+        // Create table
+        $html = '<table border="1" cellpadding="4">
+            <tr style="background-color: #47663B; color: white;">
+                <th>ID</th>
+                <th>Item Name</th>
+                <th>Waste Date</th>
+                <th>Quantity</th>
+                <th>Value</th>
+                <th>Reason</th>
+                <th>Responsible Person</th>
+            </tr>';
+        
+        // Fetch waste data
+        $stmt = $pdo->query("
+            SELECT 
+                w.id,
+                i.name as item_name,
+                w.waste_date,
+                w.waste_quantity,
+                w.waste_value,
+                w.waste_reason,
+                w.responsible_person
+            FROM waste w
+            JOIN inventory i ON w.inventory_id = i.id
+            ORDER BY w.waste_date DESC
+        ");
+        
+        while($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $html .= '<tr>
+                <td>' . htmlspecialchars($row['id']) . '</td>
+                <td>' . htmlspecialchars($row['item_name']) . '</td>
+                <td>' . htmlspecialchars($row['waste_date']) . '</td>
+                <td>' . htmlspecialchars($row['waste_quantity']) . '</td>
+                <td>₱' . htmlspecialchars(number_format($row['waste_value'], 2)) . '</td>
+                <td>' . htmlspecialchars($row['waste_reason']) . '</td>
+                <td>' . htmlspecialchars($row['responsible_person']) . '</td>
+            </tr>';
+        }
+        
+        $html .= '</table>';
+        
+        // Output the HTML content
+        $pdf->writeHTML($html, true, false, true, false, '');
+        
+        // Add footer
+        $pdf->SetY(-15);
+        $pdf->SetFont('helvetica', 'I', 8);
+        $pdf->Cell(0, 10, 'WasteWise Management System - Page '.$pdf->getAliasNumPage().'/'.$pdf->getAliasNbPages(), 0, false, 'C');
+        
+        // Output PDF
+        $pdf->Output('waste_report_' . date('Y-m-d') . '.pdf', 'D');
+        exit;
+    } catch (Exception $e) {
+        $error = "Failed to generate PDF: " . $e->getMessage();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -150,80 +258,108 @@ $totalPages = ceil($totalRecords / $limit);
 <body class="flex h-screen">
 <?php include '../layout/nav.php'?>
 
-  <div class="p-6 overflow-y-auto w-full">
-   <!-- Export Button -->
-<div class="mb-4">
-    <a href="export_waste_report.php" class="btn btn-primary">Export Waste Report as CSV</a>
-</div>
-<!-- Export PDF Button -->
-<div class="mb-4">
-    <a href="export_waste_report_pdf.php" class="btn btn-secondary">Export Waste Report as PDF</a>
-</div>
+  <div class="flex-1 p-6 overflow-auto">
+    <h1 class="text-3xl font-bold mb-6 text-primarycol">Waste Data</h1>
 
-<!-- Date Range Filter -->
-<div class="mb-4 flex space-x-2">
-    <input type="date" id="start_date" class="input input-bordered" placeholder="Start Date">
-    <input type="date" id="end_date" class="input input-bordered" placeholder="End Date">
-    <button id="filter_btn" class="btn btn-primary">Filter</button>
-</div>
+    
 
-    <!-- Waste Data Table -->
-    <div class="overflow-x-auto mb-10">
-        <h2 class="text-2xl font-semibold mb-5">Waste Data</h2>
-        <table class="table table-zebra w-full">
-            <thead>
-                <tr class="bg-sec">
-                    <th>#</th>
-                    <th class="flex justify-center">Image</th>
-                    <th>Waste Date</th>
-                    <th>Item Name</th>
-                    <th>Waste Quantity</th>
-                    <th>Waste Value</th>
-                    <th>Waste Reason</th>
-                    <th>Responsible Person</th>
-                    
-                </tr>
-            </thead>
-            <tbody>
-                <?php 
-                if ($wasteData) {
-                    foreach ($wasteData as $waste): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($waste['id']) ?></td>
-                            <td>
-                                <?php if (!empty($waste['image'])): ?>
-                                    <img src="<?= htmlspecialchars($waste['image']) ?>" class="w-8 h-8 mx-auto" alt="<?= htmlspecialchars($waste['item_name'] ?? 'No Name'); ?>">
-                                <?php else: ?>
-                                    <img src="../../assets/default-product.jpg" class="w-8 h-8 mx-auto" alt="No Image Available">
-                                <?php endif; ?>
-                            </td>
-                            <td><?= htmlspecialchars($waste['waste_date']); ?></td>
-                            <td><?= htmlspecialchars($waste['item_name'] ?? 'N/A'); ?></td>
-                            <td><?= htmlspecialchars($waste['total_waste']); ?></td>
-                            <td>₱<?= htmlspecialchars(number_format($waste['waste_value'], 2)); ?></td>
-                            <td><?= ucfirst(htmlspecialchars($waste['waste_reason'])); ?></td>
-                            <td><?= htmlspecialchars($waste['responsible_person']); ?></td>
-                            
-                        </tr>
-                <?php endforeach; 
-                } else { ?>
-                    <tr><td colspan="10" class="text-center">No waste records found.</td></tr>
-                <?php } ?>
-            </tbody>
-        </table>
+    <!-- Date Range Filter -->
+    <div class="mb-4 flex gap-2">
+        <input type="date" id="start_date" class="input input-bordered" placeholder="Start Date">
+        <input type="date" id="end_date" class="input input-bordered" placeholder="End Date">
+        <button id="filter_btn" class="btn btn-primary">Filter</button>
     </div>
 
-    <!-- Pagination Controls -->
-    <div class="flex justify-center mt-4">
+    <!-- Waste Data Table -->
+    <div class="bg-white shadow-lg rounded-lg p-6 border border-gray-200">
+        <h2 class="text-2xl font-semibold mb-4 text-primarycol">Waste Records</h2>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+                <thead>
+                    <tr>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">ID</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Image</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Date</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Item Name</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Quantity</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Value</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Reason</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Responsible Person</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($wasteData): ?>
+                        <?php foreach ($wasteData as $waste): ?>
+                            <tr class="hover:bg-gray-100">
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?= htmlspecialchars($waste['id']) ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?php if (!empty($waste['image'])): ?>
+                                        <img src="<?= htmlspecialchars($waste['image']) ?>" class="w-8 h-8 mx-auto object-cover rounded" alt="<?= htmlspecialchars($waste['item_name'] ?? 'No Name'); ?>">
+                                    <?php else: ?>
+                                        <img src="../../assets/default-product.jpg" class="w-8 h-8 mx-auto object-cover rounded" alt="No Image Available">
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?= htmlspecialchars($waste['waste_date']) ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?= htmlspecialchars($waste['item_name'] ?? 'N/A') ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?= htmlspecialchars($waste['total_waste']) ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    ₱<?= htmlspecialchars(number_format($waste['waste_value'], 2)) ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?= ucfirst(htmlspecialchars($waste['waste_reason'])) ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+                                    <?= htmlspecialchars($waste['responsible_person']) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="py-4 px-6 text-center text-gray-500">
+                                No waste records found.
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <!-- Export Buttons -->
+    <div class="flex gap-2 mb-4">
+        <form method="POST" class="inline">
+            <button type="submit" name="export_excel" class="btn btn-success">
+                Export to Excel
+            </button>
+        </form>
+        <form method="POST" class="inline">
+            <button type="submit" name="export_pdf" class="btn btn-error">
+                Export to PDF
+            </button>
+        </form>
+    </div>
+
+        <!-- Pagination Controls -->
         <?php if ($totalPages > 1): ?>
-            <div class="btn-group">
-                <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                    <a href="table.php?page=<?= $i ?>" class="btn <?= ($i == $page) ? 'btn-active' : '' ?>"><?= $i ?></a>
-                <?php endfor; ?>
+            <div class="flex justify-center mt-6">
+                <div class="btn-group">
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                        <a href="table.php?page=<?= $i ?><?= $startDate && $endDate ? "&start_date={$startDate}&end_date={$endDate}" : "" ?>" 
+                           class="btn <?= ($i == $page) ? 'btn-active' : '' ?>">
+                            <?= $i ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
             </div>
         <?php endif; ?>
     </div>
-
-  </div>
+</div>
 </body>
 </html>
