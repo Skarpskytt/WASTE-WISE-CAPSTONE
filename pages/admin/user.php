@@ -59,6 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// Fetch all users
+$userQuery = "
+    SELECT id, fname, lname, email, role, created_at 
+    FROM users 
+    ORDER BY created_at DESC
+";
+$userStmt = $pdo->prepare($userQuery);
+$userStmt->execute();
+$users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -170,39 +180,131 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
 </div>
 
-
-<div class="overflow-x-auto p-6 mt-8">
-  <table class="table w-full">
-    <thead>
-      <tr class="bg-sec">
-        <th>Username</th>
-        <th>Email</th>
-        <th>Role</th>
-        <th>Last Login</th>
-        <th class="text-center">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>John Doe</td>
-        <td>johndoe11@gmail.com</td>
-        <td>Cashier</td>
-        <td>11/24/2024</td>
-        <td class="p-2">
-                <div class="flex justify-center">
-                <a href="#" class="rounded-md hover:bg-green-100 text-green-600 p-2 flex justify-between items-center">
-                    <span><FaEdit class="w-4 h-4 mr-1"/>
-                    </span> Edit
-                </a>
-                <button class="rounded-md hover:bg-red-100 text-red-600 p-2 flex justify-between items-center">
-                    <span><FaTrash class="w-4 h-4 mr-1" /></span> Delete
-                </button>
-                </div>
-            </td>
-            </tr>
+<div class="mt-8">
+    <h2 class="text-2xl font-semibold mb-4">User List</h2>
+    <div class="overflow-x-auto">
+        <table class="table w-full">
+            <thead>
+                <tr class="bg-primarycol text-white">
+                    <th class="py-2 px-4">#</th>
+                    <th class="py-2 px-4">Name</th>
+                    <th class="py-2 px-4">Email</th>
+                    <th class="py-2 px-4">Role</th>
+                    <th class="py-2 px-4">Created At</th>
+                    <th class="py-2 px-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($users)): ?>
+                    <?php foreach ($users as $user): ?>
+                        <tr class="hover:bg-gray-100">
+                            <td class="py-2 px-4"><?= htmlspecialchars($user['id']) ?></td>
+                            <td class="py-2 px-4">
+                                <?= htmlspecialchars($user['fname'] . ' ' . $user['lname']) ?>
+                            </td>
+                            <td class="py-2 px-4"><?= htmlspecialchars($user['email']) ?></td>
+                            <td class="py-2 px-4">
+                                <span class="badge <?= $user['role'] === 'admin' ? 'badge-primary' : 'badge-secondary' ?>">
+                                    <?= htmlspecialchars(ucfirst($user['role'])) ?>
+                                </span>
+                            </td>
+                            <td class="py-2 px-4">
+                                <?= date('M j, Y g:i A', strtotime($user['created_at'])) ?>
+                            </td>
+                            <td class="py-2 px-4">
+                                <button onclick="editUser(<?= htmlspecialchars(json_encode($user)) ?>)" 
+                                        class="btn btn-sm btn-info mr-2">
+                                    Edit
+                                </button>
+                                <button onclick="deleteUser(<?= htmlspecialchars($user['id']) ?>)" 
+                                        class="btn btn-sm btn-error">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="6" class="py-4 text-center text-gray-500">
+                            No users found
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
 </div>
 
+<!-- Add modals for edit/delete -->
+<dialog id="edit_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Edit User</h3>
+        <form method="POST" class="space-y-4">
+            <input type="hidden" id="edit_id" name="edit_id">
+            <div class="form-control">
+                <label class="label">First Name</label>
+                <input type="text" id="edit_fname" name="edit_fname" class="input input-bordered" required>
+            </div>
+            <div class="form-control">
+                <label class="label">Last Name</label>
+                <input type="text" id="edit_lname" name="edit_lname" class="input input-bordered" required>
+            </div>
+            <div class="form-control">
+                <label class="label">Email</label>
+                <input type="email" id="edit_email" name="edit_email" class="input input-bordered" required>
+            </div>
+            <div class="form-control">
+                <label class="label">Role</label>
+                <select id="edit_role" name="edit_role" class="select select-bordered" required>
+                    <option value="staff">Staff</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="modal-action">
+                <button type="submit" name="update_user" class="btn btn-primary">Update</button>
+                <button type="button" onclick="closeEditModal()" class="btn">Cancel</button>
+            </div>
+        </form>
+    </div>
+</dialog>
 
+<dialog id="delete_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Confirm Delete</h3>
+        <p class="py-4">Are you sure you want to delete this user?</p>
+        <div class="modal-action">
+            <form method="POST">
+                <input type="hidden" id="delete_id" name="delete_id">
+                <button type="submit" name="delete_user" class="btn btn-error">Delete</button>
+                <button type="button" onclick="closeDeleteModal()" class="btn">Cancel</button>
+            </form>
+        </div>
+    </div>
+</dialog>
+
+<script>
+function editUser(user) {
+    document.getElementById('edit_id').value = user.id;
+    document.getElementById('edit_fname').value = user.fname;
+    document.getElementById('edit_lname').value = user.lname;
+    document.getElementById('edit_email').value = user.email;
+    document.getElementById('edit_role').value = user.role;
+    document.getElementById('edit_modal').showModal();
+}
+
+function closeEditModal() {
+    document.getElementById('edit_modal').close();
+}
+
+function deleteUser(userId) {
+    document.getElementById('delete_id').value = userId;
+    document.getElementById('delete_modal').showModal();
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete_modal').close();
+}
+</script>
 
 </body>
 </html>
