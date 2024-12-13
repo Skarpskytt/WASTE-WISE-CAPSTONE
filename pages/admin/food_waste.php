@@ -1,7 +1,12 @@
 <?php
-// Include necessary files and start session
+// food_waste.php
 session_start();
 include('../../config/db_connect.php');
+require '../../vendor/autoload.php';
+require_once 'notification_handler.php'; // Include notification handler
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 // Check if user is logged in and is an admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -36,108 +41,95 @@ $error = '';
 
 // Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $selectedItems = $_POST['items'] ?? [];
-    $quantities = $_POST['quantity_to_donate'] ?? [];
-    $ngo_id = $_POST['ngo_id'] ?? null;
-    $preferred_date = $_POST['preferred_date'] ?? null;
-    $preferred_time = $_POST['preferred_time'] ?? null;
-    $notes = $_POST['notes'] ?? null;
-    $expiry_date = $_POST['expiry_date'] ?? null;
-
-    // Initialize an array to collect errors
-    $errors = [];
-
-    if ($selectedItems && $ngo_id) {
+    try {
         $pdo->beginTransaction();
-        try {
-            foreach ($selectedItems as $item_id) {
-                $quantity = floatval($quantities[$item_id] ?? 0);
-                if ($quantity <= 0) {
-                    continue; // Skip invalid quantities
-                }
+        
+        $selectedItems = $_POST['items'] ?? [];
+        $quantities = $_POST['quantity_to_donate'] ?? [];
+        $ngo_id = $_POST['ngo_id'] ?? null;
+        $preferred_date = $_POST['preferred_date'] ?? null;
+        $preferred_time = $_POST['preferred_time'] ?? null;
+        $notes = $_POST['notes'] ?? null;
+        $expiry_date = $_POST['expiry_date'] ?? null;
 
-                // Check available waste quantity and get inventory_id
-                $wasteCheckStmt = $pdo->prepare("SELECT waste_quantity, inventory_id FROM waste WHERE id = ?");
-                $wasteCheckStmt->execute([$item_id]);
-                $waste = $wasteCheckStmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($waste && $waste['waste_quantity'] >= $quantity) {
-                    $inventory_id = $waste['inventory_id'];
-
-                    // Fetch food_type from inventory
-                    $foodTypeStmt = $pdo->prepare("SELECT name FROM inventory WHERE id = ?");
-                    $foodTypeStmt->execute([$inventory_id]);
-                    $foodType = $foodTypeStmt->fetchColumn();
-
-                    if (!$foodType) {
-                        throw new Exception("Inventory item not found for waste ID: {$item_id}");
-                    }
-
-                    // Insert donation record
-                    $insertStmt = $pdo->prepare("
-                        INSERT INTO donations (
-                            ngo_id, 
-                            waste_id, 
-                            quantity, 
-                            preferred_date, 
-                            preferred_time, 
-                            notes, 
-                            expiry_date, 
-                            status, 
-                            created_at, 
-                            food_type
-                        ) VALUES (
-                            :ngo_id, 
-                            :waste_id, 
-                            :quantity, 
-                            :preferred_date, 
-                            :preferred_time, 
-                            :notes, 
-                            :expiry_date, 
-                            'Pending', 
-                            NOW(), 
-                            :food_type
-                        )
-                    ");
-                    $insertStmt->execute([
-                        ':ngo_id' => $ngo_id,
-                        ':waste_id' => $item_id,
-                        ':quantity' => $quantity,
-                        ':preferred_date' => $preferred_date,
-                        ':preferred_time' => $preferred_time,
-                        ':notes' => $notes,
-                        ':expiry_date' => $expiry_date,
-                        ':food_type' => $foodType
-                    ]);
-
-                    // Update waste quantity
-                    $updateWasteStmt = $pdo->prepare("UPDATE waste SET waste_quantity = waste_quantity - :quantity WHERE id = :waste_id");
-                    $updateWasteStmt->execute([
-                        ':quantity' => $quantity,
-                        ':waste_id' => $item_id
-                    ]);
-                } else {
-                    $errors[] = "Insufficient quantity for item ID: {$item_id}";
-                }
-            }
-
-            if (empty($errors)) {
-                $pdo->commit();
-                $success = 'Donation successfully created!';
-            } else {
-                $pdo->rollBack();
-                $error = implode('<br>', $errors);
-            }
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            // Temporarily display the error message for debugging
-            $error = 'An unexpected error occurred while creating the donation: ' . htmlspecialchars($e->getMessage());
-            // For production, use:
-            // error_log("Donation Creation Error: " . $e->getMessage());
-            // $error = 'An unexpected error occurred while creating the donation.';
+        // Validate required fields
+        if (empty($ngo_id) || empty($selectedItems)) {
+            throw new Exception("Missing required fields");
         }
-    } else {
-        $error = 'Please select at least one item and specify a valid NGO.';
+
+        foreach ($selectedItems as $item_id) {
+            $quantity = floatval($quantities[$item_id] ?? 0);
+            if ($quantity <= 0) continue;
+
+            // Check waste quantity
+            $wasteCheckStmt = $pdo->prepare("SELECT waste_quantity, inventory_id FROM waste WHERE id = ?");
+            $wasteCheckStmt->execute([$item_id]);
+            $waste = $wasteCheckStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($waste && $waste['waste_quantity'] >= $quantity) {
+                // Get food type
+                $foodTypeStmt = $pdo->prepare("SELECT name FROM inventory WHERE id = ?");
+                $foodTypeStmt->execute([$waste['inventory_id']]);
+                $foodType = $foodTypeStmt->fetchColumn();
+
+                if (!$foodType) {
+                    throw new Exception("Inventory item not found");
+                }
+
+                // Insert donation
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO donations (
+                        ngo_id, 
+                        waste_id,
+                        food_type,
+                        quantity, 
+                        preferred_date, 
+                        preferred_time, 
+                        notes, 
+                        expiry_date, 
+                        status,
+                        created_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NOW()
+                    )
+                ");
+
+                $insertStmt->execute([
+                    $ngo_id,
+                    $item_id,
+                    $foodType,
+                    $quantity,
+                    $preferred_date,
+                    $preferred_time,
+                    $notes,
+                    $expiry_date
+                ]);
+
+                // Get donation ID and send notification
+                $donationId = $pdo->lastInsertId();
+                $notificationSent = sendDonationNotification($pdo, $donationId);
+
+                // Update waste quantity
+                $updateWasteStmt = $pdo->prepare("
+                    UPDATE waste 
+                    SET waste_quantity = waste_quantity - ? 
+                    WHERE id = ?
+                ");
+                $updateWasteStmt->execute([$quantity, $item_id]);
+            } else {
+                throw new Exception("Insufficient quantity available");
+            }
+        }
+
+        $pdo->commit();
+        $_SESSION['success'] = "Donation created successfully" . 
+            ($notificationSent ? " and notification sent" : " but notification failed");
+        header('Location: donations.php');
+        exit();
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $error = "Error: " . $e->getMessage();
     }
 }
 ?>
