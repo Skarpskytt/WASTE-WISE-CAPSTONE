@@ -22,8 +22,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
-// Fetch all NGOs
-$stmt = $pdo->query("SELECT * FROM ngos");
+// Fetch all NGOs or apply search/filter
+$search = $_GET['search'] ?? '';
+$category = $_GET['category'] ?? '';
+$location = $_GET['location'] ?? '';
+
+$query = "SELECT * FROM ngos WHERE 1=1";
+$params = [];
+
+if ($search) {
+    $query .= " AND name LIKE ?";
+    $params[] = "%$search%";
+}
+
+if ($category) {
+    $query .= " AND category = ?";
+    $params[] = $category;
+}
+
+if ($location) {
+    $query .= " AND address LIKE ?";
+    $params[] = "%$location%";
+}
+
+$stmt = $pdo->prepare($query);
+$stmt->execute($params);
 $ngos = $stmt->fetchAll();
 ?>
 
@@ -70,6 +93,19 @@ $ngos = $stmt->fetchAll();
       <h2 class="text-2xl font-semibold mb-4">NGO Management</h2>
       </div>
   
+            <!-- Filter Form -->
+            <form method="GET" class="flex space-x-4 mb-4">
+                <input type="text" name="search" placeholder="Search by name" class="input input-bordered">
+                <select name="category" class="select select-bordered">
+                    <option value="">All Categories</option>
+                    <option value="Homeless Shelter">Homeless Shelter</option>
+                    <option value="Food Bank">Food Bank</option>
+                    <option value="Community Center">Community Center</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input type="text" name="location" placeholder="Search by location" class="input input-bordered">
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </form>
 
             <!-- Add New NGO Form -->
             <div class="flex flex-col mx-3 mt-6 lg:flex-row gap-4">
