@@ -109,7 +109,7 @@ $ngos = $stmt->fetchAll();
                         <input type="number" name="capacity" placeholder="Capacity" class="input input-bordered w-full">
                     </div>
                     <div>
-                        <button type="submit" class="btn btn-primary w-full">Add NGO</button>
+                        <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Add NGO</button>
                     </div>
                 </form>
             </div>

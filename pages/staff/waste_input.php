@@ -12,8 +12,10 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
 include('../../config/db_connect.php');
 
 try {
-    $stmt = $pdo->query("SELECT * FROM inventory ORDER BY created_at DESC");
-    $inventory = $stmt->fetchAll();
+    // Fetch only items that haven't been processed for waste
+    $stmt = $pdo->prepare("SELECT * FROM inventory WHERE waste_processed = FALSE ORDER BY created_at DESC");
+    $stmt->execute();
+    $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error retrieving inventory: " . $e->getMessage());
 }
@@ -88,12 +90,12 @@ try {
         // Notification Function
         function showNotification(message, isSuccess) {
             let notification = $('#notification');
-            notification.removeClass('bg-green-500 bg-red-500');
+            notification.removeClass('bg-green-500 bg-red-500 text-white');
 
             if (isSuccess) {
-                notification.addClass('bg-green-500');
+                notification.addClass('bg-green-500 text-white');
             } else {
-                notification.addClass('bg-red-500');
+                notification.addClass('bg-red-500 text-white');
             }
 
             notification.text(message).fadeIn();
@@ -185,7 +187,7 @@ try {
 
                     <!-- Submit Button -->
                     <div class="mb-2">
-                        <button type="submit" class="w-full bg-green-700 text-white py-2 rounded-md">Submit Waste</button>
+                        <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Submit Waste</button>
                     </div>
                 </form>
             </div>

@@ -275,8 +275,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <!-- Submit Button -->
-                <div>
-                    <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">
+                <div class="flex justify-center">
+                    <button type="submit" class="w-5/12 bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">
                         Create Donation
                     </button>
                 </div>

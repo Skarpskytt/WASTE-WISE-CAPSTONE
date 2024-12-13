@@ -234,8 +234,7 @@ try {
             
             <!-- Add Inventory Button -->
             <div class="w-full md:w-full px-3 mb-6">
-                <button type="submit" class="appearance-none block w-full bg-green-700 text-gray-100 font-bold border border-gray-200 rounded-lg py-3 px-3 leading-tight 
-                hover:bg-green-600 focus:outline-none focus:bg-white focus:border-gray-500">Add Inventory Ingredient</button>
+                <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Add Inventory Ingredient</button>
             </div>
             
             <!-- Item Image Upload -->

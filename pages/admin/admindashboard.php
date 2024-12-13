@@ -168,16 +168,6 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
 <body class="flex h-screen bg-slate-100">
 <?php include '../layout/nav.php' ?>
 
-<div class="p-6 overflow-y-auto w-full">
-    <!-- Date Range Filter -->
-    <div class="mb-6 flex space-x-2">
-        <form method="GET" class="flex space-x-2">
-            <input type="date" name="start_date" value="<?= htmlspecialchars($startDate); ?>" class="input input-bordered" placeholder="Start Date">
-            <input type="date" name="end_date" value="<?= htmlspecialchars($endDate); ?>" class="input input-bordered" placeholder="End Date">
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="admindashboard.php" class="btn btn-secondary">Reset</a>
-        </form>
-    </div>
 
     <!-- Alerts and Notifications -->
     <?php if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdValue): ?>
@@ -197,48 +187,64 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
     <?php endif; ?>
 
     <!-- Analytics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-8">
         <!-- Total Waste Quantity -->
         <div class="bg-white shadow-md rounded-lg p-4">
             <h3 class="text-lg font-semibold">Total Waste Quantity</h3>
             <p class="text-2xl font-bold"><?= number_format($totalWasteQuantity, 2); ?> Units</p>
+            <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48">
+<path fill="#a5d6a7" d="M41.393,37.998l0.057-0.911l1.508-20.045v-4c0-0.552-0.448-1-1-1H29.402	c-0.283,0-0.552,0.119-0.741,0.329l-3.323,3.671H15.186c-1.16,0-2.076,0.983-1.995,2.14l1.672,23.909	c0.136,2.175,1.939,3.869,4.118,3.869h21.913l0.001-0.01c0.035,0.001,0.068,0.01,0.104,0.01c2.209,0,4-1.791,4-4	C45,39.884,43.415,38.198,41.393,37.998z"></path><path fill="none" stroke="#18193f" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" stroke-width="3" d="M32.202,7.5h-6.259c-0.282,0-0.552,0.119-0.741,0.329L20.974,12.5"></path><path fill="none" stroke="#18193f" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" stroke-width="3" d="M7.5,12.5h32v-4c0-0.552-0.448-1-1-1h-1.462"></path><line x1="38.5" x2="37.381" y1="12.5" y2="28.118" fill="none" stroke="#18193f" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" stroke-width="3"></line><path fill="none" stroke="#18193f" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" stroke-width="3" d="M10.334,24.429L9.5,12.5"></path><path fill="none" stroke="#18193f" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" stroke-width="3" d="M36.5,41.5H15.258c-2.112,0-3.86-1.642-3.992-3.75l-0.504-7.201"></path><circle cx="36.5" cy="37.5" r="4" fill="none" stroke="#18193f" stroke-miterlimit="10" stroke-width="3"></circle>
+</svg>
         </div>
         <!-- Total Waste Value -->
         <div class="bg-white shadow-md rounded-lg p-4">
             <h3 class="text-lg font-semibold">Total Waste Value</h3>
             <p class="text-2xl font-bold">₱<?= number_format($totalWasteValue, 2); ?></p>
+            <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48">
+<path fill="#7cb342" d="M24 4A20 20 0 1 0 24 44A20 20 0 1 0 24 4Z"></path><path fill="#fff" d="M14.009 18.021H37.009V20.021H14.009zM14.009 22.021H37.009V24.021H14.009z"></path><path fill="#fff" d="M17 13H21V36H17z"></path><path fill="#fff" d="M25.271,29.542H19v-3.5h6.271c1.825,0,3.479-0.889,4.317-2.318 c0.507-0.867,0.737-1.836,0.667-2.805c-0.053-0.715-0.265-1.402-0.633-2.042c-0.828-1.44-2.486-2.336-4.326-2.336H19v-3.5h6.296 c3.089,0,5.909,1.568,7.36,4.091c0.633,1.1,0.999,2.288,1.089,3.532c0.123,1.677-0.271,3.346-1.137,4.827 C31.146,27.99,28.334,29.542,25.271,29.542z"></path>
+</svg>
         </div>
+    <!-- Date Range Filter -->
+    <div class="mb-6 flex space-x-2">
+        <form method="GET" class="flex justify-end space-x-2">
+            <input type="date" name="start_date" value="<?= htmlspecialchars($startDate); ?>" class="input input-bordered" placeholder="Start Date">
+            <input type="date" name="end_date" value="<?= htmlspecialchars($endDate); ?>" class="input input-bordered" placeholder="End Date">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="admindashboard.php" class="btn btn-secondary">Reset</a>
+        </form>
+    </div>
+
     </div>
 
     <!-- Charts Container -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-8">
         <!-- Top Loss Reasons -->
         <div class="bg-white shadow-md rounded-lg p-4">
-            <h3 class="text-lg font-semibold mb-2">Top Loss Reasons</h3>
+            <h2 class="text-lg font-semibold mb-2">Top Loss Reasons</h2>
             <div id="lossReasonChart"></div>
         </div>
 
         <!-- Top Wasted Food Items -->
         <div class="bg-white shadow-md rounded-lg p-4">
-            <h3 class="text-lg font-semibold mb-2">Top Wasted Food Items</h3>
+            <h2 class="text-lg font-semibold mb-2">Top Wasted Food Items</h2>
             <div id="topWastedFoodChart"></div>
         </div>
 
         <!-- Total Waste Quantity per Week -->
         <div class="bg-white shadow-md rounded-lg p-4">
-            <h3 class="text-lg font-semibold mb-2">Total Waste Quantity per Week</h3>
+            <h2 class="text-lg font-semibold mb-2">Total Waste Quantity per Week</h2>
             <div id="wasteQuantityByWeekChart"></div>
         </div>
 
         <!-- Total Waste Value per Week -->
         <div class="bg-white shadow-md rounded-lg p-4">
-            <h3 class="text-lg font-semibold mb-2">Total Waste Value per Week</h3>
+            <h2 class="text-lg font-semibold mb-2">Total Waste Value per Week</h2>
             <div id="wasteValueByWeekChart"></div>
         </div>
 
         <!-- Waste Quantity by Reason Over Time (Line Chart) -->
         <div class="bg-white shadow-md rounded-lg p-4 md:col-span-2">
-            <h3 class="text-lg font-semibold mb-2">Waste Quantity by Reason Over Time</h3>
+            <h2 class="text-lg font-semibold mb-2">Waste Quantity by Reason Over Time</h2>
             <div id="wasteByReasonOverTimeChart"></div>
         </div>
     </div>
@@ -306,9 +312,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         tooltip: {
             enabled: true
         },
-        title: {
-            text: 'Total Waste Quantity per Week'
-        }
+
     };
     var wasteQuantityByWeekChart = new ApexCharts(document.querySelector("#wasteQuantityByWeekChart"), wasteQuantityByWeekOptions);
     wasteQuantityByWeekChart.render();
@@ -344,9 +348,6 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 }
             }
         },
-        title: {
-            text: 'Total Waste Value per Week'
-        }
     };
     var wasteValueByWeekChart = new ApexCharts(document.querySelector("#wasteValueByWeekChart"), wasteValueByWeekOptions);
     wasteValueByWeekChart.render();
@@ -378,9 +379,6 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 }
             }
         },
-        title: {
-            text: 'Top Loss Reasons'
-        }
     };
     var lossReasonChart = new ApexCharts(document.querySelector("#lossReasonChart"), lossReasonOptions);
     lossReasonChart.render();
@@ -411,9 +409,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         tooltip: {
             enabled: true
         },
-        title: {
-            text: 'Top Wasted Food Items'
-        }
+      
     };
     var topWastedFoodChart = new ApexCharts(document.querySelector("#topWastedFoodChart"), topWastedFoodOptions);
     topWastedFoodChart.render();
@@ -467,9 +463,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 format: 'dd MMM yyyy'
             }
         },
-        title: {
-            text: 'Waste Quantity by Reason Over Time'
-        }
+       
     };
     var wasteByReasonOverTimeChart = new ApexCharts(document.querySelector("#wasteByReasonOverTimeChart"), wasteByReasonOverTimeOptions);
     wasteByReasonOverTimeChart.render();
