@@ -65,9 +65,10 @@ function sendDonationNotification($pdo, $donationId) {
         $mail->setFrom('your-email@gmail.com', 'WasteWise Admin');
         $mail->addAddress($donation['contact_email'], $donation['ngo_name']);
 
-        $baseUrl = "http://localhost/WASTE-WISE-CAPSTONE/pages/admin";
-        $acceptLink = "{$baseUrl}/handle_response.php?token={$token}&action=accept&id={$donationId}";
-        $declineLink = "{$baseUrl}/handle_response.php?token={$token}&action=decline&id={$donationId}";
+        // Base URL should match your XAMPP setup
+        $baseUrl = "http://localhost/WASTE-WISE-CAPSTONE/pages/admin/handle_response.php";
+        $acceptLink = "{$baseUrl}?token={$token}&action=accept&id={$donationId}";
+        $declineLink = "{$baseUrl}?token={$token}&action=decline&id={$donationId}";
 
         $mail->isHTML(true);
         $mail->Subject = 'New Food Donation Available';

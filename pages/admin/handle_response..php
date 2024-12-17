@@ -1,14 +1,26 @@
 <?php
 // handle_response.php
 
+// Add error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 include('../../config/db_connect.php');
 require '../../vendor/autoload.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+// Validate URL parameters
 $token = $_GET['token'] ?? '';
 $action = $_GET['action'] ?? '';
 $donationId = $_GET['id'] ?? '';
+
+if (empty($token) || empty($action) || empty($donationId)) {
+    die("Invalid parameters provided");
+}
+
+// Verify file location matches URL path
+// Should be in: C:\xampp\htdocs\WASTE-WISE-CAPSTONE\pages\admin\handle_response.php
 
 function sendStatusEmail($donation, $ngo, $status) {
     $mail = new PHPMailer(true);

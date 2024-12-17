@@ -307,9 +307,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         tooltip: {
             enabled: true
         },
-        title: {
-            text: 'Total Waste Quantity per Week'
-        }
+   
     };
     var wasteQuantityByWeekChart = new ApexCharts(document.querySelector("#wasteQuantityByWeekChart"), wasteQuantityByWeekOptions);
     wasteQuantityByWeekChart.render();
@@ -345,9 +343,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 }
             }
         },
-        title: {
-            text: 'Total Waste Value per Week'
-        }
+    
     };
     var wasteValueByWeekChart = new ApexCharts(document.querySelector("#wasteValueByWeekChart"), wasteValueByWeekOptions);
     wasteValueByWeekChart.render();
@@ -379,9 +375,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 }
             }
         },
-        title: {
-            text: 'Top Loss Reasons'
-        }
+   
     };
     var lossReasonChart = new ApexCharts(document.querySelector("#lossReasonChart"), lossReasonOptions);
     lossReasonChart.render();
@@ -412,9 +406,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         tooltip: {
             enabled: true
         },
-        title: {
-            text: 'Top Wasted Food Items'
-        }
+    
     };
     var topWastedFoodChart = new ApexCharts(document.querySelector("#topWastedFoodChart"), topWastedFoodOptions);
     topWastedFoodChart.render();
@@ -468,9 +460,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 format: 'dd MMM yyyy'
             }
         },
-        title: {
-            text: 'Waste Quantity by Reason Over Time'
-        }
+     
     };
     var wasteByReasonOverTimeChart = new ApexCharts(document.querySelector("#wasteByReasonOverTimeChart"), wasteByReasonOverTimeOptions);
     wasteByReasonOverTimeChart.render();
