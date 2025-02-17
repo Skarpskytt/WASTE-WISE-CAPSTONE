@@ -123,19 +123,25 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
     if ($totalWasteQuantity > $thresholdQuantity) {
         $message = "Warning: Total Waste Quantity exceeds the threshold of {$thresholdQuantity} units.";
         $insertNotification = $pdo->prepare("
-            INSERT INTO notifications (message, type) 
-            VALUES (:message, 'warning')
+            INSERT INTO notifications (user_id, message) 
+            VALUES (:user_id, :message)
         ");
-        $insertNotification->execute([':message' => $message]);
+        $insertNotification->execute([
+            ':user_id' => $_SESSION['user_id'], // or another appropriate user id
+            ':message' => $message
+        ]);
     }
     
     if ($totalWasteValue > $thresholdValue) {
         $message = "Warning: Total Waste Value exceeds the threshold of ₱" . number_format($thresholdValue, 2) . ".";
         $insertNotification = $pdo->prepare("
-            INSERT INTO notifications (message, type) 
-            VALUES (:message, 'warning')
+            INSERT INTO notifications (user_id, message) 
+            VALUES (:user_id, :message)
         ");
-        $insertNotification->execute([':message' => $message]);
+        $insertNotification->execute([
+            ':user_id' => $_SESSION['user_id'], // or another appropriate user id
+            ':message' => $message
+        ]);
     }
 }
 

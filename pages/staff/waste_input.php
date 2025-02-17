@@ -1,5 +1,4 @@
 <?php
-// waste_input.php
 session_start();
 
 // Check if user is logged in and is a staff member
@@ -11,6 +10,10 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
 // Include the database connection
 include('../../config/db_connect.php');
 
+// Fetch the user's name from the session or database
+$userId = $_SESSION['user_id'];
+$userName = $_SESSION['fname'] . ' ' . $_SESSION['lname'];
+
 try {
     // Fetch only items that haven't been processed for waste
     $stmt = $pdo->prepare("SELECT * FROM inventory WHERE waste_processed = FALSE ORDER BY created_at DESC");
@@ -18,6 +21,29 @@ try {
     $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error retrieving inventory: " . $e->getMessage());
+}
+
+// Handle form submission for processing waste
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $inventoryId = $_POST['inventory_id'];
+    $wasteDate = $_POST['waste_date'];
+    $wasteQuantity = $_POST['waste_quantity'];
+    $wasteValue = $_POST['waste_value'];
+    $wasteReason = $_POST['waste_reason'];
+
+    try {
+        // Insert waste data into the waste table
+        $stmt = $pdo->prepare("INSERT INTO waste (user_id, inventory_id, waste_date, waste_quantity, waste_value, waste_reason, responsible_person) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $inventoryId, $wasteDate, $wasteQuantity, $wasteValue, $wasteReason, $userName]);
+
+        // Mark the inventory item as processed for waste
+        $updateStmt = $pdo->prepare("UPDATE inventory SET waste_processed = TRUE WHERE id = ?");
+        $updateStmt->execute([$inventoryId]);
+
+        echo "Waste processed successfully.";
+    } catch (PDOException $e) {
+        die("Failed to process waste: " . $e->getMessage());
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -128,7 +154,7 @@ try {
 
 <div class="p-5 flex-grow">
     <div>
-        <h1 class="text-2xl font-semibold">Waste Input</h1>
+        <h1 class="text-3xl font-bold mb-6 text-primarycol">Waste Input</h1>
         <p class="text-gray-500 mt-2">Manage waste entries</p>
     </div>
 

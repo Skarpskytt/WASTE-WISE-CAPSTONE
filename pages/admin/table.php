@@ -11,16 +11,17 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 include('../../config/db_connect.php'); // Ensure the path is correct
 require_once '../../vendor/autoload.php';
 
-// Fetch Waste Data with Quantity Sold and Date Filters
+// Capture search term and date range from GET
+$search    = isset($_GET['search']) ? trim($_GET['search']) : null;
 $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : null;
-$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : null;
+$endDate   = isset($_GET['end_date']) ? $_GET['end_date'] : null;
 
 // Pagination Variables
 $limit = 10; // Records per page
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$page  = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $offset = ($page - 1) * $limit;
 
-// Modify SQL Query to Include LIMIT and OFFSET
+// Construct base query
 $query = "
     SELECT 
         waste.id,
@@ -32,38 +33,51 @@ $query = "
         waste.waste_reason,
         waste.responsible_person,
         inventory.image
-    FROM 
-        waste
-    LEFT JOIN 
-        inventory ON waste.inventory_id = inventory.id
+    FROM waste
+    LEFT JOIN inventory ON waste.inventory_id = inventory.id
     WHERE 1=1
 ";
 
+// Prepare parameters
 $params = [];
 
+// Date range filter
 if ($startDate && $endDate) {
-    $query .= " AND waste.waste_date BETWEEN :start_date AND :end_date";
+    $query .= " AND waste_date BETWEEN :start_date AND :end_date";
     $params[':start_date'] = $startDate;
-    $params[':end_date'] = $endDate;
+    $params[':end_date']   = $endDate;
 }
 
-// Group by waste.id if necessary
+// Search filter (e.g., match item_name)
+if (!empty($search)) {
+    $query .= " AND inventory.name LIKE :search";
+    $params[':search'] = "%{$search}%";
+}
+
+// Sort & pagination
 $query .= " ORDER BY waste.waste_date DESC LIMIT :limit OFFSET :offset";
 
 $stmt = $pdo->prepare($query);
 
-// Bind parameters
+// Bind date params
 if ($startDate && $endDate) {
     $stmt->bindParam(':start_date', $params[':start_date']);
     $stmt->bindParam(':end_date', $params[':end_date']);
 }
+
+// Bind search param
+if (!empty($search)) {
+    $stmt->bindParam(':search', $params[':search']);
+}
+
+// Bind limit and offset
 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
 
 $stmt->execute();
 $wasteData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch total records for pagination
+// Count total records for pagination
 $countQuery = "
     SELECT COUNT(*) FROM (
         SELECT waste.id
@@ -71,18 +85,25 @@ $countQuery = "
         LEFT JOIN inventory ON waste.inventory_id = inventory.id
         WHERE 1=1
 ";
+
+// Repeat date filters
 if ($startDate && $endDate) {
-    $countQuery .= " AND waste.waste_date BETWEEN :start_date AND :end_date";
+    $countQuery .= " AND waste_date BETWEEN :start_date AND :end_date";
 }
-$countQuery .= "
-    GROUP BY waste.id
-) AS subquery
-";
+// Repeat search filter
+if (!empty($search)) {
+    $countQuery .= " AND inventory.name LIKE :search";
+}
+
+$countQuery .= " GROUP BY waste.id ) AS subquery";
 
 $countStmt = $pdo->prepare($countQuery);
 if ($startDate && $endDate) {
-    $countStmt->bindParam(':start_date', $startDate);
-    $countStmt->bindParam(':end_date', $endDate);
+    $countStmt->bindParam(':start_date', $params[':start_date']);
+    $countStmt->bindParam(':end_date', $params[':end_date']);
+}
+if (!empty($search)) {
+    $countStmt->bindParam(':search', $params[':search']);
 }
 $countStmt->execute();
 $totalRecords = $countStmt->rowCount();
@@ -239,17 +260,6 @@ if (isset($_POST['export_pdf'])) {
                 window.location.href = `delete_waste.php?id=${id}`;
             }
         });
-
-        $('#filter_btn').on('click', function() {
-            let startDate = $('#start_date').val();
-            let endDate = $('#end_date').val();
-
-            if(startDate && endDate){
-                window.location.href = `table.php?start_date=${startDate}&endDate=${endDate}`;
-            } else {
-                alert('Please select both start and end dates.');
-            }
-        });
     });
      </script>
        <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -261,14 +271,36 @@ if (isset($_POST['export_pdf'])) {
   <div class="flex-1 p-6 overflow-auto">
     <h1 class="text-3xl font-bold mb-6 text-primarycol">Waste Data</h1>
 
-    
-
-    <!-- Date Range Filter -->
-    <div class="mb-4 flex gap-2">
-        <input type="date" id="start_date" class="input input-bordered" placeholder="Start Date">
-        <input type="date" id="end_date" class="input input-bordered" placeholder="End Date">
-        <button id="filter_btn" class="btn btn-primary">Filter</button>
-    </div>
+    <!-- Search & Date Filter Form -->
+    <form method="GET" class="flex flex-wrap gap-4 mb-6 items-end">
+        <!-- Search Field -->
+        <div class="ml-auto">
+            <label for="search" class="text-sm font-medium mb-1">Search Item</label>
+            <input type="text" name="search" id="search" 
+                   value="<?php echo htmlspecialchars($search ?? ''); ?>"
+                   class="input input-bordered w-64"
+                   placeholder="Enter item name..."/>
+        </div>
+        <!-- Date Range Fields -->
+        <div>
+            <label for="start_date" class="text-sm font-medium mb-1">From</label>
+            <input type="date" name="start_date" id="start_date" 
+                   value="<?php echo htmlspecialchars($startDate ?? ''); ?>"
+                   class="input input-bordered" />
+        </div>
+        <div>
+            <label for="end_date" class="text-sm font-medium mb-1">To</label>
+            <input type="date" name="end_date" id="end_date"
+                   value="<?php echo htmlspecialchars($endDate ?? ''); ?>"
+                   class="input input-bordered" />
+        </div>
+        <!-- Submit Button -->
+        <div>
+            <button type="submit" class="btn bg-primarycol text-white hover:bg-fourth">
+                Search
+            </button>
+        </div>
+    </form>
 
     <!-- Waste Data Table -->
     <div class="bg-white shadow-lg rounded-lg p-6 border border-gray-200">
@@ -351,7 +383,12 @@ if (isset($_POST['export_pdf'])) {
             <div class="flex justify-center mt-6">
                 <div class="btn-group">
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                        <a href="table.php?page=<?= $i ?><?= $startDate && $endDate ? "&start_date={$startDate}&end_date={$endDate}" : "" ?>" 
+                        <a href="table.php?page=<?= $i ?><?php 
+                          // Preserve filters in pagination links
+                          if ($startDate) echo "&start_date=".$startDate; 
+                          if ($endDate) echo "&end_date=".$endDate;
+                          if ($search) echo "&search=".$search;
+                        ?>" 
                            class="btn <?= ($i == $page) ? 'btn-active' : '' ?>">
                             <?= $i ?>
                         </a>

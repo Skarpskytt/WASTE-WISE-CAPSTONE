@@ -1,7 +1,8 @@
 <?php
-// save_signup.php
 session_start();
 include('../config/db_connect.php');
+include('../config/session_handler.php');
+use CustomSession\SessionHandler;
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Retrieve and sanitize input data

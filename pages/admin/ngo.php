@@ -90,7 +90,7 @@ $ngos = $stmt->fetchAll();
     <?php include '../layout/nav.php' ?>
     <div class="p-7">
       <div>
-      <h2 class="text-2xl font-semibold mb-4">NGO Management</h2>
+      <h2 class="text-3xl font-bold mb-6 text-primarycol">NGO Management</h2>
       </div>
   
             <!-- Filter Form -->

@@ -12,6 +12,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'staff') {
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // Retrieve and sanitize input data
+    $user_id = $_SESSION['user_id'];
     $item_id = intval($_POST['item_id']);
     $waste_quantity = floatval($_POST['waste_quantity']);
     $waste_reason = trim($_POST['waste_reason']);
@@ -66,9 +67,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $waste_value = $waste_quantity * $price_per_unit;
 
         // Insert waste record
-        $stmt = $pdo->prepare("INSERT INTO waste (inventory_id, waste_quantity, waste_value, waste_reason, waste_date, responsible_person) 
-                               VALUES (:inventory_id, :waste_quantity, :waste_value, :waste_reason, :waste_date, :responsible_person)");
+        $stmt = $pdo->prepare("INSERT INTO waste (user_id, inventory_id, waste_quantity, waste_value, waste_reason, waste_date, responsible_person) 
+                               VALUES (:user_id, :inventory_id, :waste_quantity, :waste_value, :waste_reason, :waste_date, :responsible_person)");
         $stmt->execute([
+            ':user_id' => $user_id,
             ':inventory_id' => $item_id,
             ':waste_quantity' => $waste_quantity,
             ':waste_value' => $waste_value,

@@ -1,7 +1,8 @@
 <?php
-// save_login.php
 session_start();
 include('../config/db_connect.php');
+include('../config/session_handler.php');
+use CustomSession\SessionHandler;
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Retrieve and sanitize input data
@@ -36,9 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Optionally, implement "Remember Me" functionality using cookies
         if ($remember) {
-            // Set cookies for 30 days
-            setcookie('user_id', $user['id'], time() + (30 * 24 * 60 * 60), "/");
-            setcookie('role', $user['role'], time() + (30 * 24 * 60 * 60), "/");
+            // Set cookies for "Remember Me" functionality
         }
 
         // Redirect based on role

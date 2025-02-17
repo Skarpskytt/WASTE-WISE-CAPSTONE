@@ -54,7 +54,7 @@ while ($row = $stmt->fetch()) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Settings - <?= htmlspecialchars($settings['website_title'] ?? 'WasteWise') ?></title>
+    <title><?= htmlspecialchars($settings['website_title'] ?? 'WasteWise') ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -101,8 +101,8 @@ while ($row = $stmt->fetch()) {
                         Website Icon
                     </label>
                     <?php if (!empty($settings['website_icon'])): ?>
-                        <img src="../../images/<?= htmlspecialchars($settings['website_icon']) ?>" 
-                             alt="Current Icon" 
+                        <img src="../../assets/images/<?= htmlspecialchars($settings['website_icon']) ?>" 
+                             alt="<?= htmlspecialchars($settings['website_name'] ?? 'Site Logo') ?>" 
                              class="w-16 h-16 mb-2 object-contain">
                     <?php endif; ?>
                     <input 
