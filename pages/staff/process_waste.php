@@ -27,9 +27,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     // Validate waste reason
-    $allowed_reasons = ['overproduction', 'expired', 'compost', 'donation', 'dumpster'];
+    if ($item_type === 'ingredient') {
+        $allowed_reasons = ['overproduction', 'expired'];
+    } else {
+        $allowed_reasons = ['overproduction', 'expired', 'donation', 'compost', 'spoilage'];
+    }
+
     if (!in_array($waste_reason, $allowed_reasons)) {
-        echo json_encode(['success' => false, 'message' => 'Invalid waste reason selected.']);
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Invalid waste reason selected for ' . $item_type
+        ]);
         exit();
     }
 

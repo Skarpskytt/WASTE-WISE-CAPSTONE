@@ -283,16 +283,16 @@ if (isset($_POST['export_pdf'])) {
     class PDF extends FPDF {
         function Header() {
             // Logo
-            $this->Image('../../assets/images/Company Logo.png', 10, 10, 30);
+            $this->Image('../../assets/images/Company Logo.jpg', 10, 10, 30); // Adjust path and dimensions
             
-            // Font
+            // Set font for title
             $this->SetFont('Arial', 'B', 20);
             
             // Move to the right
             $this->Cell(65);
             
             // Title
-            $this->Cell(60, 20, 'Bea Bakes Waste Reports', 0, 0, 'C');
+            $this->Cell(60, 20, 'Bea Bakes Waste Management', 0, 0, 'C');
             
             // Line break
             $this->Ln(20);
@@ -317,6 +317,18 @@ if (isset($_POST['export_pdf'])) {
 
     // Create PDF instance
     $pdf = new PDF('L', 'mm', 'A4');
+
+    // Set document information
+    $pdf->SetTitle('Bea Bakes - Waste Records Report');
+    $pdf->SetAuthor('Bea Bakes Admin');
+    $pdf->SetCreator('Bea Bakes Management System');
+    $pdf->SetSubject('Waste Records Report');
+    $pdf->SetKeywords('Waste, Report, Records, Bea Bakes');
+
+    // Use automatic page breaks
+    $pdf->SetAutoPageBreak(true, 15);
+
+    // Set up the document
     $pdf->AliasNbPages();
     $pdf->AddPage();
     $pdf->SetFont('Arial', '', 10);

@@ -222,6 +222,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <span class="text-xs text-gray-500">Available: <?php echo htmlspecialchars($itemQuantity); ?> <?php echo htmlspecialchars($itemUnit); ?></span>
                     </div>
 
+                    <!-- Waste Reason -->
                     <div class="mb-2">
                         <label for="waste_reason_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Reason</label>
                         <select name="waste_reason" 
@@ -229,8 +230,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 required
                                 class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                             <option value="">Select Reason</option>
-                            <option value="overproduction">Overproduction</option>
-                            <option value="expired">Expired</option>
+                            <?php if ($isIngredient): ?>
+                                <!-- Options for ingredients -->
+                                <option value="overproduction">Overproduction</option>
+                                <option value="expired">Expired</option>
+                            <?php else: ?>
+                                <!-- Options for products -->
+                                <option value="overproduction">Overproduction</option>
+                                <option value="expired">Expired</option>
+                                <option value="donation">Donation</option>
+                                <option value="compost">Compost</option>
+                                <option value="spoilage">Spoilage</option>
+                            <?php endif; ?>
                         </select>
                     </div>
 
