@@ -7,7 +7,7 @@ $errors = [];
 
 // Check if 'id' is set and not empty
 if (!isset($_GET['id']) || empty($_GET['id'])) {
-    header("Location: inventory_data.php");
+    header("Location: product_data.php");
     exit();
 }
 
@@ -42,43 +42,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Handle image upload (optional)
     if (isset($_FILES['item_image']) && $_FILES['item_image']['error'] == 0) {
         $allowed = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp"];
-        $filename = $_FILES['item_image']['name'];
+        $filename = time() . '_' . $_FILES['item_image']['name'];
         $filetype = $_FILES['item_image']['type'];
         $filesize = $_FILES['item_image']['size'];
 
         // Verify file extension
         $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         if (!array_key_exists($ext, $allowed)) {
-            $errors[] = "Error: Please select a valid file format (JPG, JPEG, PNG, WEBP).";
+            $errors[] = "Error: Please select a valid file format.";
         }
 
-        // Verify file type
-        if (!in_array($filetype, $allowed)) {
-            $errors[] = "Error: Invalid file type.";
-        }
-
-        // Check file size - 2MB maximum
-        if ($filesize > 2 * 1024 * 1024) {
-            $errors[] = "Error: File size exceeds the 2MB limit.";
-        }
-
-        // Check whether file exists before uploading
-        if (file_exists("uploads/" . $filename)) {
-            $errors[] = "Error: " . htmlspecialchars($filename) . " already exists.";
-        } else {
-            // Create the uploads directory if it doesn't exist
-            if (!is_dir("uploads")) {
-                mkdir("uploads", 0777, true);
+        if (empty($errors)) {
+            // Create uploads directory if it doesn't exist
+            $uploadDir = "../../assets/uploads/";
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
             }
 
-            // Move the uploaded file
-            if (move_uploaded_file($_FILES["item_image"]["tmp_name"], "uploads/" . $filename)) {
-                $imagePath = "uploads/" . $filename;
+            $targetPath = $uploadDir . $filename;
 
-                // Optionally delete the old image
-                if ($inventory['image'] && file_exists($inventory['image'])) {
-                    unlink($inventory['image']);
+            if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
+                // Delete old image if exists
+                if (!empty($inventory['image'])) {
+                    $oldImage = $inventory['image'];
+                    if (file_exists($oldImage)) {
+                        unlink($oldImage);
+                    }
                 }
+                $imagePath = $targetPath;
             } else {
                 $errors[] = "Error uploading the image.";
             }
@@ -109,9 +100,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $stmt = $pdo->prepare("UPDATE inventory SET name = ?, category = ?, stock_date = ?, quantity = ?, unit = ?, location = ?, price_per_unit = ? WHERE id = ?");
                 $stmt->execute([$itemName, $category, $stockDate, $itemQuantity, $unit, $location, $pricePerUnit, $inventory_id]);
             }
-            $_SESSION['success'] = "Inventory item updated successfully.";
-            header("Location: inventory_data.php");
-            exit();
+            $_SESSION['success'] = "Product updated successfully.";
+            header("Location: product_data.php");
+            exit(); 
         } catch (PDOException $e) {
             $errors[] = "Error updating inventory: " . $e->getMessage();
         }
@@ -124,7 +115,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Edit Inventory - WasteWise</title>
+  <title>Edit Product - Bea Bakes</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -162,8 +153,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
  <div class="p-7">
 
   <div>
-    <h1 class="text-2xl font-semibold">Edit Inventory Item</h1>
-    <p class="text-gray-500 mt-2">Update inventory details</p>
+    <h1 class="text-2xl font-semibold">Edit Product Item</h1>
+    <p class="text-gray-500 mt-2">Update Product details</p>
   </div>
 
   <!-- Display Success or Error Messages -->
@@ -187,7 +178,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   <div class="flex flex-col mx-3 mt-6 lg:flex-row gap-4">
     <!-- Edit Inventory Form -->
     <div class="w-full lg:w-1/3 m-1">
-        <form class="w-full bg-white shadow-xl p-6 border" action="edit_inventory.php?id=<?php echo htmlspecialchars($inventory_id); ?>" method="POST" enctype="multipart/form-data">
+        <form class="w-full bg-white shadow-xl p-6 border" 
+              action="edit_product.php?id=<?php echo htmlspecialchars($inventory_id); ?>" 
+              method="POST" 
+              enctype="multipart/form-data">
             <div class="flex flex-wrap -mx-3 mb-6">
                 <!-- Item Name -->
                 <div class="w-full md:w/full px-3 mb-6">
@@ -261,7 +255,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 <!-- Display Current Image -->
                 <div class="mt-2 text-center">
-                    <img src="<?php echo htmlspecialchars($inventory['image']); ?>" alt="Current Image" class="h-20 w-20 mx-auto">
+                    <?php if (!empty($inventory['image']) && file_exists($inventory['image'])): ?>
+                        <img src="<?= htmlspecialchars($inventory['image']) ?>" 
+                             alt="Current Image" 
+                             class="h-20 w-20 mx-auto object-cover">
+                    <?php else: ?>
+                        <img src="../../assets/images/default-product.jpg" 
+                             alt="Default Image" 
+                             class="h-20 w-20 mx-auto object-cover">
+                    <?php endif; ?>
                     <p class="text-sm text-gray-600">Current Image</p>
                 </div>
             </div>

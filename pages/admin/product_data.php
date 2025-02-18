@@ -281,14 +281,14 @@ try {
                       echo "<td>" . htmlspecialchars($item['price_per_unit']) . "</td>"; // New Column Data
                       echo "<td class='p-2'>
                               <div class='flex justify-center space-x-2'>
-                                  <a href='edit_inventory.php?id=" . urlencode($item['id']) . "' class='rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
+                                  <a href='edit_product.php?id=" . urlencode($item['id']) . "' class='rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
                                       <!-- Edit Icon -->
                                       <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
                                         <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
                                       </svg>
                                       Edit
                                   </a>
-                                  <a href='delete_inventory.php?id=" . urlencode($item['id']) . "' onclick=\"return confirm('Are you sure you want to delete this item?');\" class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
+                                  <a href='delete_product.php?id=" . urlencode($item['id']) . "' onclick=\"return confirm('Are you sure you want to delete this item?');\" class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
                                       <!-- Delete Icon -->
                                       <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
                                         <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
