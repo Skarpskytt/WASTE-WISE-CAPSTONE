@@ -19,6 +19,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 $success = '';
 $error = '';
 
+// Add these near the top of the file, after your initial includes
+$search = isset($_GET['search']) ? trim($_GET['search']) : null;
+$startDate = isset($_GET['start_date']) ? $_GET['start_date'] : null;
+$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : null;
+
 // Excel/CSV Export Function
 if (isset($_POST['export_excel'])) {
     try {
@@ -265,7 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['delete_id'])) {
     }
 }
 
-// Fetch Donations
+// Modify your donation query to include filters
 $donationQuery = "
     SELECT 
         donations.id,
@@ -280,10 +285,26 @@ $donationQuery = "
         donations.food_type
     FROM donations
     JOIN ngos ON donations.ngo_id = ngos.id
-    ORDER BY donations.created_at DESC
+    WHERE 1=1
 ";
+
+$params = [];
+
+if ($startDate && $endDate) {
+    $donationQuery .= " AND donations.preferred_date BETWEEN :start_date AND :end_date";
+    $params[':start_date'] = $startDate;
+    $params[':end_date'] = $endDate;
+}
+
+if (!empty($search)) {
+    $donationQuery .= " AND (ngos.name LIKE :search OR donations.food_type LIKE :search)";
+    $params[':search'] = "%{$search}%";
+}
+
+$donationQuery .= " ORDER BY donations.created_at DESC";
+
 $donationStmt = $pdo->prepare($donationQuery);
-$donationStmt->execute();
+$donationStmt->execute($params);
 $donations = $donationStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -331,6 +352,54 @@ $donations = $donationStmt->fetchAll(PDO::FETCH_ASSOC);
 
     <div class="flex-1 p-6 overflow-auto">
         <h1 class="text-3xl font-bold mb-6 text-primarycol">Manage Donations</h1>
+
+        <!-- Add this after your <h1> tag -->
+        <div class="mb-6">
+            <!-- Search & Date Filter Form -->
+            <form method="GET" class="flex flex-wrap gap-4 mb-6 items-end bg-white p-4 rounded-lg shadow">
+                <!-- Search Field -->
+                <div>
+                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                    <input type="text" 
+                        name="search" 
+                        id="search" 
+                        value="<?= htmlspecialchars($search ?? '') ?>"
+                        class="input input-bordered w-64"
+                        placeholder="Search NGO or food type..."/>
+                </div>
+
+                <!-- Date Range Fields -->
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700 mb-1">From</label>
+                    <input type="date" 
+                        name="start_date" 
+                        id="start_date" 
+                        value="<?= htmlspecialchars($startDate ?? '') ?>"
+                        class="input input-bordered"/>
+                </div>
+
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700 mb-1">To</label>
+                    <input type="date" 
+                        name="end_date" 
+                        id="end_date"
+                        value="<?= htmlspecialchars($endDate ?? '') ?>"
+                        class="input input-bordered"/>
+                </div>
+
+                <!-- Submit Button -->
+                <div>
+                    <button type="submit" 
+                            class="btn bg-primarycol text-white hover:bg-fourth">
+                        Search
+                    </button>
+                    <a href="donations.php" 
+                    class="btn btn-ghost">
+                    Reset
+                    </a>
+                </div>
+            </form>
+        </div>
 
         <!-- Notification Section -->
         <?php if($error): ?>
@@ -424,14 +493,28 @@ $donations = $donationStmt->fetchAll(PDO::FETCH_ASSOC);
                                         ?>
                                     </td>
                                     <td class="py-2 px-4 border-b border-gray-200 text-sm">
-                                        <button onclick="openEditModal(<?= htmlspecialchars(json_encode($donation)) ?>)" 
-                                                class="text-blue-500 hover:underline mr-2">
-                                            Edit
-                                        </button>
-                                        <button onclick="openDeleteModal(<?= htmlspecialchars($donation['id']) ?>)" 
-                                                class="text-red-500 hover:underline">
-                                            Delete
-                                        </button>
+                                        <div class='flex justify-center space-x-2'>
+                                            <a href="#" 
+                                               onclick="openEditModal(<?= htmlspecialchars(json_encode($donation)) ?>)" 
+                                               class='rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
+                                                <!-- Edit Icon -->
+                                                <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' 
+                                                          d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
+                                                </svg>
+                                                Edit
+                                            </a>
+                                            <a href="#" 
+                                               onclick="openDeleteModal(<?= htmlspecialchars($donation['id']) ?>)" 
+                                               class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
+                                                <!-- Delete Icon -->
+                                                <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' 
+                                                          d='M6 18L18 6M6 6l12 12' />
+                                                </svg>
+                                                Delete
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

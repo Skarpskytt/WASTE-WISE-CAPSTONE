@@ -18,9 +18,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $waste_reason = trim($_POST['waste_reason']);
     $waste_date = $_POST['waste_date'];
     $responsible_person = htmlspecialchars(trim($_POST['responsible_person']));
+    $item_type = $_POST['item_type']; // Get item type (product or ingredient)
 
     // Validate inputs
-    if (empty($item_id) || empty($waste_quantity) || empty($waste_reason) || empty($waste_date) || empty($responsible_person)) {
+    if (empty($item_id) || empty($waste_quantity) || empty($waste_reason) || empty($waste_date) || empty($responsible_person) || empty($item_type)) {
         echo json_encode(['success' => false, 'message' => 'All fields are required.']);
         exit();
     }
@@ -42,8 +43,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // Begin transaction
         $pdo->beginTransaction();
 
-        // Fetch item's price_per_unit and current quantity
-        $stmt = $pdo->prepare("SELECT price_per_unit, quantity FROM inventory WHERE id = :id FOR UPDATE");
+        // Fetch item details based on type
+        if ($item_type === 'ingredient') {
+            $stmt = $pdo->prepare("SELECT price, quantity FROM ingredients WHERE id = :id FOR UPDATE");
+        } else {
+            $stmt = $pdo->prepare("SELECT price_per_unit as price, quantity FROM inventory WHERE id = :id FOR UPDATE");
+        }
+        
         $stmt->execute([':id' => $item_id]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -53,7 +59,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             exit();
         }
 
-        $price_per_unit = floatval($item['price_per_unit']);
+        $price_per_unit = floatval($item['price']);
         $current_quantity = floatval($item['quantity']);
 
         // Check if sufficient quantity is available
@@ -67,29 +73,51 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $waste_value = $waste_quantity * $price_per_unit;
 
         // Insert waste record
-        $stmt = $pdo->prepare("INSERT INTO waste (user_id, inventory_id, waste_quantity, waste_value, waste_reason, waste_date, responsible_person) 
-                               VALUES (:user_id, :inventory_id, :waste_quantity, :waste_value, :waste_reason, :waste_date, :responsible_person)");
+        $stmt = $pdo->prepare("
+            INSERT INTO waste (
+                user_id, 
+                item_id,
+                waste_quantity, 
+                waste_value, 
+                waste_reason, 
+                waste_date, 
+                responsible_person, 
+                item_type
+            ) VALUES (
+                :user_id, 
+                :item_id,
+                :waste_quantity, 
+                :waste_value, 
+                :waste_reason, 
+                :waste_date, 
+                :responsible_person, 
+                :item_type
+            )
+        ");
+        
         $stmt->execute([
             ':user_id' => $user_id,
-            ':inventory_id' => $item_id,
+            ':item_id' => $item_id,  
             ':waste_quantity' => $waste_quantity,
             ':waste_value' => $waste_value,
             ':waste_reason' => $waste_reason,
             ':waste_date' => $waste_date,
-            ':responsible_person' => $responsible_person
+            ':responsible_person' => $responsible_person,
+            ':item_type' => $item_type
         ]);
 
-        // Update inventory quantity
+        // Update quantity based on type
         $new_quantity = $current_quantity - $waste_quantity;
-        $stmt = $pdo->prepare("UPDATE inventory SET quantity = :new_quantity WHERE id = :id");
-        $stmt->execute([
+        if ($item_type === 'ingredient') {
+            $updateStmt = $pdo->prepare("UPDATE ingredients SET quantity = :new_quantity, waste_processed = TRUE WHERE id = :id");
+        } else {
+            $updateStmt = $pdo->prepare("UPDATE inventory SET quantity = :new_quantity, waste_processed = TRUE WHERE id = :id");
+        }
+        
+        $updateStmt->execute([
             ':new_quantity' => $new_quantity,
             ':id' => $item_id
         ]);
-
-        // Update inventory status to indicate waste has been processed
-        $updateStmt = $pdo->prepare("UPDATE inventory SET waste_processed = TRUE WHERE id = :id");
-        $updateStmt->execute([':id' => $item_id]);
 
         // Commit transaction
         $pdo->commit();

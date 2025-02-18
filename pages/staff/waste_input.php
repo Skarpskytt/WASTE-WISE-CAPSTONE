@@ -15,12 +15,20 @@ $userId = $_SESSION['user_id'];
 $userName = $_SESSION['fname'] . ' ' . $_SESSION['lname'];
 
 try {
-    // Fetch only items that haven't been processed for waste
-    $stmt = $pdo->prepare("SELECT * FROM inventory WHERE waste_processed = FALSE ORDER BY created_at DESC");
-    $stmt->execute();
-    $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Fetch inventory items
+    $invStmt = $pdo->prepare("SELECT *, 'product' as type FROM inventory WHERE waste_processed = FALSE ORDER BY created_at DESC");
+    $invStmt->execute();
+    $inventory = $invStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Fetch ingredients
+    $ingStmt = $pdo->prepare("SELECT *, 'ingredient' as type FROM ingredients WHERE waste_processed = FALSE ORDER BY stock_datetime DESC");
+    $ingStmt->execute();
+    $ingredients = $ingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Combine both arrays
+    $items = array_merge($inventory, $ingredients);
 } catch (PDOException $e) {
-    die("Error retrieving inventory: " . $e->getMessage());
+    die("Error retrieving data: " . $e->getMessage());
 }
 
 // Handle form submission for processing waste
@@ -155,65 +163,104 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <div class="p-5 flex-grow">
     <div>
         <h1 class="text-3xl font-bold mb-6 text-primarycol">Waste Input</h1>
-        <p class="text-gray-500 mt-2">Manage waste entries</p>
+        <p class="text-gray-500 mt-2">Manage waste entries for products and ingredients</p>
     </div>
 
     <!-- Notification Container -->
     <div id="notification"></div>
 
-    <!-- Inventory Cards -->
+    <!-- Items Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-        <?php foreach ($inventory as $item): ?>
+        <?php foreach ($items as $item): 
+            $isIngredient = $item['type'] === 'ingredient';
+            $itemName = $isIngredient ? $item['ingredient_name'] : $item['name'];
+            $itemQuantity = $isIngredient ? $item['quantity'] : $item['quantity'];
+            $itemUnit = $isIngredient ? $item['metric_unit'] : $item['unit'];
+            $itemPrice = $isIngredient ? $item['price'] : $item['price_per_unit'];
+            $itemImage = $isIngredient ? $item['item_image'] : $item['image'];
+        ?>
             <div class="bg-white shadow-md rounded-lg p-3 card">
-                <img src="../admin/<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" class="h-32 w-full object-cover rounded-md">
-                <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($item['name']); ?></h2>
+                <!-- Type Badge -->
+                <div class="flex justify-between items-center mb-2">
+                    <span class="px-2 py-1 rounded text-xs font-semibold <?= $isIngredient ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800' ?>">
+                        <?= ucfirst($item['type']) ?>
+                    </span>
+                </div>
+
+                <img src="<?php echo $isIngredient ? $itemImage : '../admin/' . $itemImage; ?>" 
+                     alt="<?php echo htmlspecialchars($itemName); ?>" 
+                     class="h-32 w-full object-cover rounded-md">
+                <h2 class="text-lg font-bold mt-3"><?php echo htmlspecialchars($itemName); ?></h2>
                 <p class="text-gray-600">
-                    Quantity: <?php echo htmlspecialchars($item['quantity']); ?> <?php echo htmlspecialchars($item['unit']); ?>
+                    Quantity: <?php echo htmlspecialchars($itemQuantity); ?> <?php echo htmlspecialchars($itemUnit); ?>
                 </p>
                 <p class="text-gray-600">
-                    Price per Unit: ₱<?php echo htmlspecialchars(number_format($item['price_per_unit'], 2)); ?>
+                    Price per Unit: ₱<?php echo htmlspecialchars(number_format($itemPrice, 2)); ?>
                 </p>
                 
                 <!-- Waste Input Form -->
                 <form class="waste-form mt-3" method="POST" action="process_waste.php">
                     <input type="hidden" name="item_id" value="<?php echo htmlspecialchars($item['id']); ?>">
+                    <input type="hidden" name="item_type" value="<?php echo htmlspecialchars($item['type']); ?>">
 
                     <div class="mb-2">
-                        <label for="waste_quantity_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Quantity</label>
-                        <input type="number" name="waste_quantity" id="waste_quantity_<?php echo $item['id']; ?>" min="0" step="any" required
-                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
+                        <label for="waste_quantity_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">
+                            Waste Quantity <?php echo $isIngredient ? "(" . htmlspecialchars($itemUnit) . ")" : ""; ?>
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="number" 
+                                   name="waste_quantity" 
+                                   id="waste_quantity_<?php echo $item['id']; ?>" 
+                                   min="0" 
+                                   step="any" 
+                                   required
+                                   class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
+                            <?php if ($isIngredient): ?>
+                                <span class="mt-2 text-sm text-gray-600"><?php echo htmlspecialchars($itemUnit); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <span class="text-xs text-gray-500">Available: <?php echo htmlspecialchars($itemQuantity); ?> <?php echo htmlspecialchars($itemUnit); ?></span>
                     </div>
 
                     <div class="mb-2">
                         <label for="waste_reason_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Reason</label>
-                        <select name="waste_reason" id="waste_reason_<?php echo $item['id']; ?>" required
+                        <select name="waste_reason" 
+                                id="waste_reason_<?php echo $item['id']; ?>" 
+                                required
                                 class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                             <option value="">Select Reason</option>
                             <option value="overproduction">Overproduction</option>
                             <option value="expired">Expired</option>
-                            <option value="compost">Compost</option>
-                            <option value="donation">Donation</option>
-                            <option value="dumpster">Dumpster</option>
                         </select>
                     </div>
 
                     <!-- Waste Date -->
                     <div class="mb-2">
                         <label for="waste_date_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Waste Date</label>
-                        <input type="date" name="waste_date" id="waste_date_<?php echo $item['id']; ?>" required
+                        <input type="date" 
+                               name="waste_date" 
+                               id="waste_date_<?php echo $item['id']; ?>" 
+                               required
+                               value="<?php echo date('Y-m-d'); ?>"
                                class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
                     </div>
 
-                    <!-- Responsible Person -->
+                    <!-- Responsible Person (Auto-filled) -->
                     <div class="mb-2">
                         <label for="responsible_person_<?php echo $item['id']; ?>" class="block text-sm font-medium text-gray-700">Responsible Person</label>
-                        <input type="text" name="responsible_person" id="responsible_person_<?php echo $item['id']; ?>" required
-                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 focus:outline-none focus:ring-[#98c01d]">
+                        <input type="text" 
+                               name="responsible_person" 
+                               id="responsible_person_<?php echo $item['id']; ?>" 
+                               value="<?php echo htmlspecialchars($userName); ?>" 
+                               readonly
+                               class="mt-1 block w-full border border-gray-300 rounded-md p-1.5 bg-gray-50 focus:outline-none focus:ring-[#98c01d]">
                     </div>
 
                     <!-- Submit Button -->
                     <div class="mb-2">
-                        <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Submit Waste</button>
+                        <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">
+                            Submit Waste
+                        </button>
                     </div>
                 </form>
             </div>

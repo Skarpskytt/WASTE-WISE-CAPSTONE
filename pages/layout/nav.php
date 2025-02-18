@@ -15,13 +15,6 @@ $notifications = $notificationsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Count unread notifications
 $unreadCount = count($notifications);
-
-// Optionally load the same settings used in settings.php
-$stmt = $pdo->query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('website_title','website_name','website_icon')");
-$settings = [];
-while($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $settings[$row['setting_key']] = $row['setting_value'];
-}
 ?>
 
 <aside id="sidebar" class="bg-base-100 w-full md:w-64 lg:w-64 h-full border-r border-gray-200 fixed md:relative lg:relative transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 z-50">
@@ -176,20 +169,11 @@ while($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             </svg>
          </button>
          
-         <?php
-// At the top of nav.php, fetch settings
-$settingsStmt = $pdo->query("SELECT * FROM settings WHERE setting_key IN ('website_title', 'website_name')");
-$settings = [];
-while ($row = $settingsStmt->fetch()) {
-    $settings[$row['setting_key']] = $row['setting_value'];
-}
-?>
-
 <!-- Update the logo section -->
 <a href="../admin/admindashboard.php" class="flex ms-2 md:me-24">
-    <img src="../../assets/images/Logo.png" class="h-8 me-3" alt="<?= htmlspecialchars($settings['website_name'] ?? 'WasteWise') ?>"/>
+    <img src="../../assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
     <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
-        <?= htmlspecialchars($settings['website_name'] ?? 'WasteWise') ?>
+        Bea Bakes
     </span>
 </a>
        </div>

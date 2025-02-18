@@ -103,8 +103,8 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <div class="p-7">
   <div>
-    <h1 class="text-2xl font-semibold">Inventory Data</h1>
-    <p class="text-gray-500 mt-2">Manage your inventory</p>
+    <h1 class="text-3xl font-bold mb-6 text-primarycol">Ingredients Data</h1>
+    <p class="text-gray-500 mt-2">Manage your ingredients</p>
   </div>
 
   <!-- Display Success or Error Messages -->

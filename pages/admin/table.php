@@ -26,15 +26,16 @@ $query = "
     SELECT 
         waste.id,
         waste.waste_date,
-        inventory.name AS item_name,
-        inventory.quantity,
+        COALESCE(inventory.name, ingredients.ingredient_name) AS item_name,
         waste.waste_quantity AS total_waste,
         waste.waste_value,
         waste.waste_reason,
         waste.responsible_person,
-        inventory.image
+        COALESCE(inventory.image, ingredients.item_image) AS image,
+        waste.item_type
     FROM waste
-    LEFT JOIN inventory ON waste.inventory_id = inventory.id
+    LEFT JOIN inventory ON waste.item_id = inventory.id AND waste.item_type = 'product'
+    LEFT JOIN ingredients ON waste.item_id = ingredients.id AND waste.item_type = 'ingredient'
     WHERE 1=1
 ";
 
@@ -82,7 +83,8 @@ $countQuery = "
     SELECT COUNT(*) FROM (
         SELECT waste.id
         FROM waste
-        LEFT JOIN inventory ON waste.inventory_id = inventory.id
+        LEFT JOIN inventory ON waste.item_id = inventory.id AND waste.item_type = 'product'
+        LEFT JOIN ingredients ON waste.item_id = ingredients.id AND waste.item_type = 'ingredient'
         WHERE 1=1
 ";
 
@@ -175,14 +177,16 @@ if (isset($_POST['export_pdf'])) {
         $stmt = $pdo->query("
             SELECT 
                 w.id,
-                i.name as item_name,
+                COALESCE(i.name, ing.ingredient_name) as item_name,
                 w.waste_date,
                 w.waste_quantity,
                 w.waste_value,
                 w.waste_reason,
-                w.responsible_person
+                w.responsible_person,
+                w.item_type
             FROM waste w
-            JOIN inventory i ON w.inventory_id = i.id
+            LEFT JOIN inventory i ON w.item_id = i.id AND w.item_type = 'product'
+            LEFT JOIN ingredients ing ON w.item_id = ing.id AND w.item_type = 'ingredient'
             ORDER BY w.waste_date DESC
         ");
         
@@ -214,6 +218,164 @@ if (isset($_POST['export_pdf'])) {
     } catch (Exception $e) {
         $error = "Failed to generate PDF: " . $e->getMessage();
     }
+}
+
+// Add this code after your existing query but before the HTML output
+
+// Handle Excel Export
+if (isset($_POST['export_excel'])) {
+    // Set headers for Excel download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=waste_report_' . date('Y-m-d') . '.csv');
+    
+    // Create output stream
+    $output = fopen('php://output', 'w');
+    
+    // Add headers to CSV
+    fputcsv($output, [
+        'ID',
+        'Waste Date',
+        'Item Name',
+        'Item Type',
+        'Waste Quantity',
+        'Waste Value (₱)',
+        'Waste Reason',
+        'Responsible Person'
+    ]);
+    
+    // Fetch all waste data for export
+    $exportStmt = $pdo->query("
+        SELECT 
+            w.id,
+            w.waste_date,
+            COALESCE(i.name, ing.ingredient_name) as item_name,
+            w.item_type,
+            w.waste_quantity,
+            w.waste_value,
+            w.waste_reason,
+            w.responsible_person
+        FROM waste w
+        LEFT JOIN inventory i ON w.item_id = i.id AND w.item_type = 'product'
+        LEFT JOIN ingredients ing ON w.item_id = ing.id AND w.item_type = 'ingredient'
+        ORDER BY w.waste_date DESC
+    ");
+
+    while ($row = $exportStmt->fetch(PDO::FETCH_ASSOC)) {
+        fputcsv($output, [
+            $row['id'],
+            $row['waste_date'],
+            $row['item_name'],
+            ucfirst($row['item_type']),
+            $row['waste_quantity'],
+            number_format($row['waste_value'], 2),
+            ucfirst($row['waste_reason']),
+            $row['responsible_person']
+        ]);
+    }
+    fclose($output);
+    exit();
+}
+
+// Handle PDF Export
+if (isset($_POST['export_pdf'])) {
+    require('fpdf186/fpdf.php');
+
+    class PDF extends FPDF {
+        function Header() {
+            // Logo
+            $this->Image('../../assets/images/Company Logo.png', 10, 10, 30);
+            
+            // Font
+            $this->SetFont('Arial', 'B', 20);
+            
+            // Move to the right
+            $this->Cell(65);
+            
+            // Title
+            $this->Cell(60, 20, 'Bea Bakes Waste Reports', 0, 0, 'C');
+            
+            // Line break
+            $this->Ln(20);
+
+            // Subtitle
+            $this->SetFont('Arial', 'B', 15);
+            $this->Cell(0, 10, 'Waste Records Report', 0, 1, 'C');
+            
+            // Line break
+            $this->Ln(10);
+        }
+
+        function Footer() {
+            // Position at 1.5 cm from bottom
+            $this->SetY(-15);
+            // Arial italic 8
+            $this->SetFont('Arial', 'I', 8);
+            // Page number
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . '/{nb}', 0, 0, 'C');
+        }
+    }
+
+    // Create PDF instance
+    $pdf = new PDF('L', 'mm', 'A4');
+    $pdf->AliasNbPages();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+
+    // Add report generation date
+    $pdf->Cell(0, 10, 'Generated on: ' . date('F j, Y, g:i a'), 0, 1, 'R');
+    $pdf->Ln(5);
+
+    // Table headers
+    $pdf->SetFillColor(71, 102, 59); // #47663B
+    $pdf->SetTextColor(255);
+    $pdf->SetFont('Arial', 'B', 10);
+    
+    // Headers
+    $headers = array('ID', 'Date', 'Item Name', 'Type', 'Quantity', 'Value (₱)', 'Reason', 'Responsible');
+    $colWidths = array(20, 30, 50, 25, 25, 30, 40, 40);
+    
+    foreach ($headers as $i => $header) {
+        $pdf->Cell($colWidths[$i], 10, $header, 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+
+    // Table data
+    $pdf->SetFillColor(255);
+    $pdf->SetTextColor(0);
+    $pdf->SetFont('Arial', '', 9);
+
+    // Fetch data for PDF
+    $pdfStmt = $pdo->query("
+        SELECT 
+            w.id,
+            w.waste_date,
+            COALESCE(i.name, ing.ingredient_name) as item_name,
+            w.item_type,
+            w.waste_quantity,
+            w.waste_value,
+            w.waste_reason,
+            w.responsible_person
+        FROM waste w
+        LEFT JOIN inventory i ON w.item_id = i.id AND w.item_type = 'product'
+        LEFT JOIN ingredients ing ON w.item_id = ing.id AND w.item_type = 'ingredient'
+        ORDER BY w.waste_date DESC
+    ");
+
+    while ($row = $pdfStmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdf->Cell($colWidths[0], 10, $row['id'], 1, 0, 'C');
+        $pdf->Cell($colWidths[1], 10, $row['waste_date'], 1, 0, 'C');
+        $pdf->Cell($colWidths[2], 10, $row['item_name'], 1, 0, 'L');
+        $pdf->Cell($colWidths[3], 10, ucfirst($row['item_type']), 1, 0, 'C');
+        $pdf->Cell($colWidths[4], 10, $row['waste_quantity'], 1, 0, 'R');
+        $pdf->Cell($colWidths[5], 10, number_format($row['waste_value'], 2), 1, 0, 'R');
+        $pdf->Cell($colWidths[6], 10, ucfirst($row['waste_reason']), 1, 0, 'C');
+        $pdf->Cell($colWidths[7], 10, $row['responsible_person'], 1, 0, 'C');
+        $pdf->Ln();
+    }
+
+    // Output PDF
+    $pdf->Output('D', 'waste_report_' . date('Y-m-d') . '.pdf');
+    exit();
 }
 ?>
 <!DOCTYPE html>
@@ -318,6 +480,7 @@ if (isset($_POST['export_pdf'])) {
                         <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Value</th>
                         <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Reason</th>
                         <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Responsible Person</th>
+                        <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Type</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -329,9 +492,19 @@ if (isset($_POST['export_pdf'])) {
                                 </td>
                                 <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
                                     <?php if (!empty($waste['image'])): ?>
-                                        <img src="<?= htmlspecialchars($waste['image']) ?>" class="w-8 h-8 mx-auto object-cover rounded" alt="<?= htmlspecialchars($waste['item_name'] ?? 'No Name'); ?>">
+                                        <?php 
+                                        // Determine the correct path based on item_type
+                                        $imagePath = $waste['item_type'] === 'ingredient' 
+                                            ? "../staff/" . $waste['image']  // Path for ingredient images
+                                            : "../admin/" . $waste['image'];  // Path for product images
+                                        ?>
+                                        <img src="<?= htmlspecialchars($imagePath) ?>" 
+                                             class="w-8 h-8 mx-auto object-cover rounded" 
+                                             alt="<?= htmlspecialchars($waste['item_name'] ?? 'No Name'); ?>">
                                     <?php else: ?>
-                                        <img src="../../assets/default-product.jpg" class="w-8 h-8 mx-auto object-cover rounded" alt="No Image Available">
+                                        <img src="../../assets/default-product.jpg" 
+                                             class="w-8 h-8 mx-auto object-cover rounded" 
+                                             alt="No Image Available">
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
@@ -351,6 +524,12 @@ if (isset($_POST['export_pdf'])) {
                                 </td>
                                 <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
                                     <?= htmlspecialchars($waste['responsible_person']) ?>
+                                </td>
+                                <td class="py-2 px-4 border-b border-gray-200 text-sm">
+                                    <span class="px-2 py-1 rounded text-xs font-semibold 
+                                        <?= $waste['item_type'] === 'ingredient' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800' ?>">
+                                        <?= ucfirst($waste['item_type']) ?>
+                                    </span>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

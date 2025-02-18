@@ -172,19 +172,28 @@ $ngos = $stmt->fetchAll();
                             <td><?= htmlspecialchars($ngo['contact_email']) ?></td>
                             <td><?= htmlspecialchars($ngo['category']) ?></td>
                             <td><?= htmlspecialchars($ngo['capacity']) ?></td>
-                            <td class="flex space-x-2">
-                                <a href="edit_ngo.php?id=<?= urlencode($ngo['id']) ?>" class="btn btn-sm btn-secondary flex items-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13" />
-                                    </svg>
-                                    Edit
-                                </a>
-                                <a href="delete_ngo.php?id=<?= urlencode($ngo['id']) ?>" onclick="return confirm('Are you sure you want to delete this NGO?');" class="btn btn-sm btn-error flex items-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                    Delete
-                                </a>
+                            <td class="py-2 px-4 border-b border-gray-200 text-sm">
+                                <div class='flex justify-center space-x-2'>
+                                    <a href="edit_ngo.php?id=<?= urlencode($ngo['id']) ?>" 
+                                       class='rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
+                                        <!-- Edit Icon -->
+                                        <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' 
+                                                  d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
+                                        </svg>
+                                        Edit
+                                    </a>
+                                    <a href="delete_ngo.php?id=<?= urlencode($ngo['id']) ?>" 
+                                       onclick="return confirm('Are you sure you want to delete this NGO?');" 
+                                       class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
+                                        <!-- Delete Icon -->
+                                        <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' 
+                                                  d='M6 18L18 6M6 6l12 12' />
+                                        </svg>
+                                        Delete
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>

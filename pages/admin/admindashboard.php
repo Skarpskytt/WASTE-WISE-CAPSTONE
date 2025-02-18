@@ -11,8 +11,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 include('../../config/db_connect.php');
 
 // Initialize date filters
-$startDate = isset($_GET['start_date']) ? $_GET['start_date'] : null;
-$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : null;
+$startDate = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-30 days'));
+$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
 
 // Function to append date filters to SQL queries
 function appendDateFilters($baseQuery, $startDate, $endDate, &$params) {
@@ -55,29 +55,42 @@ $lossReasonQuery = "
 ";
 $params = [];
 $lossReasonQuery = appendDateFilters($lossReasonQuery, $startDate, $endDate, $params);
-$lossReasonQuery .= " GROUP BY waste_reason";
+$lossReasonQuery .= " GROUP BY waste_reason ORDER BY count DESC";
 $lossReasonStmt = $pdo->prepare($lossReasonQuery);
 $lossReasonStmt->execute($params);
 $lossReasonData = $lossReasonStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch data for Top Wasted Food Items
 $topWastedFoodQuery = "
-    SELECT inventory.name AS item_name, SUM(waste.waste_quantity) AS total_waste_quantity
+    SELECT 
+        COALESCE(inventory.name, ingredients.ingredient_name) AS item_name, 
+        SUM(waste.waste_quantity) AS total_waste_quantity,
+        SUM(waste.waste_value) AS total_waste_value,
+        waste.item_type
     FROM waste
-    LEFT JOIN inventory ON waste.inventory_id = inventory.id
+    LEFT JOIN inventory ON waste.item_id = inventory.id AND waste.item_type = 'product'
+    LEFT JOIN ingredients ON waste.item_id = ingredients.id AND waste.item_type = 'ingredient'
 ";
 $params = [];
 $topWastedFoodQuery = appendDateFilters($topWastedFoodQuery, $startDate, $endDate, $params);
-$topWastedFoodQuery .= " GROUP BY waste.inventory_id ORDER BY total_waste_quantity DESC LIMIT 5";
+$topWastedFoodQuery .= " GROUP BY waste.item_id, waste.item_type ORDER BY total_waste_quantity DESC LIMIT 5";
 $topWastedFoodStmt = $pdo->prepare($topWastedFoodQuery);
 $topWastedFoodStmt->execute($params);
 $topWastedFoodData = $topWastedFoodStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch recent waste transactions
 $wasteTransactionsQuery = "
-    SELECT waste.id, waste.waste_date, inventory.name AS item_name, waste.waste_quantity, waste.waste_value, waste.waste_reason
+    SELECT 
+        waste.id, 
+        waste.waste_date,
+        COALESCE(inventory.name, ingredients.ingredient_name) AS item_name,
+        waste.waste_quantity,
+        waste.waste_value,
+        waste.waste_reason,
+        waste.item_type
     FROM waste
-    LEFT JOIN inventory ON waste.inventory_id = inventory.id
+    LEFT JOIN inventory ON waste.item_id = inventory.id AND waste.item_type = 'product'
+    LEFT JOIN ingredients ON waste.item_id = ingredients.id AND waste.item_type = 'ingredient'
 ";
 $params = [];
 $wasteTransactionsQuery = appendDateFilters($wasteTransactionsQuery, $startDate, $endDate, $params);
@@ -113,21 +126,125 @@ $totalWaste = $totalWasteQuantityStmt->fetch(PDO::FETCH_ASSOC);
 $totalWasteQuantity = $totalWaste['total_quantity'] ?? 0;
 $totalWasteValue = $totalWaste['total_value'] ?? 0;
 
-// Define Waste Thresholds
-$thresholdQuantity = 1000; // Example threshold for quantity
-$thresholdValue = 50000;   // Example threshold for value
+// ===== DECISION SUPPORT SYSTEM ENHANCEMENTS =====
 
-// In your admindashboard.php where you check thresholds
+// 1. Define dynamic thresholds based on historical data
+$thresholdPeriod = date('Y-m-d', strtotime('-90 days')); // Get data from last 90 days
+$historicalDataQuery = "
+    SELECT AVG(waste_quantity) as avg_quantity, 
+           STDDEV(waste_quantity) as std_quantity,
+           AVG(waste_value) as avg_value,
+           STDDEV(waste_value) as std_value
+    FROM waste
+    WHERE waste_date >= :threshold_period
+";
+$historicalDataStmt = $pdo->prepare($historicalDataQuery);
+$historicalDataStmt->execute([':threshold_period' => $thresholdPeriod]);
+$historicalData = $historicalDataStmt->fetch(PDO::FETCH_ASSOC);
+
+// Set thresholds to be 150% of historical average (dynamic)
+$thresholdQuantity = $historicalData['avg_quantity'] * 1.5;
+$thresholdValue = $historicalData['avg_value'] * 1.5;
+
+// 2. Seasonal pattern analysis
+$seasonalAnalysisQuery = "
+    SELECT MONTH(waste_date) as month, AVG(waste_quantity) as avg_quantity
+    FROM waste
+    WHERE waste_date >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+    GROUP BY MONTH(waste_date)
+    ORDER BY month
+";
+$seasonalAnalysisStmt = $pdo->prepare($seasonalAnalysisQuery);
+$seasonalAnalysisStmt->execute();
+$seasonalData = $seasonalAnalysisStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 3. Trend analysis - Check if current waste is trending up
+$currentMonthQuery = "
+    SELECT SUM(waste_quantity) as current_quantity
+    FROM waste
+    WHERE MONTH(waste_date) = MONTH(CURDATE()) AND YEAR(waste_date) = YEAR(CURDATE())
+";
+$currentMonthStmt = $pdo->prepare($currentMonthQuery);
+$currentMonthStmt->execute();
+$currentMonth = $currentMonthStmt->fetch(PDO::FETCH_ASSOC);
+
+$previousMonthQuery = "
+    SELECT SUM(waste_quantity) as previous_quantity
+    FROM waste
+    WHERE MONTH(waste_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    AND YEAR(waste_date) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+";
+$previousMonthStmt = $pdo->prepare($previousMonthQuery);
+$previousMonthStmt->execute();
+$previousMonth = $previousMonthStmt->fetch(PDO::FETCH_ASSOC);
+
+$trendingUp = false;
+$trendPercentage = 0;
+if ($previousMonth['previous_quantity'] > 0) {
+    $trendPercentage = ($currentMonth['current_quantity'] - $previousMonth['previous_quantity']) / $previousMonth['previous_quantity'] * 100;
+    $trendingUp = $trendPercentage > 10; // If waste increases more than 10%
+}
+
+// 4. Item-specific analysis
+$itemThresholdAnalysisQuery = "
+    SELECT 
+        COALESCE(inventory.name, ingredients.ingredient_name) AS item_name,
+        AVG(waste.waste_quantity) AS avg_quantity,
+        STDDEV(waste.waste_quantity) AS std_quantity,
+        waste.item_type
+    FROM waste
+    LEFT JOIN inventory ON waste.item_id = inventory.id AND waste.item_type = 'product'
+    LEFT JOIN ingredients ON waste.item_id = ingredients.id AND waste.item_type = 'ingredient'
+    WHERE waste_date >= :threshold_period
+    GROUP BY waste.item_id, waste.item_type
+";
+$itemThresholdAnalysisStmt = $pdo->prepare($itemThresholdAnalysisQuery);
+$itemThresholdAnalysisStmt->execute([':threshold_period' => $thresholdPeriod]);
+$itemThresholdData = $itemThresholdAnalysisStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 5. Get recommendations based on the data analysis
+$recommendations = [];
+
+// Threshold alerts
+if ($totalWasteQuantity > $thresholdQuantity) {
+    $recommendations[] = "Total waste quantity is above threshold. Consider reviewing inventory management practices.";
+}
+
+if ($totalWasteValue > $thresholdValue) {
+    $recommendations[] = "Total waste value is above threshold. Review high-value items that are wasted frequently.";
+}
+
+// Trending alerts
+if ($trendingUp) {
+    $recommendations[] = "Waste is trending up by {$trendPercentage}% from last month. Implement immediate waste reduction measures.";
+}
+
+// Top wasted items recommendations
+if (!empty($topWastedFoodData)) {
+    $topItem = $topWastedFoodData[0];
+    $recommendations[] = "The most wasted item is '{$topItem['item_name']}'. Consider reducing production or improving storage.";
+}
+
+// Season-based recommendations
+$currentMonth = date('n');
+foreach ($seasonalData as $season) {
+    if ($season['month'] == $currentMonth && $season['avg_quantity'] > $historicalData['avg_quantity']) {
+        $recommendations[] = "Historically, waste increases in " . date('F', mktime(0, 0, 0, $currentMonth, 10)) . ". Consider adjusting production accordingly.";
+        break;
+    }
+}
+
+// Check for notifications
 if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdValue) {
     // Create notification messages
     if ($totalWasteQuantity > $thresholdQuantity) {
-        $message = "Warning: Total Waste Quantity exceeds the threshold of {$thresholdQuantity} units.";
+        $message = "Warning: Total Waste Quantity exceeds the threshold of " . number_format($thresholdQuantity, 2) . " units.";
         $insertNotification = $pdo->prepare("
             INSERT INTO notifications (user_id, message) 
             VALUES (:user_id, :message)
         ");
         $insertNotification->execute([
-            ':user_id' => $_SESSION['user_id'], // or another appropriate user id
+            ':user_id' => $_SESSION['user_id'],
             ':message' => $message
         ]);
     }
@@ -139,12 +256,37 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
             VALUES (:user_id, :message)
         ");
         $insertNotification->execute([
-            ':user_id' => $_SESSION['user_id'], // or another appropriate user id
+            ':user_id' => $_SESSION['user_id'],
             ':message' => $message
         ]);
     }
 }
 
+// 6. Predictive waste - simple prediction for next week based on historical data
+$predictedWasteQuery = "
+    SELECT SUM(waste_quantity) as weekly_quantity, SUM(waste_value) as weekly_value
+    FROM waste
+    WHERE waste_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 13 WEEK) AND DATE_SUB(CURDATE(), INTERVAL 1 WEEK)
+    GROUP BY WEEK(waste_date)
+    ORDER BY WEEK(waste_date) DESC
+    LIMIT 12
+";
+$predictedWasteStmt = $pdo->prepare($predictedWasteQuery);
+$predictedWasteStmt->execute();
+$weeklyData = $predictedWasteStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$predictedQuantity = 0;
+$predictedValue = 0;
+if (count($weeklyData) > 0) {
+    $totalWeeklyQuantity = 0;
+    $totalWeeklyValue = 0;
+    foreach ($weeklyData as $week) {
+        $totalWeeklyQuantity += $week['weekly_quantity'];
+        $totalWeeklyValue += $week['weekly_value'];
+    }
+    $predictedQuantity = $totalWeeklyQuantity / count($weeklyData);
+    $predictedValue = $totalWeeklyValue / count($weeklyData);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -176,7 +318,26 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
 
 <div class="p-6 overflow-y-auto w-full">
     <!-- Date Range Filter -->
-    
+    <div class="mb-6 flex space-x-2">
+        <form method="GET" class="flex space-x-2">
+            <input type="date" name="start_date" value="<?= htmlspecialchars($startDate); ?>" class="input input-bordered" placeholder="Start Date">
+            <input type="date" name="end_date" value="<?= htmlspecialchars($endDate); ?>" class="input input-bordered" placeholder="End Date">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="admindashboard.php" class="btn btn-secondary">Reset</a>
+        </form>
+    </div>
+
+    <!-- Decision Support System Recommendations -->
+    <?php if (!empty($recommendations)): ?>
+    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6" role="alert">
+        <h3 class="font-bold text-lg mb-2">Smart Recommendations</h3>
+        <ul class="list-disc pl-5">
+            <?php foreach ($recommendations as $recommendation): ?>
+                <li class="mb-1"><?= htmlspecialchars($recommendation) ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+    <?php endif; ?>
 
     <!-- Alerts and Notifications -->
     <?php if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdValue): ?>
@@ -188,8 +349,12 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                           d="M12 9v2m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
                 </svg>
                 <span>
-                    <?= ($totalWasteQuantity > $thresholdQuantity) ? "Warning: Total Waste Quantity exceeds the threshold of {$thresholdQuantity} units." : ""; ?>
-                    <?= ($totalWasteValue > $thresholdValue) ? "Warning: Total Waste Value exceeds the threshold of ₱" . number_format($thresholdValue, 2) . "." : ""; ?>
+                    <?php if ($totalWasteQuantity > $thresholdQuantity): ?>
+                        Warning: Total Waste Quantity exceeds the threshold of <?= number_format($thresholdQuantity, 2) ?> units.
+                    <?php endif; ?>
+                    <?php if ($totalWasteValue > $thresholdValue): ?>
+                        Warning: Total Waste Value exceeds the threshold of ₱<?= number_format($thresholdValue, 2) ?>.
+                    <?php endif; ?>
                 </span>
             </div>
         </div>
@@ -201,20 +366,28 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         <div class="bg-white shadow-md rounded-lg p-4">
             <h3 class="text-lg font-semibold">Total Waste Quantity</h3>
             <p class="text-2xl font-bold"><?= number_format($totalWasteQuantity, 2); ?> Units</p>
+            <p class="text-sm text-gray-500">Threshold: <?= number_format($thresholdQuantity, 2) ?> Units</p>
         </div>
         <!-- Total Waste Value -->
         <div class="bg-white shadow-md rounded-lg p-4">
             <h3 class="text-lg font-semibold">Total Waste Value</h3>
             <p class="text-2xl font-bold">₱<?= number_format($totalWasteValue, 2); ?></p>
+            <p class="text-sm text-gray-500">Threshold: ₱<?= number_format($thresholdValue, 2) ?></p>
         </div>
-        <div class="mb-6 flex space-x-2">
-        <form method="GET" class="flex space-x-2">
-            <input type="date" name="start_date" value="<?= htmlspecialchars($startDate); ?>" class="input input-bordered" placeholder="Start Date">
-            <input type="date" name="end_date" value="<?= htmlspecialchars($endDate); ?>" class="input input-bordered" placeholder="End Date">
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="admindashboard.php" class="btn btn-secondary">Reset</a>
-        </form>
-    </div>
+        <!-- Predicted Waste Next Week -->
+        <div class="bg-white shadow-md rounded-lg p-4">
+            <h3 class="text-lg font-semibold">Predicted Waste (Next Week)</h3>
+            <p class="text-2xl font-bold"><?= number_format($predictedQuantity, 2); ?> Units</p>
+            <p class="text-sm text-gray-500">Value: ₱<?= number_format($predictedValue, 2) ?></p>
+        </div>
+        <!-- Waste Trend -->
+        <div class="bg-white shadow-md rounded-lg p-4">
+            <h3 class="text-lg font-semibold">Monthly Waste Trend</h3>
+            <p class="text-2xl font-bold <?= $trendingUp ? 'text-red-500' : 'text-green-500' ?>">
+                <?= $trendPercentage > 0 ? '↑' : '↓' ?> <?= number_format(abs($trendPercentage), 2) ?>%
+            </p>
+            <p class="text-sm text-gray-500">Compared to last month</p>
+        </div>
     </div>
 
     <!-- Charts Container -->
@@ -248,6 +421,12 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
             <h3 class="text-lg font-semibold mb-2">Waste Quantity by Reason Over Time</h3>
             <div id="wasteByReasonOverTimeChart"></div>
         </div>
+
+        <!-- Seasonal Pattern Analysis -->
+        <div class="bg-white shadow-md rounded-lg p-4 md:col-span-2">
+            <h3 class="text-lg font-semibold mb-2">Seasonal Waste Pattern Analysis</h3>
+            <div id="seasonalPatternChart"></div>
+        </div>
     </div>
 
     <!-- Waste Transactions Table -->
@@ -262,6 +441,7 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                     <th>Waste Quantity</th>
                     <th>Waste Value</th>
                     <th>Waste Reason</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -275,10 +455,13 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                             <td><?= htmlspecialchars($transaction['waste_quantity']); ?></td>
                             <td>₱<?= htmlspecialchars(number_format($transaction['waste_value'], 2)); ?></td>
                             <td><?= ucfirst(htmlspecialchars($transaction['waste_reason'])); ?></td>
+                            <td>
+                                <a href="analyze_item.php?id=<?= $transaction['id'] ?>" class="btn btn-sm btn-outline">Analyze</a>
+                            </td>
                         </tr>
                 <?php endforeach; 
                 } else { ?>
-                    <tr><td colspan="6" class="text-center">No waste transactions found.</td></tr>
+                    <tr><td colspan="7" class="text-center">No waste transactions found.</td></tr>
                 <?php } ?>
             </tbody>
         </table>
@@ -313,7 +496,20 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         tooltip: {
             enabled: true
         },
-   
+        annotations: {
+            yaxis: [{
+                y: <?= $thresholdQuantity ?>,
+                borderColor: '#FF0000',
+                label: {
+                    borderColor: '#FF0000',
+                    style: {
+                        color: '#fff',
+                        background: '#FF0000'
+                    },
+                    text: 'Threshold'
+                }
+            }]
+        }
     };
     var wasteQuantityByWeekChart = new ApexCharts(document.querySelector("#wasteQuantityByWeekChart"), wasteQuantityByWeekOptions);
     wasteQuantityByWeekChart.render();
@@ -349,7 +545,20 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 }
             }
         },
-    
+        annotations: {
+            yaxis: [{
+                y: <?= $thresholdValue ?>,
+                borderColor: '#FF0000',
+                label: {
+                    borderColor: '#FF0000',
+                    style: {
+                        color: '#fff',
+                        background: '#FF0000'
+                    },
+                    text: 'Threshold'
+                }
+            }]
+        }
     };
     var wasteValueByWeekChart = new ApexCharts(document.querySelector("#wasteValueByWeekChart"), wasteValueByWeekOptions);
     wasteValueByWeekChart.render();
@@ -381,7 +590,6 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 }
             }
         },
-   
     };
     var lossReasonChart = new ApexCharts(document.querySelector("#lossReasonChart"), lossReasonOptions);
     lossReasonChart.render();
@@ -412,7 +620,6 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
         tooltip: {
             enabled: true
         },
-    
     };
     var topWastedFoodChart = new ApexCharts(document.querySelector("#topWastedFoodChart"), topWastedFoodOptions);
     topWastedFoodChart.render();
@@ -466,11 +673,10 @@ if ($totalWasteQuantity > $thresholdQuantity || $totalWasteValue > $thresholdVal
                 format: 'dd MMM yyyy'
             }
         },
-     
     };
     var wasteByReasonOverTimeChart = new ApexCharts(document.querySelector("#wasteByReasonOverTimeChart"), wasteByReasonOverTimeOptions);
     wasteByReasonOverTimeChart.render();
-</script>
 
+</script>
 </body>
 </html>

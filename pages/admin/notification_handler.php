@@ -26,15 +26,23 @@ function sendDonationNotification($pdo, $donationId) {
         return false;
     }
 
-    // Get donation details
+    // Get donation details with proper joins for both products and ingredients
     $stmt = $pdo->prepare("
-        SELECT d.*, n.name as ngo_name, n.contact_email, i.name as food_name
+        SELECT 
+            d.*,
+            n.name as ngo_name,
+            n.contact_email,
+            COALESCE(i.name, ing.ingredient_name) as food_name,
+            w.item_type,
+            w.waste_quantity
         FROM donations d
         JOIN ngos n ON d.ngo_id = n.id
         JOIN waste w ON d.waste_id = w.id
-        JOIN inventory i ON w.inventory_id = i.id
+        LEFT JOIN inventory i ON w.item_id = i.id AND w.item_type = 'product'
+        LEFT JOIN ingredients ing ON w.item_id = ing.id AND w.item_type = 'ingredient'
         WHERE d.id = ?
     ");
+    
     $stmt->execute([$donationId]);
     $donation = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -70,6 +78,8 @@ function sendDonationNotification($pdo, $donationId) {
         $acceptLink = "{$baseUrl}?token={$token}&action=accept&id={$donationId}";
         $declineLink = "{$baseUrl}?token={$token}&action=decline&id={$donationId}";
 
+        // Update email template to include item type
+        $itemTypeText = ucfirst($donation['item_type']);
         $mail->isHTML(true);
         $mail->Subject = 'New Food Donation Available';
         $mail->Body = "
@@ -78,8 +88,10 @@ function sendDonationNotification($pdo, $donationId) {
             <p>A new food donation is available:</p>
             
             <div style='background-color: #f5f5f5; padding: 15px; margin: 10px 0;'>
-                <p><strong>Food Type:</strong> {$donation['food_name']}</p>
-                <p><strong>Quantity:</strong> {$donation['quantity']}</p>
+                <p><strong>Type:</strong> {$itemTypeText}</p>
+                <p><strong>Food Item:</strong> {$donation['food_name']}</p>
+                <p><strong>Quantity:</strong> {$donation['quantity']} " . 
+                ($donation['item_type'] === 'product' ? 'pieces' : $donation['metric_unit']) . "</p>
                 <p><strong>Expiry Date:</strong> {$donation['expiry_date']}</p>
                 <p><strong>Preferred Date:</strong> {$donation['preferred_date']}</p>
                 <p><strong>Notes:</strong> {$donation['notes']}</p>

@@ -20,7 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $category = htmlspecialchars(trim($_POST['category']));
     $stockDate = $_POST['stockdate'];
     $itemQuantity = floatval($_POST['itemquantity']);
-    $unit = htmlspecialchars(trim($_POST['unit']));
+    $unit = 'pieces'; // Set default unit for products
     $location = htmlspecialchars(trim($_POST['itemlocation']));
     $pricePerUnit = floatval($_POST['price_per_unit']);
 
@@ -29,16 +29,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $errors[] = "Error: Invalid stock date format.";
     }
 
-    // Validate Unit
-    $allowedUnits = ['grams', 'kilograms', 'liters', 'milliliters', 'pieces'];
-    if (!in_array($unit, $allowedUnits)) {
-        $errors[] = "Error: Invalid unit selected.";
-    }
-
     // Handle image upload
     if (isset($_FILES['item_image']) && $_FILES['item_image']['error'] == 0) {
         $allowed = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp"];
-        $filename = $_FILES['item_image']['name'];
+        $filename = time() . '_' . $_FILES['item_image']['name']; // Add timestamp to prevent duplicates
         $filetype = $_FILES['item_image']['type'];
         $filesize = $_FILES['item_image']['size'];
 
@@ -55,23 +49,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $errors[] = "Error: File size exceeds the 2MB limit.";
             }
 
-            // Check whether file exists before uploading
-            if (file_exists("uploads/" . $filename)) {
-                $errors[] = "Error: " . htmlspecialchars($filename) . " already exists.";
-            } else {
-                // Create the uploads directory if it doesn't exist
-                if (!is_dir("uploads")) {
-                    mkdir("uploads", 0777, true);
-                }
+            // Create uploads directory if it doesn't exist
+            $uploadDir = "uploads/";
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
 
-                move_uploaded_file($_FILES["item_image"]["tmp_name"], "uploads/" . $filename);
-                $itemImage = "uploads/" . $filename;
+            $targetPath = $uploadDir . $filename;
+
+            if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
+                $itemImage = $targetPath;
+            } else {
+                $errors[] = "Error: Failed to move uploaded file.";
             }
         } else {
-            $errors[] = "Error: There was a problem uploading your file. Please try again.";
+            $errors[] = "Error: Invalid file type.";
         }
     } else {
-        $errors[] = "Error: Please upload an item image.";
+        $itemImage = "../../assets/default-product.jpg"; // Default image path
     }
 
     // If no errors, insert into database using PDO
@@ -88,8 +83,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ':image' => $itemImage,
                 ':price_per_unit' => $pricePerUnit
             ]);
-            $_SESSION['success'] = "Inventory item added successfully.";
-            header("Location: inventory_data.php");
+            $_SESSION['success'] = "Product added successfully.";
+            header("Location: product_data.php");
             exit();
         } catch (PDOException $e) {
             $errors[] = "Error: Could not execute the query. " . $e->getMessage();
@@ -172,7 +167,7 @@ try {
   <div class="flex flex-col mx-3 mt-6 lg:flex-row gap-4">
     <!-- Add Inventory Ingredient Form -->
     <div class="w-full lg:w-1/3 m-1">
-        <form class="w-full bg-white shadow-xl p-6 border" action="inventory_data.php" method="POST" enctype="multipart/form-data">
+        <form class="w-full bg-white shadow-xl p-6 border" action="product_data.php" method="POST" enctype="multipart/form-data">
             <div class="flex flex-wrap -mx-3 mb-6">
                 <!-- Item Name -->
 
@@ -203,18 +198,7 @@ try {
                     <input type="number" min="0" step="any" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
                     id="itemquantity" name="itemquantity" placeholder="Quantity" required />
                 </div>
-                <div class="w-full md:w-full px-3 mb-6">
-                <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="unit">Metric Unit</label>
-                <select class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                id="unit" name="unit" required>
-                    <option value="">Select Unit</option>
-                    <option value="grams">Grams</option>
-                    <option value="kilograms">Kilograms</option>
-                    <option value="liters">Liters</option>
-                    <option value="milliliters">Milliliters</option>
-                    <option value="pieces">Pieces</option>
-                </select>
-            </div>
+                <input type="hidden" name="unit" value="pieces">
                  </div>
                 
                
@@ -234,7 +218,7 @@ try {
             
             <!-- Add Inventory Button -->
             <div class="w-full md:w-full px-3 mb-6">
-                <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Add Inventory Ingredient</button>
+                <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Add Inventory Product</button>
             </div>
             
             <!-- Item Image Upload -->
@@ -266,7 +250,7 @@ try {
               <th class="flex justify-center">Image</th>
               <th>Item Name</th>
               <th>Category</th>
-              <th>Quantity Sold</th>
+              <th>Quantity</th>
               <th>Unit</th>
               <th>Location</th>
               <th>Stock Date</th>
@@ -281,7 +265,13 @@ try {
                   foreach ($inventory as $item) {
                       echo "<tr>";
                       echo "<th>" . $count++ . "</th>";
-                      echo "<td class='flex justify-center'><img src='" . htmlspecialchars($item['image']) . "' class='h-8 w-8' alt='" . htmlspecialchars($item['name']) . "'></td>";
+                      echo "<td class='flex justify-center'>";
+                      if (!empty($item['image']) && file_exists($item['image'])) {
+                          echo "<img src='" . htmlspecialchars($item['image']) . "' class='h-8 w-8 object-cover rounded' alt='" . htmlspecialchars($item['name']) . "'>";
+                      } else {
+                          echo "<img src='../../assets/default-product.jpg' class='h-8 w-8 object-cover rounded' alt='Default Image'>";
+                      }
+                      echo "</td>";
                       echo "<td>" . htmlspecialchars($item['name']) . "</td>";
                       echo "<td>" . htmlspecialchars($item['category']) . "</td>";
                       echo "<td>" . htmlspecialchars($item['quantity']) . "</td>";

@@ -153,10 +153,26 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
                                     <?= date('M j, Y g:i A', strtotime($user['created_at'])) ?>
                                 </td>
                                 <td class="py-2 px-4 border-b border-gray-200 text-sm">
-                                    <button onclick="editUser(<?= htmlspecialchars(json_encode($user)) ?>)" 
-                                            class="btn btn-sm btn-info mr-2">Edit</button>
-                                    <button onclick="deleteUser(<?= htmlspecialchars($user['id']) ?>)" 
-                                            class="btn btn-sm btn-error">Delete</button>
+                                    <div class='flex justify-center space-x-2'>
+                                        <a href="#" onclick="editUser(<?= htmlspecialchars(json_encode($user)) ?>)" 
+                                           class='rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
+                                            <!-- Edit Icon -->
+                                            <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                                <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' 
+                                                      d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
+                                            </svg>
+                                            Edit
+                                        </a>
+                                        <a href="#" onclick="deleteUser(<?= htmlspecialchars($user['id']) ?>)" 
+                                           class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
+                                            <!-- Delete Icon -->
+                                            <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                                <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' 
+                                                      d='M6 18L18 6M6 6l12 12' />
+                                            </svg>
+                                            Delete
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

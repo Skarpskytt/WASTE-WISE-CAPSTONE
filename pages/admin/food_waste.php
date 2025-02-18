@@ -20,16 +20,20 @@ $ngoStmt = $pdo->prepare($ngoQuery);
 $ngoStmt->execute();
 $ngos = $ngoStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch Wasted Items for Donation with correct food_type and positive quantity
+// Update the waste query to use item_id and handle both products and ingredients
 $wasteQuery = "
     SELECT 
-        waste.id, 
-        inventory.name AS food_type, 
-        waste.waste_quantity, 
-        inventory.image
+        waste.id,
+        COALESCE(inventory.name, ingredients.ingredient_name) AS food_type,
+        waste.waste_quantity,
+        COALESCE(inventory.image, ingredients.item_image) AS image,
+        waste.item_type
     FROM waste
-    JOIN inventory ON waste.inventory_id = inventory.id
-    WHERE waste.waste_reason = 'donation' AND waste.waste_quantity > 0
+    LEFT JOIN inventory ON waste.item_id = inventory.id AND waste.item_type = 'product'
+    LEFT JOIN ingredients ON waste.item_id = ingredients.id AND waste.item_type = 'ingredient'
+    WHERE waste.waste_reason = 'overproduction' 
+    AND waste.waste_quantity > 0
+    AND waste.status = 'pending'
 ";
 $wasteStmt = $pdo->prepare($wasteQuery);
 $wasteStmt->execute();
@@ -62,18 +66,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($quantity <= 0) continue;
 
             // Check waste quantity
-            $wasteCheckStmt = $pdo->prepare("SELECT waste_quantity, inventory_id FROM waste WHERE id = ?");
+            $wasteCheckStmt = $pdo->prepare("SELECT waste_quantity, item_id, item_type FROM waste WHERE id = ?");
             $wasteCheckStmt->execute([$item_id]);
             $waste = $wasteCheckStmt->fetch(PDO::FETCH_ASSOC);
 
+            // Update the food type check in the POST handling section
             if ($waste && $waste['waste_quantity'] >= $quantity) {
-                // Get food type
-                $foodTypeStmt = $pdo->prepare("SELECT name FROM inventory WHERE id = ?");
-                $foodTypeStmt->execute([$waste['inventory_id']]);
+                // Get food type based on item type
+                if ($waste['item_type'] === 'product') {
+                    $foodTypeStmt = $pdo->prepare("SELECT name FROM inventory WHERE id = ?");
+                } else {
+                    $foodTypeStmt = $pdo->prepare("SELECT ingredient_name AS name FROM ingredients WHERE id = ?");
+                }
+                $foodTypeStmt->execute([$waste['item_id']]);
                 $foodType = $foodTypeStmt->fetchColumn();
 
                 if (!$foodType) {
-                    throw new Exception("Inventory item not found");
+                    throw new Exception("Item not found");
                 }
 
                 // Insert donation
