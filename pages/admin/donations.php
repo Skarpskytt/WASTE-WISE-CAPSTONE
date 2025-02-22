@@ -1,9 +1,9 @@
 <?php
-// donations.php
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
 
-// Include necessary files and start session
-session_start();
-include('../../config/db_connect.php');
+// Check for admin access only
+checkAuth(['admin']);
 require '../../vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;

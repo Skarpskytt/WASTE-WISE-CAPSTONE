@@ -1,8 +1,9 @@
 <?php
-// export_waste_report.php
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
 
-// Include the database connection
-include('../../config/db_connect.php'); // Adjust the path as needed
+// Check for admin access only
+checkAuth(['admin']);
 
 // Fetch waste data
 try {

@@ -1,18 +1,15 @@
 <?php
-session_start();
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
 
-// Check if user is logged in and is an admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header('Location: ../auth/login.php');
-    exit();
-}
-
-// Include the database connection
-include('../../config/db_connect.php');
+// Check for admin access only
+checkAuth(['admin']);
 
 // Initialize date filters
 $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-30 days'));
 $endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+
+// ... rest of your existing code ...
 
 // Function to append date filters to SQL queries
 function appendDateFilters($baseQuery, $startDate, $endDate, &$params) {

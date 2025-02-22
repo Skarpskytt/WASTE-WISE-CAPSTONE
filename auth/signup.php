@@ -38,6 +38,13 @@
         ?>
         
         <form action="save_signup.php" method="POST" class="space-y-4">
+          <?php if (isset($_SESSION['pending_approval'])): ?>
+              <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mt-4" role="alert">
+                  <span class="block sm:inline"><?php echo $_SESSION['pending_approval']; ?></span>
+              </div>
+              <?php unset($_SESSION['pending_approval']); ?>
+          <?php endif; ?>
+          
           <div class="flex flex-row gap-2">
             <div>
               <label for="fname" class="block text-sm font-medium text-gray-700">First Name</label>
@@ -60,6 +67,43 @@
             <label for="conpassword" class="block text-sm font-medium text-gray-700">Confirm Password</label>
             <input type="password" id="conpassword" name="conpassword" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
           </div>
+          <div>
+            <label for="role" class="block text-sm font-medium text-gray-700">Select Role</label>
+            <select id="role" name="role" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+                <option value="">Select a role</option>
+                <option value="branch1_staff">Branch 1 Staff</option>
+                <option value="branch2_staff">Branch 2 Staff</option>
+                <option value="ngo">NGO Partner</option>
+            </select>
+          </div>
+          <div id="branch-fields" class="hidden">
+            <label for="branch" class="block text-sm font-medium text-gray-700">Select Branch</label>
+            <select id="branch" name="branch_id" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
+                <option value="">Select a branch</option>
+                <?php
+                include('../config/db_connect.php');
+                $stmt = $pdo->query('SELECT id, name FROM branches');
+                while ($branch = $stmt->fetch()) {
+                    echo '<option value="' . htmlspecialchars($branch['id']) . '">' . 
+                         htmlspecialchars($branch['name']) . '</option>';
+                }
+                ?>
+            </select>
+          </div>
+          <div id="ngo-fields" class="hidden space-y-4">
+            <div>
+                <label for="org_name" class="block text-sm font-medium text-gray-700">Organization Name</label>
+                <input type="text" id="org_name" name="org_name" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
+            </div>
+            <div>
+                <label for="phone" class="block text-sm font-medium text-gray-700">Contact Phone</label>
+                <input type="tel" id="phone" name="phone" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
+            </div>
+            <div>
+                <label for="address" class="block text-sm font-medium text-gray-700">Organization Address</label>
+                <textarea id="address" name="address" rows="3" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300"></textarea>
+            </div>
+          </div>
           <div class="flex gap-2">
             <input type="checkbox" id="terms" name="terms" required>
             <label for="terms" class="text-xs text-gray-600 hover:text-gray-800">Accept Terms and Conditions</label>
@@ -79,5 +123,28 @@
       </div>
     </div>
   </div>
+  <script>
+    document.getElementById('role').addEventListener('change', function() {
+        const ngoFields = document.getElementById('ngo-fields');
+        const branchFields = document.getElementById('branch-fields');
+        
+        // Hide all conditional fields first
+        ngoFields.classList.add('hidden');
+        branchFields.classList.add('hidden');
+        
+        // Reset required attributes
+        document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = false);
+        document.querySelector('#branch').required = false;
+        
+        // Show relevant fields based on role
+        if (this.value === 'ngo') {
+            ngoFields.classList.remove('hidden');
+            document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = true);
+        } else if (this.value.includes('staff')) {
+            branchFields.classList.remove('hidden');
+            document.querySelector('#branch').required = true;
+        }
+    });
+  </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Homepage | WasteWise</title>
+  <title>Homepage | Bea Bakes</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,8 +61,8 @@
             </ul>
           </div>
           <a href="homepage.php" class="flex ms-2 md:me-24">
-            <img src="../assets/images/Logo.png" class="h-8 me-3" alt="WasteWise Logo" />
-            <span class="text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Wastewise</span>
+            <img src="../assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise Logo" />
+            <span class="text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Bea Bakes</span>
           </a>
         </div>
         <div class="navbar-center hidden lg:flex">
@@ -93,7 +93,7 @@
   <div class="hero bg-sec min-h-screen flex-1">
     <div class="hero-content text-center text-black">
       <div class="max-w-md">
-        <h1 class="text-6xl font-bold textbal">WasteWise</h1>
+        <h1 class="text-6xl font-bold textbal">Bea Bakes</h1>
         <p class="py-6">
           An innovative waste management system designed to help businesses efficiently track, analyze, and reduce waste. By leveraging data analytics and reporting,
            the system enables organizations to optimize their waste disposal processes, minimize environmental impact, and achieve sustainability goals.

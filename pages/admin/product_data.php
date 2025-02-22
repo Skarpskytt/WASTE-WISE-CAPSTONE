@@ -1,15 +1,9 @@
 <?php
-// inventory_data.php
-session_start();
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
 
-// Check if user is logged in and is an admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header('Location: ../auth/login.php');
-    exit();
-}
-
-// Include the database connection
-include('../../config/db_connect.php');
+// Check for admin access only
+checkAuth(['admin']);
 
 $errors = [];
 

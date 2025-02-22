@@ -1,6 +1,9 @@
 <?php
-session_start();
-include('../../config/db_connect.php');
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
+
+// Check for admin access only
+checkAuth(['admin']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {

@@ -1,10 +1,12 @@
 <?php
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
+
+// Check for admin access only
+checkAuth(['admin']);
 // export_waste_report_pdf.php
 
 require('fpdf186/fpdf.php'); // Adjust the path as needed
-
-// Include the database connection
-include('../../config/db_connect.php'); // Adjust the path as needed
 
 // Fetch waste data
 try {

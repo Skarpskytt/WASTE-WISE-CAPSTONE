@@ -1,4 +1,9 @@
 <?php
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
+
+// Check for admin access only
+checkAuth(['admin']);
 // handle_response.php
 
 // Add error reporting

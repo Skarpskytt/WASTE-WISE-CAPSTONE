@@ -1,15 +1,11 @@
 <?php
-session_start();
-
-// Check if user is logged in and is an admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header('Location: ../auth/login.php');
-    exit();
-}
-
-// Include the database connection
-include('../../config/db_connect.php'); // Ensure the path is correct
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
 require_once '../../vendor/autoload.php';
+
+// Check for admin access only
+checkAuth(['admin']);
+
 
 // Capture search term and date range from GET
 $search    = isset($_GET['search']) ? trim($_GET['search']) : null;

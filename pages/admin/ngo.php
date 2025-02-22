@@ -1,5 +1,10 @@
 <?php
-include('../../config/db_connect.php');
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
+
+// Check for admin access only
+checkAuth(['admin']);
+
 
 // Handle form submission for adding a new NGO
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

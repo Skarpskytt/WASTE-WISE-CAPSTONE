@@ -33,7 +33,7 @@ use CustomSession\SessionHandler;
   <div class="w-full bg-white lg:w-1/2 flex items-center justify-center">
     <div class="max-w-md w-full p-6">
       <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign in</h1>
-      <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Welcome to Wastewise: A Food Waste Management System</h1>
+      <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Welcome to Bea Bakes: A Food Waste Management Hub System</h1>
       
       <?php
       if (isset($_SESSION['error'])) {

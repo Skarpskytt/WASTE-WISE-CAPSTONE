@@ -1,12 +1,9 @@
 <?php
-session_start();
-include('../../config/db_connect.php');
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
 
-// Check if user is logged in and is an admin
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header('Location: ../auth/login.php');
-    exit();
-}
+// Check for admin access only
+checkAuth(['admin']);
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
