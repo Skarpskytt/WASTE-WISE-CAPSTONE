@@ -1,7 +1,13 @@
-# Ignore .env file
+# Environment Variables
 .env
 
-# Ignore other files and directories as needed
-/node_modules
-/vendor
+# Dependencies
+/vendor/
+/node_modules/
+
+# IDE specific files
+.vscode/
+.idea/
+
+# Logs
 *.log

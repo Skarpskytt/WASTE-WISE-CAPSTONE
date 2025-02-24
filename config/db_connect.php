@@ -1,10 +1,8 @@
 <?php
-// config.php
-
-$host = 'localhost';
-$db   = 'wastewise'; // Replace with your database name
-$user = 'root';     // Replace with your database user
-$pass = '';     // Replace with your database password
+$host = '127.0.0.1'; // Using IP instead of hostname
+$db   = 'wastewise';
+$user = 'root';
+$pass = '';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
@@ -17,6 +15,6 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (\PDOException $e) {
-    die('Database connection failed: ' . $e->getMessage());
+    throw new Exception('Database connection failed: ' . $e->getMessage());
 }
 ?>

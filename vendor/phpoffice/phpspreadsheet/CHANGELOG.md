@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com)
 and this project adheres to [Semantic Versioning](https://semver.org).
 
+## 2025-02-07 - 3.9.1
+
+### Fixed
+
+- Xls writer Parser Mishandling True/False Argument. Backport of [PR #4333](https://github.com/PHPOffice/PhpSpreadsheet/pull/4333)
+- Xls writer Parser Parse By Character Not Byte. Backport of [PR #4344](https://github.com/PHPOffice/PhpSpreadsheet/pull/4344)
+
+## 2025-01-26 - 3.9.0
+
+### Added
+
+- Methods to get style for row or column. [PR #4317](https://github.com/PHPOffice/PhpSpreadsheet/pull/4317)
+- Method for duplicating worksheet in spreadsheet. [PR #4315](https://github.com/PHPOffice/PhpSpreadsheet/pull/4315)
+
+### Fixed
+
+- Security patch for control characters in protocol.
+- Ods Reader Sheet Names with Period. [Issue #4311](https://github.com/PHPOffice/PhpSpreadsheet/issues/4311) [PR #4313](https://github.com/PHPOffice/PhpSpreadsheet/pull/4313)
+- Mpdf and Tcpdf Hidden Columns and Merged Cells. [Issue #4319](https://github.com/PHPOffice/PhpSpreadsheet/issues/4319) [PR #4320](https://github.com/PHPOffice/PhpSpreadsheet/pull/4320)
+- Html Writer Allow mailto. [Issue #4316](https://github.com/PHPOffice/PhpSpreadsheet/issues/4316) [PR #4322](https://github.com/PHPOffice/PhpSpreadsheet/pull/4322)
+- Use composer/pcre rather than preg_* in Writer. [PR #4323](https://github.com/PHPOffice/PhpSpreadsheet/pull/4323)
+
+## 2025-01-11 - 3.8.0
+
+### Added
+
+- CHOOSECOLS, CHOOSEROWS, DROP, TAKE, and EXPAND. [PR #4286](https://github.com/PHPOffice/PhpSpreadsheet/pull/4286)
+
+### Fixed
+
+- Security patch for Html navigation.
+- Xlsx Reader Shared Formula with Boolean Result. Partial solution for [Issue #4280](https://github.com/PHPOffice/PhpSpreadsheet/issues/4280) [PR #4281](https://github.com/PHPOffice/PhpSpreadsheet/pull/4281)
+- Retitling cloned Worksheets. [Issue #641](https://github.com/PHPOffice/PhpSpreadsheet/issues/641) [PR #4302](https://github.com/PHPOffice/PhpSpreadsheet/pull/4302)
+- Extremely limited support for GROUPBY function. Partial response to [Issue #4282](https://github.com/PHPOffice/PhpSpreadsheet/issues/4282) [PR #4283](https://github.com/PHPOffice/PhpSpreadsheet/pull/4283)
+
+## 2024-12-26 - 3.7.0
+
+### Deprecated
+
+- Drawing::setIsUrl is unneeded. The property is set when setPath determines whether path is a url.
+
+### Fixed
+
+- Security patches for Samples.
+- Security patches for Html Writer.
+- Avoid unexpected charset in currency symbol. [PR #4279](https://github.com/PHPOffice/PhpSpreadsheet/pull/4279)
+- Add forceFullCalc option to Xlsx Writer. [Issue #4269](https://github.com/PHPOffice/PhpSpreadsheet/issues/4269) [PR #4271](https://github.com/PHPOffice/PhpSpreadsheet/pull/4271)
+- More context options may be needed for http(s) image. [Php issue 17121](https://github.com/php/php-src/issues/17121) [PR #4276](https://github.com/PHPOffice/PhpSpreadsheet/pull/4276)
+- Coverage-related tweaks to Xls Reader. [PR #4277](https://github.com/PHPOffice/PhpSpreadsheet/pull/4277)
+- Several fixed to ODS Writer. [Issue #4261](https://github.com/PHPOffice/PhpSpreadsheet/issues/4261) [PR #4263](https://github.com/PHPOffice/PhpSpreadsheet/pull/4263) [PR #4264](https://github.com/PHPOffice/PhpSpreadsheet/pull/4264) [PR #4266](https://github.com/PHPOffice/PhpSpreadsheet/pull/4266)
+
 ## 2024-12-08 - 3.6.0
 
 ### Added

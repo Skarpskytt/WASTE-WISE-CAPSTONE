@@ -35,16 +35,46 @@ use CustomSession\SessionHandler;
       <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign in</h1>
       <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Welcome to Bea Bakes: A Food Waste Management Hub System</h1>
       
-      <?php
-      if (isset($_SESSION['error'])) {
-          echo '<div class="mb-4 text-red-500">' . $_SESSION['error'] . '</div>';
-          unset($_SESSION['error']);
-      }
-      if (isset($_SESSION['success'])) {
-          echo '<div class="mb-4 text-green-500">' . $_SESSION['success'] . '</div>';
-          unset($_SESSION['success']);
-      }
-      ?>
+      <?php if (isset($_SESSION['error'])): ?>
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-4">
+            <p class="text-center">
+                <?php 
+                $error = $_SESSION['error'];
+                if (strpos($error, 'NGO account is still pending') !== false) {
+                    echo '<span class="font-semibold">Pending Approval:</span> ' . $error;
+                } elseif (strpos($error, 'Wrong password') !== false) {
+                    echo '<span class="font-semibold">Authentication Error:</span> ' . $error;
+                } else {
+                    echo $error;
+                }
+                ?>
+            </p>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['login_error'])): ?>
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-4">
+            <p class="text-center">
+                <?php 
+                $error = $_SESSION['login_error'];
+                if (strpos($error, 'Wrong password') !== false) {
+                    echo '<span class="font-semibold">Authentication Error:</span> ' . $error;
+                } else {
+                    echo $error;
+                }
+                ?>
+            </p>
+        </div>
+        <?php unset($_SESSION['login_error']); ?>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['success'])): ?>
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-md mb-4">
+            <p class="text-center"><?= $_SESSION['success'] ?></p>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+      <?php endif; ?>
       
       <form action="save_login.php" method="POST" class="space-y-4">
         <div>

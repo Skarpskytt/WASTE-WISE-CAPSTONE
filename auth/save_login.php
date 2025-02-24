@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $email = trim($_POST['email']);
         $password = $_POST['password'];
 
-        // Fetch user with role and branch information
+        // First check if user exists
         $stmt = $pdo->prepare('
             SELECT u.*, b.name as branch_name, np.status as ngo_status 
             FROM users u 
@@ -20,15 +20,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
-        if (!$user || !password_verify($password, $user['password'])) {
+        // Check if user exists first
+        if (!$user) {
             throw new Exception('Invalid email or password.');
         }
 
-        if (!$user['is_active']) {
-            if ($user['role'] === 'ngo' && $user['ngo_status'] === 'pending') {
-                throw new Exception('Your NGO account is pending approval.');
+        // Check password separately
+        if (!password_verify($password, $user['password'])) {
+            throw new Exception('Wrong password. Please try again.');
+        }
+
+        // Check NGO status
+        if ($user['role'] === 'ngo') {
+            if (!$user['is_active'] && $user['ngo_status'] === 'pending') {
+                throw new Exception('Your NGO account is still pending approval. Please wait for admin confirmation.');
+            } elseif (!$user['is_active'] && $user['ngo_status'] === 'rejected') {
+                throw new Exception('Your NGO account application has been rejected.');
             }
-            throw new Exception('Your account is inactive.');
+        }
+
+        if (!$user['is_active']) {
+            throw new Exception('Your account is inactive. Please contact administrator.');
         }
 
         // Set session variables
@@ -59,7 +71,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
 
     } catch (Exception $e) {
-        $_SESSION['error'] = $e->getMessage();
+        $error = $e->getMessage();
+        if (strpos($error, 'Wrong password') !== false || 
+            strpos($error, 'Invalid email') !== false) {
+            $_SESSION['login_error'] = $error; // Use different session variable for login errors
+        } else {
+            $_SESSION['error'] = $error;
+        }
         header('Location: login.php');
         exit();
     }
