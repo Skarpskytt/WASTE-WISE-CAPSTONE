@@ -61,11 +61,38 @@
           </div>
           <div>
             <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-            <input type="password" id="password" name="password" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+            <div class="relative">
+                <input type="password" 
+                       id="password" 
+                       name="password" 
+                       class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" 
+                       required
+                       onkeyup="checkPasswordStrength(this.value)">
+                <button type="button" 
+                        onclick="togglePassword('password', 'eyeIcon1')"
+                        class="absolute right-2 top-2.5 text-gray-500">
+                    <span id="eyeIcon1">👁️‍🗨️</span>
+                </button>
+            </div>
+            <div id="password-strength" class="mt-1 text-xs"></div>
           </div>
+
           <div>
             <label for="conpassword" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-            <input type="password" id="conpassword" name="conpassword" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+            <div class="relative">
+                <input type="password" 
+                       id="conpassword" 
+                       name="conpassword" 
+                       class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" 
+                       required
+                       onkeyup="checkPasswordMatch()">
+                <button type="button" 
+                        onclick="togglePassword('conpassword', 'eyeIcon2')"
+                        class="absolute right-2 top-2.5 text-gray-500">
+                    <span id="eyeIcon2">👁️‍🗨️</span>
+                </button>
+            </div>
+            <div id="password-match" class="mt-1 text-xs"></div>
           </div>
           <div>
             <label for="role" class="block text-sm font-medium text-gray-700">Select Role</label>
@@ -124,6 +151,61 @@
     </div>
   </div>
   <script>
+    function togglePassword(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.textContent = '👁️';
+        } else {
+            input.type = 'password';
+            icon.textContent = '👁️‍🗨️';
+        }
+    }
+
+    function checkPasswordStrength(password) {
+        const strengthDiv = document.getElementById('password-strength');
+        const strength = {
+            1: { text: 'Weak', color: 'text-red-500' },
+            2: { text: 'Medium', color: 'text-yellow-500' },
+            3: { text: 'Strong', color: 'text-green-500' }
+        };
+
+        let strengthScore = 0;
+
+        // Check length
+        if (password.length >= 8) strengthScore++;
+        
+        // Check for mix of characters
+        if (password.match(/[a-z]/) && password.match(/[A-Z]/) && password.match(/[0-9]/)) strengthScore++;
+        
+        // Check for special characters
+        if (password.match(/[^a-zA-Z0-9]/)) strengthScore++;
+
+        // Display result
+        const result = strength[strengthScore] || strength[1];
+        strengthDiv.className = `mt-1 text-xs ${result.color}`;
+        strengthDiv.textContent = `Password Strength: ${result.text}`;
+    }
+
+    function checkPasswordMatch() {
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('conpassword').value;
+        const matchDiv = document.getElementById('password-match');
+
+        if (confirmPassword === '') {
+            matchDiv.className = 'mt-1 text-xs text-gray-500';
+            matchDiv.textContent = '';
+        } else if (password === confirmPassword) {
+            matchDiv.className = 'mt-1 text-xs text-green-500';
+            matchDiv.textContent = 'Passwords match!';
+        } else {
+            matchDiv.className = 'mt-1 text-xs text-red-500';
+            matchDiv.textContent = 'Passwords do not match!';
+        }
+    }
+
     document.getElementById('role').addEventListener('change', function() {
         const ngoFields = document.getElementById('ngo-fields');
         const branchFields = document.getElementById('branch-fields');

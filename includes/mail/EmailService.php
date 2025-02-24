@@ -22,19 +22,18 @@ class EmailService {
     private function initializeMailer() {
         $this->mailer = new PHPMailer(true);
         
-        // Enable debugging for troubleshooting
-        $this->mailer->SMTPDebug = SMTP::DEBUG_SERVER; // Temporarily enable debug output
+        // Disable debugging in production
+        $this->mailer->SMTPDebug = 0; // Change from SMTP::DEBUG_SERVER to 0
         $this->mailer->isSMTP();
-        $this->mailer->Host = 'smtp.gmail.com';
+        $this->mailer->Host = $_ENV['SMTP_HOST'];
         $this->mailer->SMTPAuth = true;
-        $this->mailer->Username = 'bakesbea226@gmail.com';
-        // Make sure to use the App Password without spaces
-        $this->mailer->Password = 'loedyxqtkvgmdhso';
+        $this->mailer->Username = $_ENV['SMTP_USERNAME'];
+        $this->mailer->Password = $_ENV['SMTP_PASSWORD'];
         $this->mailer->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $this->mailer->Port = 587;
+        $this->mailer->Port = $_ENV['SMTP_PORT'];
         
-        // Set default sender with explicit email and name
-        $this->mailer->setFrom('bakesbea226@gmail.com', 'Bea Bakes Waste Management');
+        // Set default sender
+        $this->mailer->setFrom($_ENV['MAIL_FROM'], $_ENV['MAIL_FROM_NAME']);
     }
 
     public function sendNGOApprovalEmail($ngoData) {
@@ -81,6 +80,28 @@ class EmailService {
         }
     }
 
+    public function sendPasswordResetEmail($userData, $resetLink) {
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($userData['email'], $userData['fname'] . ' ' . $userData['lname']);
+            
+            $this->mailer->isHTML(true);
+            $this->mailer->Subject = 'Password Reset Request';
+            
+            $this->mailer->Body = $this->getPasswordResetTemplate($userData, $resetLink);
+            
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to send password reset email: " . $e->getMessage());
+            throw new Exception("Failed to send password reset email: " . $e->getMessage());
+        }
+    }
+
     private function getNGOApprovalTemplate($data) {
         return "
             <h2>Welcome to Bea Bakes Waste Management!</h2>
@@ -100,5 +121,28 @@ class EmailService {
             <p>If you have any questions or would like to submit a new application in the future, please feel free to contact us.</p>
             <p>Best regards,<br>Bea Bakes Team</p>
         ";
+    }
+
+    private function getPasswordResetTemplate($userData, $resetLink) {
+        return "
+        <h2>Password Reset Request</h2>
+        <p>Dear {$userData['fname']},</p>
+        <p>You recently requested to reset your password for your Bea Bakes account.</p>
+        <p>Click the button below to reset your password:</p>
+        <p style='margin: 20px 0;'>
+            <a href='{$resetLink}' 
+               style='background-color: #47663B; 
+                      color: white; 
+                      padding: 10px 20px; 
+                      text-decoration: none; 
+                      border-radius: 5px;
+                      display: inline-block;'>
+                Reset Password
+            </a>
+        </p>
+        <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
+        <p>This password reset link is only valid for the next hour.</p>
+        <p>Best regards,<br>Bea Bakes Team</p>
+    ";
     }
 }

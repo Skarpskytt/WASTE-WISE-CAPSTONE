@@ -3,15 +3,16 @@
 namespace PhpOffice\PhpSpreadsheet\Reader\Xlsx;
 
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
-use PhpOffice\PhpSpreadsheet\Reader\Xlsx;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use SimpleXMLElement;
 
 class DataValidations
 {
-    private Worksheet $worksheet;
+    /** @var Worksheet */
+    private $worksheet;
 
-    private SimpleXMLElement $worksheetXml;
+    /** @var SimpleXMLElement */
+    private $worksheetXml;
 
     public function __construct(Worksheet $workSheet, SimpleXMLElement $worksheetXml)
     {
@@ -56,8 +57,8 @@ class DataValidations
                     $docValidation->setError((string) $dataValidation['error']);
                     $docValidation->setPromptTitle((string) $dataValidation['promptTitle']);
                     $docValidation->setPrompt((string) $dataValidation['prompt']);
-                    $docValidation->setFormula1(Xlsx::replacePrefixes((string) $dataValidation->formula1));
-                    $docValidation->setFormula2(Xlsx::replacePrefixes((string) $dataValidation->formula2));
+                    $docValidation->setFormula1((string) $dataValidation->formula1);
+                    $docValidation->setFormula2((string) $dataValidation->formula2);
                     $docValidation->setSqref($range);
                 }
             }

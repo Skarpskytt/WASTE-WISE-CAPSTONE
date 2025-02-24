@@ -48,25 +48,29 @@ class SessionHandler
     }
 }
 
-// Usage
-try {
-    $pdo = new \PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
-    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-} catch (\PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
-}
-
-$handler = new SessionHandler($pdo);
-session_set_save_handler(
-    [$handler, 'open'],
-    [$handler, 'close'],
-    [$handler, 'read'],
-    [$handler, 'write'],
-    [$handler, 'destroy'],
-    [$handler, 'gc']
-);
-
+// Move session handler setup before any session operations
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    try {
+        $pdo = new \PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        
+        $handler = new SessionHandler($pdo);
+        session_set_save_handler(
+            [$handler, 'open'],
+            [$handler, 'close'],
+            [$handler, 'read'],
+            [$handler, 'write'],
+            [$handler, 'destroy'],
+            [$handler, 'gc']
+        );
+        
+        // Register shutdown function to ensure session data is saved
+        register_shutdown_function('session_write_close');
+        
+        // Start the session after setting the handler
+        session_start();
+    } catch (\PDOException $e) {
+        die("Database connection failed: " . $e->getMessage());
+    }
 }
 ?>

@@ -21,6 +21,20 @@ use CustomSession\SessionHandler;
      }
    }
   </script>
+  <script>
+function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const eyeIcon = document.getElementById('eyeIcon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        eyeIcon.innerHTML = '👁️';
+    } else {
+        passwordInput.type = 'password';
+        eyeIcon.innerHTML = '👁️‍🗨️';
+    }
+}
+</script>
 </head>
 <body>
 <div class="flex h-screen">
@@ -75,6 +89,16 @@ use CustomSession\SessionHandler;
         </div>
         <?php unset($_SESSION['success']); ?>
       <?php endif; ?>
+
+      <?php if (isset($_SESSION['pending_message'])): ?>
+        <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-md mb-4">
+            <p class="text-center">
+                <span class="font-semibold">Account Status:</span> 
+                <?php echo $_SESSION['pending_message']; ?>
+            </p>
+        </div>
+        <?php unset($_SESSION['pending_message']); ?>
+      <?php endif; ?>
       
       <form action="save_login.php" method="POST" class="space-y-4">
         <div>
@@ -82,13 +106,32 @@ use CustomSession\SessionHandler;
           <input type="email" id="email" name="email" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
         </div>
         <div>
-          <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-          <input type="password" id="password" name="password" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
-        </div>
-        <div class="flex items-center">
+    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+    <div class="relative">
+        <input type="password" id="password" name="password" 
+               class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" 
+               required>
+        <button type="button" 
+                onclick="togglePassword()" 
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 mt-1"
+                tabindex="-1">
+            <span id="eyeIcon" class="text-gray-700">👁️‍🗨️</span>
+        </button>
+    </div>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex items-center">
           <input type="checkbox" id="remember" name="remember" class="h-4 w-4 text-primarycol focus:ring-primarycol border-gray-300 rounded">
           <label for="remember" class="ml-2 block text-sm text-gray-900">Remember me</label>
         </div>
+        <div>
+          <div></div> <!-- Empty div for spacing -->
+          <a href="forgot_password.php" class="text-sm text-primarycol hover:underline">
+            Forgot your password?
+          </a>
+        </div>
+</div>
+       
         <div>
           <button type="submit" class="w-full bg-black text-white p-2 rounded-md hover:bg-sec focus:outline-none focus:bg-sec focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300 hover:text-black">Sign In</button>
         </div>

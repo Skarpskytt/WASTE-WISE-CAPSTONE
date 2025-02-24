@@ -3,10 +3,10 @@
 include('../config/db_connect.php');
 
 // Define admin user details
-$fname = 'JJ';
+$fname = 'Joshua';
 $lname = 'Chua';
-$email = 'jj@wastewise.com';
-$password = 'adminpassword'; // Change this to your desired password
+$email = 'joshuabchua11@gmail.com';
+$password = 'Pogiako123*'; // Change this to your desired password
 $role = 'admin';
 
 // Hash the password

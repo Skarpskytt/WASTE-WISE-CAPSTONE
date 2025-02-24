@@ -11,10 +11,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // First check if user exists
         $stmt = $pdo->prepare('
-            SELECT u.*, b.name as branch_name, np.status as ngo_status 
+            SELECT u.*, np.status as ngo_status 
             FROM users u 
-            LEFT JOIN branches b ON u.branch_id = b.id
-            LEFT JOIN ngo_profiles np ON u.id = np.user_id
+            LEFT JOIN ngo_profiles np ON u.id = np.user_id 
             WHERE u.email = ?
         ');
         $stmt->execute([$email]);
@@ -32,10 +31,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Check NGO status
         if ($user['role'] === 'ngo') {
-            if (!$user['is_active'] && $user['ngo_status'] === 'pending') {
-                throw new Exception('Your NGO account is still pending approval. Please wait for admin confirmation.');
-            } elseif (!$user['is_active'] && $user['ngo_status'] === 'rejected') {
-                throw new Exception('Your NGO account application has been rejected.');
+            $ngoStatusStmt = $pdo->prepare('SELECT status FROM ngo_profiles WHERE user_id = ?');
+            $ngoStatusStmt->execute([$user['id']]);
+            $ngoStatus = $ngoStatusStmt->fetchColumn();
+            
+            if (!$user['is_active'] && $ngoStatus === 'pending') {
+                $_SESSION['pending_message'] = "Your NGO account is currently under review. You will be notified via email once approved.";
+                header('Location: login.php');
+                exit();
+            } elseif (!$user['is_active'] && $ngoStatus === 'rejected') {
+                $_SESSION['error'] = "Your NGO account application has been rejected.";
+                header('Location: login.php');
+                exit();
             }
         }
 
