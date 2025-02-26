@@ -63,11 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             case 'admin':
                 header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/admin/admindashboard.php');
                 break;
-            case 'branch1_staff':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/staff/branch1/branch1_dashboard.php');
-                break;
-            case 'branch2_staff':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/staff/branch2/branch2_dashboard.php');
+            case 'branch1_staff': // Individual case for branch1_staff
+            case 'branch2_staff': 
+                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/staff/staff_dashboard.php');
                 break;
             case 'ngo':
                 header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/ngo/dashboard.php');

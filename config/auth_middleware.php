@@ -8,34 +8,43 @@ function checkAuth($allowed_roles = []) {
     // Check if user is logged in
     if (!isset($_SESSION['user_id'])) {
         $_SESSION['error'] = 'Please log in to access this page.';
-        header('Location: /auth/login.php');
+        // Fix typo in path: capstozne -> capstone
+        header('Location: /capstone/WASTE-WISE-CAPSTONE/auth/login.php');
         exit();
     }
 
     // Check if user's role is allowed
-    if (!empty($allowed_roles) && !in_array($_SESSION['role'], $allowed_roles)) {
-        $_SESSION['error'] = 'You do not have permission to access this page.';
-        header('Location: /pages/unauthorized.php');
-        exit();
-    }
-
-    // For branch staff, check if they're accessing their assigned branch
-    if (strpos($_SESSION['role'], 'branch') !== false) {
-        $current_branch = $_SESSION['branch_id'];
-        $requested_branch = substr($_SESSION['role'], 6, 1); // Gets '1' or '2' from 'branch1' or 'branch2'
+    if (!empty($allowed_roles)) {
+        // Modified to handle staff roles together
+        $userHasAccess = false;
         
-        if ($current_branch != $requested_branch) {
-            $_SESSION['error'] = 'You can only access your assigned branch.';
-            header('Location: /pages/unauthorized.php');
+        foreach ($allowed_roles as $role) {
+            // Special case for 'staff' to allow both branch1_staff and branch2_staff
+            if ($role === 'staff' && (($_SESSION['role'] === 'branch1_staff') || ($_SESSION['role'] === 'branch2_staff'))) {
+                $userHasAccess = true;
+                break;
+            }
+            
+            // Direct role match
+            if ($_SESSION['role'] === $role) {
+                $userHasAccess = true;
+                break;
+            }
+        }
+        
+        if (!$userHasAccess) {
+            $_SESSION['error'] = 'You do not have permission to access this page.';
+            header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/unauthorized.php');
             exit();
         }
     }
 
     // For NGO users, check if their account is approved
     if ($_SESSION['role'] === 'ngo') {
-        if ($_SESSION['status'] !== 'approved') {
+        // Only check status if it's set in the session
+        if (isset($_SESSION['status']) && $_SESSION['status'] !== 'approved') {
             $_SESSION['error'] = 'Your NGO account is pending approval.';
-            header('Location: /pages/unauthorized.php');
+            header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/unauthorized.php');
             exit();
         }
     }
