@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/staff/staff_dashboard.php');
                 break;
             case 'ngo':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/ngo/dashboard.php');
+                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/ngo/ngo_dashboard.php');
                 break;
             default:
                 throw new Exception('Invalid role configuration.');

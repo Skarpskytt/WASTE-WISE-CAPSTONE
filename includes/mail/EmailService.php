@@ -23,17 +23,17 @@ class EmailService {
         $this->mailer = new PHPMailer(true);
         
         // Disable debugging in production
-        $this->mailer->SMTPDebug = 0; // Change from SMTP::DEBUG_SERVER to 0
+        $this->mailer->SMTPDebug = 0;
         $this->mailer->isSMTP();
-        $this->mailer->Host = $_ENV['SMTP_HOST'];
+        $this->mailer->Host = $_ENV['MAIL_HOST'];
         $this->mailer->SMTPAuth = true;
-        $this->mailer->Username = $_ENV['SMTP_USERNAME'];
-        $this->mailer->Password = $_ENV['SMTP_PASSWORD'];
+        $this->mailer->Username = $_ENV['MAIL_USERNAME'];
+        $this->mailer->Password = $_ENV['MAIL_PASSWORD'];
         $this->mailer->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $this->mailer->Port = $_ENV['SMTP_PORT'];
+        $this->mailer->Port = $_ENV['MAIL_PORT'];
         
         // Set default sender
-        $this->mailer->setFrom($_ENV['MAIL_FROM'], $_ENV['MAIL_FROM_NAME']);
+        $this->mailer->setFrom($_ENV['MAIL_FROM_ADDRESS'], $_ENV['MAIL_FROM_NAME']);
     }
 
     public function sendNGOApprovalEmail($ngoData) {

@@ -1,21 +1,112 @@
 <?php
+// filepath: /c:/xampp/htdocs/capstone/WASTE-WISE-CAPSTONE/pages/staff/ingredients.php
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Check for Branch 1 staff access only
+// Check for staff access
 checkAuth(['staff']);
 
-// Process form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_ingredient'])) {
-    // Map form fields to variables.
-    $ingredient_name = $_POST['itemname']       ?? '';
-    $expiration_date = $_POST['expirationdate'] ?? '';
-    $stock_datetime  = $_POST['stockdate']       ?? date('Y-m-d H:i:s');
-    $quantity        = $_POST['itemquantity']    ?? '';
-    $metric_unit     = $_POST['unit']            ?? '';
-    $price           = $_POST['price']           ?? '';
-    $location        = $_POST['itemlocation']    ?? '';
+$errors = [];
+$successMessage = '';
 
+// Handle EDIT ingredient submission
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_ingredient'])) {
+    $ingredientId = $_POST['ingredient_id'];
+    $ingredientName = htmlspecialchars(trim($_POST['edit_itemname']));
+    $category = htmlspecialchars(trim($_POST['edit_category']));
+    $supplierName = htmlspecialchars(trim($_POST['edit_supplier']));
+    $stockDate = $_POST['edit_stockdate'];
+    $pricePerUnit = floatval($_POST['edit_price_per_unit']);
+    
+    // Handle image update if a new one is provided
+    $itemImage = $_POST['current_image']; // Keep existing image by default
+    
+    if (isset($_FILES['edit_item_image']) && $_FILES['edit_item_image']['error'] === 0) {
+        $allowed = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp"];
+        $filename = time() . '_' . $_FILES['edit_item_image']['name'];
+        $filetype = $_FILES['edit_item_image']['type'];
+        $filesize = $_FILES['edit_item_image']['size'];
+
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (!array_key_exists($ext, $allowed)) {
+            $errors[] = "Error: Please select a valid file format (JPG, JPEG, PNG, WEBP).";
+        } elseif ($filesize > 2 * 1024 * 1024) {
+            $errors[] = "Error: File size exceeds the 2MB limit.";
+        } else {
+            $uploadDir = "uploads/";
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+
+            $targetPath = $uploadDir . $filename;
+
+            if (move_uploaded_file($_FILES["edit_item_image"]["tmp_name"], $targetPath)) {
+                $itemImage = $targetPath;
+            } else {
+                $errors[] = "Error: Failed to move uploaded file.";
+            }
+        }
+    }
+
+    // If no errors, update database
+    if (empty($errors)) {
+        try {
+            $stmt = $pdo->prepare("
+                UPDATE ingredients SET 
+                    ingredient_name = :name,
+                    category = :category,
+                    supplier_name = :supplier,
+                    stock_datetime = :stock_date,
+                    price_per_unit = :price_per_unit,
+                    item_image = :image
+                WHERE id = :id AND branch_id = :branch_id
+            ");
+            
+            $stmt->execute([
+                ':name' => $ingredientName,
+                ':category' => $category,
+                ':supplier' => $supplierName,
+                ':stock_date' => $stockDate,
+                ':price_per_unit' => $pricePerUnit,
+                ':image' => $itemImage,
+                ':id' => $ingredientId,
+                ':branch_id' => $_SESSION['branch_id'] // Security check to ensure users only edit their branch's ingredients
+            ]);
+            
+            $successMessage = "Ingredient updated successfully.";
+        } catch (PDOException $e) {
+            $errors[] = "Error updating ingredient: " . $e->getMessage();
+        }
+    }
+}
+
+// Handle DELETE ingredient
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_ingredient'])) {
+    $ingredientId = $_POST['ingredient_id'];
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM ingredients WHERE id = :id AND branch_id = :branch_id");
+        $stmt->execute([
+            ':id' => $ingredientId,
+            ':branch_id' => $_SESSION['branch_id'] // Security check
+        ]);
+        
+        $successMessage = "Ingredient deleted successfully.";
+    } catch (PDOException $e) {
+        $errors[] = "Error deleting ingredient: " . $e->getMessage();
+    }
+}
+
+// Process form submission for adding ingredient
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_ingredient'])) {
+    // Map form fields to variables
+    $ingredient_name = $_POST['itemname'] ?? '';
+    $category = $_POST['category'] ?? '';
+    $supplier_name = $_POST['supplier'] ?? null; // Optional
+    $stock_datetime = $_POST['stockdate'] ?? date('Y-m-d H:i:s');
+    $price_per_unit = $_POST['price_per_unit'] ?? '';
+    $branchId = $_SESSION['branch_id'];
+    
     // Process image upload if exists
     $item_image = null;
     if (isset($_FILES['item_image']) && $_FILES['item_image']['error'] === 0) {
@@ -32,37 +123,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_ingredient'])) {
                 // Save relative file path
                 $item_image = "uploads/" . $file_name;
             } else {
-                $errorMessage = "Failed to upload image.";
+                $errors[] = "Failed to upload image.";
             }
         } else {
-            $errorMessage = "Invalid file type. Only PNG, JPG, and WEBP allowed.";
+            $errors[] = "Invalid file type. Only PNG, JPG, and WEBP allowed.";
         }
     }
 
     try {
         $stmt = $pdo->prepare("
             INSERT INTO ingredients 
-                (ingredient_name, expiration_date, stock_datetime, quantity, metric_unit, price, location, item_image)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (ingredient_name, category, supplier_name, stock_datetime, price_per_unit, item_image, branch_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $ingredient_name,
-            $expiration_date,
+            $category,
+            $supplier_name,
             $stock_datetime,
-            $quantity,
-            $metric_unit,
-            $price,
-            $location,
-            $item_image
+            $price_per_unit,
+            $item_image,
+            $branchId
         ]);
         $successMessage = "Ingredient added successfully!";
     } catch (PDOException $e) {
-        $errorMessage = "Error adding ingredient: " . $e->getMessage();
+        $errors[] = "Error adding ingredient: " . $e->getMessage();
     }
 }
 
-// Fetch ingredients data from the database
-$stmt = $pdo->query("SELECT * FROM ingredients ORDER BY id DESC");
+// Fetch ingredients data from the database - filter by branch_id
+$stmt = $pdo->prepare("SELECT * FROM ingredients WHERE branch_id = ? ORDER BY id DESC");
+$stmt->execute([$_SESSION['branch_id']]);
 $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -70,7 +161,7 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inventory Data - WasteWise</title>
+  <title>Ingredients Data - WasteWise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -96,6 +187,76 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
       $('#closeSidebar').on('click', function() {
           $('#sidebar').addClass('-translate-x-full');
       });
+      
+      // Open edit modal
+      $('.openEditModal').on('click', function() {
+        const ingredientId = $(this).data('id');
+        const ingredientName = $(this).data('name');
+        const category = $(this).data('category');
+        const supplier = $(this).data('supplier');
+        const stockDate = $(this).data('stockdate');
+        const pricePerUnit = $(this).data('price');
+        const imagePath = $(this).data('image');
+        
+        // Populate edit form with current values
+        $('#ingredient_id').val(ingredientId);
+        $('#edit_itemname').val(ingredientName);
+        $('#edit_category').val(category);
+        $('#edit_supplier').val(supplier);
+        $('#edit_stockdate').val(stockDate);
+        $('#edit_price_per_unit').val(pricePerUnit);
+        $('#current_image').val(imagePath);
+        $('#edit_image_preview').attr('src', imagePath);
+        
+        // Show the modal
+        $('#editModal').removeClass('hidden');
+      });
+      
+      // Close edit modal
+      $('#closeEditModal').on('click', function() {
+        $('#editModal').addClass('hidden');
+      });
+      
+      // Open delete confirmation
+      $('.openDeleteModal').on('click', function() {
+        const ingredientId = $(this).data('id');
+        const ingredientName = $(this).data('name');
+        
+        $('#delete_ingredient_id').val(ingredientId);
+        $('#delete_ingredient_name').text(ingredientName);
+        
+        $('#deleteModal').removeClass('hidden');
+      });
+      
+      // Close delete modal
+      $('#closeDeleteModal').on('click', function() {
+        $('#deleteModal').addClass('hidden');
+      });
+      
+      // Preview edit image
+      $('#edit_item_image').on('change', function() {
+        const file = this.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            $('#edit_image_preview').attr('src', e.target.result);
+          }
+          reader.readAsDataURL(file);
+        }
+      });
+      
+      // Preview add image
+      $('#dropzone-file').on('change', function() {
+        const file = this.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            $('#add_image_preview').attr('src', e.target.result);
+            $('#add_image_preview').removeClass('hidden');
+          }
+          reader.readAsDataURL(file);
+        }
+      });
     });
   </script>
 </head>
@@ -112,12 +273,16 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   <!-- Display Success or Error Messages -->
   <?php if (!empty($successMessage)): ?>
-    <div class="bg-green-100 text-green-800 p-3 rounded my-4">
-      <?= htmlspecialchars($successMessage) ?>
+    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mt-4" role="alert">
+      <span class="block sm:inline"><?= htmlspecialchars($successMessage) ?></span>
     </div>
-  <?php elseif (!empty($errorMessage)): ?>
-    <div class="bg-red-100 text-red-800 p-3 rounded my-4">
-      <?= htmlspecialchars($errorMessage) ?>
+  <?php endif; ?>
+
+  <?php if (!empty($errors)): ?>
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
+      <?php foreach ($errors as $error): ?>
+        <span class="block sm:inline"><?= htmlspecialchars($error) ?></span><br>
+      <?php endforeach; ?>
     </div>
   <?php endif; ?>
 
@@ -142,6 +307,35 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
             />
           </div>
 
+          <!-- Category -->
+          <div class="w-full md:w-full px-3 mb-6">
+            <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="category">
+              Category
+            </label>
+            <input
+              class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
+              id="category"
+              type="text"
+              name="category"
+              placeholder="Category (e.g., Dairy, Dry Goods)"
+              required
+            />
+          </div>
+
+          <!-- Supplier Name - Optional -->
+          <div class="w-full md:w-full px-3 mb-6">
+            <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="supplier">
+              Supplier Name (Optional)
+            </label>
+            <input
+              class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
+              id="supplier"
+              type="text"
+              name="supplier"
+              placeholder="Supplier Name"
+            />
+          </div>
+
           <!-- Stock Date -->
           <div class="w-full md:w-full px-3 mb-6">
             <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">
@@ -156,85 +350,18 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
             />
           </div>
 
-          <div class="flex flex-1">
-            <!-- Quantity -->
-            <div class="w-full md:w-full px-3 mb-6">
-              <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemquantity">
-                Quantity
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
-                id="itemquantity"
-                name="itemquantity"
-                placeholder="Quantity"
-                required
-              />
-            </div>
-            <!-- Metric Unit -->
-            <div class="w-full md:w-full px-3 mb-6">
-              <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="unit">
-                Metric Unit
-              </label>
-              <select
-                class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
-                id="unit"
-                name="unit"
-                required
-              >
-                <option value="">Select Unit</option>
-                <option value="grams">Grams</option>
-                <option value="kilograms">Kilograms</option>
-                <option value="liters">Liters</option>
-                <option value="milliliters">Milliliters</option>
-                <option value="pieces">Pieces</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Location -->
+          <!-- Price per Unit -->
           <div class="w-full md:w-full px-3 mb-6">
-            <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemlocation">
-              Location
-            </label>
-            <input
-              type="text"
-              class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
-              id="itemlocation"
-              name="itemlocation"
-              placeholder="Location"
-              required
-            />
-          </div>
-
-          <!-- Expiration Date -->
-          <div class="w-full md:w-full px-3 mb-6">
-            <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expirationdate">
-              Expiration Date
-            </label>
-            <input
-              type="date"
-              class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
-              id="expirationdate"
-              name="expirationdate"
-              required
-            />
-          </div>
-
-          <!-- Price -->
-          <div class="w-full md:w-full px-3 mb-6">
-            <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price">
-              Price
+            <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price_per_unit">
+              Price per Unit
             </label>
             <input
               type="number"
               step="0.01"
               class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
-              id="price"
-              name="price"
-              placeholder="Price"
+              id="price_per_unit"
+              name="price_per_unit"
+              placeholder="Price per unit (kg, liter, etc.)"
               required
             />
           </div>
@@ -272,6 +399,7 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </svg>
             <h2 class="mt-4 text-xl font-medium text-gray-700 tracking-wide">Item Image</h2>
             <p class="mt-2 text-gray-500 tracking-wide">Upload or drag & drop your file PNG, JPG, or WEBP.</p>
+            <img id="add_image_preview" class="mt-4 max-h-40 hidden" alt="Image preview" />
             <input
               id="dropzone-file"
               type="file"
@@ -294,50 +422,186 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <th>#</th>
               <th class="flex justify-center">Image</th>
               <th>Ingredient Name</th>
-              <th>Quantity</th>
-              <th>Metric Unit</th>
-              <th>Location</th>
+              <th>Category</th>
+              <th>Supplier</th>
               <th>Stock Date</th>
-              <th>Expiration Date</th>
-              <th>Price</th>
+              <th>Price per Unit</th>
               <th class="text-center">Action</th>
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($ingredients as $index => $ingredient): ?>
+            <?php foreach ($ingredients as $index => $ingredient): 
+                $imgPath = (!empty($ingredient['item_image']) && file_exists($ingredient['item_image'])) 
+                    ? $ingredient['item_image'] 
+                    : '../../assets/images/default-ingredient.jpg';
+                $stockDate = date('Y-m-d', strtotime($ingredient['stock_datetime']));
+            ?>
               <tr>
                 <td><?= $index + 1 ?></td>
                 <td class="flex justify-center">
-                  <!-- Assuming you store the image path in a column, otherwise display N/A -->
-                  <?php if (!empty($ingredient['item_image'])): ?>
-                    <img src="<?= htmlspecialchars($ingredient['item_image']) ?>" alt="Ingredient Image" class="w-10 h-10 object-cover" />
-                  <?php else: ?>
-                    N/A
-                  <?php endif; ?>
+                  <img src="<?= htmlspecialchars($imgPath) ?>" alt="Ingredient Image" class="h-8 w-8 object-cover rounded" />
                 </td>
                 <td><?= htmlspecialchars($ingredient['ingredient_name']) ?></td>
-                <td><?= htmlspecialchars($ingredient['quantity']) ?></td>
-                <td><?= htmlspecialchars($ingredient['metric_unit']) ?></td>
-                <td><?= htmlspecialchars($ingredient['location']) ?></td>
-                <td><?= htmlspecialchars(date('Y-m-d', strtotime($ingredient['stock_datetime']))) ?></td>
-                <td><?= htmlspecialchars($ingredient['expiration_date']) ?></td>
-                <td><?= htmlspecialchars($ingredient['price']) ?></td>
-                <td class="text-center">
-                  <a href="edit_ingredient.php?id=<?= $ingredient['id'] ?>" 
-                     class="bg-blue-500 text-white py-1 px-2 rounded mr-2">Edit</a>
-                  <a href="delete_ingredient.php?id=<?= $ingredient['id'] ?>" 
-                     class="bg-red-500 text-white py-1 px-2 rounded"
-                     onclick="return confirm('Are you sure you want to delete this ingredient?')">Delete</a>
+                <td><?= htmlspecialchars($ingredient['category'] ?? 'N/A') ?></td>
+                <td><?= !empty($ingredient['supplier_name']) ? htmlspecialchars($ingredient['supplier_name']) : 'N/A' ?></td>
+                <td><?= htmlspecialchars($stockDate) ?></td>
+                <td><?= htmlspecialchars($ingredient['price_per_unit'] ?? $ingredient['price']) ?></td>
+                <td class="p-2">
+                  <div class="flex justify-center space-x-2">
+                    <button 
+                      data-id="<?= htmlspecialchars($ingredient['id']) ?>" 
+                      data-name="<?= htmlspecialchars($ingredient['ingredient_name']) ?>" 
+                      data-category="<?= htmlspecialchars($ingredient['category'] ?? '') ?>" 
+                      data-supplier="<?= htmlspecialchars($ingredient['supplier_name'] ?? '') ?>" 
+                      data-stockdate="<?= htmlspecialchars($stockDate) ?>" 
+                      data-price="<?= htmlspecialchars($ingredient['price_per_unit'] ?? $ingredient['price'] ?? 0) ?>" 
+                      data-image="<?= htmlspecialchars($imgPath) ?>" 
+                      class="openEditModal rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13" />
+                      </svg>
+                      Edit
+                    </button>
+                    <button 
+                      data-id="<?= htmlspecialchars($ingredient['id']) ?>" 
+                      data-name="<?= htmlspecialchars($ingredient['ingredient_name']) ?>" 
+                      class="openDeleteModal rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             <?php endforeach; ?>
+            <?php if (empty($ingredients)): ?>
+              <tr>
+                <td colspan="8" class="text-center">No ingredients found.</td>
+              </tr>
+            <?php endif; ?>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
-<div></div>
+
+<!-- Edit Ingredient Modal -->
+<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="bg-white p-6 rounded-lg w-full max-w-lg">
+    <div class="flex justify-between items-center border-b pb-3">
+      <h3 class="text-xl font-semibold text-gray-900">Edit Ingredient</h3>
+      <button id="closeEditModal" class="text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    
+    <form action="ingredients.php" method="POST" enctype="multipart/form-data" class="mt-4">
+      <input type="hidden" name="edit_ingredient" value="1">
+      <input type="hidden" name="ingredient_id" id="ingredient_id">
+      <input type="hidden" name="current_image" id="current_image">
+      
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_itemname">
+          Ingredient Name
+        </label>
+        <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+          id="edit_itemname" name="edit_itemname" type="text" required>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_category">
+          Category
+        </label>
+        <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+          id="edit_category" name="edit_category" type="text" required>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_supplier">
+          Supplier (Optional)
+        </label>
+        <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+          id="edit_supplier" name="edit_supplier" type="text">
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_stockdate">
+          Stock Date
+        </label>
+        <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+          id="edit_stockdate" name="edit_stockdate" type="date" required>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_price_per_unit">
+          Price per Unit
+        </label>
+        <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+          id="edit_price_per_unit" name="edit_price_per_unit" type="number" step="0.01" required>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2">
+          Current Image
+        </label>
+        <img id="edit_image_preview" src="" alt="Ingredient Image" class="h-32 object-contain mb-2">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_item_image">
+          Change Image (optional)
+        </label>
+        <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+          id="edit_item_image" name="edit_item_image" type="file" accept="image/png, image/jpeg, image/webp">
+      </div>
+      
+      <div class="flex items-center justify-end pt-4 border-t">
+        <button type="button" id="cancelEdit" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded mr-2"
+          onclick="document.getElementById('editModal').classList.add('hidden')">
+          Cancel
+        </button>
+        <button type="submit" class="bg-primarycol hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete Ingredient Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="bg-white p-6 rounded-lg w-full max-w-md">
+    <div class="flex justify-between items-center border-b pb-3">
+      <h3 class="text-xl font-semibold text-gray-900">Confirm Deletion</h3>
+      <button id="closeDeleteModal" class="text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="mt-4">
+      <p class="text-gray-700">Are you sure you want to delete <span id="delete_ingredient_name" class="font-semibold"></span>?</p>
+      <p class="text-gray-500 text-sm mt-2">This action cannot be undone.</p>
+    </div>
+    
+    <form action="ingredients.php" method="POST" class="mt-6">
+      <input type="hidden" name="delete_ingredient" value="1">
+      <input type="hidden" name="ingredient_id" id="delete_ingredient_id">
+      
+      <div class="flex items-center justify-end border-t pt-4">
+        <button type="button" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded mr-2"
+          onclick="document.getElementById('deleteModal').classList.add('hidden')">
+          Cancel
+        </button>
+        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+          Delete
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
 </body>
 </html>
