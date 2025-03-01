@@ -25,6 +25,12 @@ $unreadCount = count($notifications);
             </svg>
         </button>
        <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
+       <div class="mb-3">
+        <a href="staff_dashboard.php" class="flex ms-2 md:me-24">
+           <img src="/capstone/WASTE-WISE-CAPSTONE/assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
+           <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Bea Bakes</span>
+         </a>
+        </div>
           <li>
              <a href="../admin/admindashboard.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
@@ -159,13 +165,7 @@ $unreadCount = count($notifications);
             </svg>
          </button>
          
-<!-- Update the logo section -->
-<a href="../admin/admindashboard.php" class="flex ms-2 md:me-24">
-    <img src="../../assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
-    <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
-        Bea Bakes
-    </span>
-</a>
+
        </div>
        <div class="flex items-center">
            <div class="flex items-center ms-3 gap-4">

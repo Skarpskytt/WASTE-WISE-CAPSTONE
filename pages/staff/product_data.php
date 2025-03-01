@@ -31,7 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
         } elseif ($filesize > 2 * 1024 * 1024) {
             $errors[] = "Error: File size exceeds the 2MB limit.";
         } else {
-            $uploadDir = "uploads/";
+            $uploadDir = __DIR__ . "/uploads/products/";
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
@@ -39,7 +39,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["edit_item_image"]["tmp_name"], $targetPath)) {
-                $itemImage = $targetPath;
+                $itemImage = 'uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
             }
@@ -123,7 +123,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
             $errors[] = "Error: File size exceeds the 2MB limit.";
         } else {
             // Create uploads directory if it doesn't exist
-            $uploadDir = "uploads/";
+            $uploadDir = __DIR__ . "/uploads/products/";
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
@@ -131,7 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
-                $itemImage = $targetPath;
+                $itemImage = 'uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
             }
@@ -386,10 +386,10 @@ try {
             if (!empty($inventory)) {
                 $count = 1;
                 foreach ($inventory as $item) {
-                    $imgPath = (!empty($item['image']) && file_exists($item['image'])) 
-                        ? $item['image'] 
+                    $imageName = basename($item['image'] ?? '');
+                    $imgPath = !empty($imageName) && file_exists(__DIR__ . '/uploads/products/' . $imageName)
+                        ? 'uploads/products/' . $imageName
                         : '../../assets/images/default-product.jpg';
-                        
                     echo "<tr>";
                     echo "<th>" . $count++ . "</th>";
                     echo "<td class='flex justify-center'>";
