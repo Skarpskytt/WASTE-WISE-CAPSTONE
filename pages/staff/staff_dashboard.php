@@ -8,6 +8,26 @@ checkAuth(['staff']);
 // Get branch ID from session
 $branchId = $_SESSION['branch_id'];
 
+// Make sure we have the user's name for display
+if (!isset($_SESSION['fname']) || empty($_SESSION['fname'])) {
+    // If name isn't in session, fetch it from the database
+    try {
+        $userStmt = $pdo->prepare("SELECT fname, lname FROM users WHERE id = ?");
+        $userStmt->execute([$_SESSION['user_id']]);
+        $userData = $userStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($userData) {
+            $_SESSION['fname'] = $userData['fname'];
+            $_SESSION['lname'] = $userData['lname'];
+        }
+    } catch (PDOException $e) {
+        // Silently handle error - just use generic name if can't fetch
+    }
+}
+
+// Fallback to a generic greeting if still can't get name
+$userName = isset($_SESSION['fname']) ? $_SESSION['fname'] : 'Staff';
+
 // Fetch waste data for today
 $today = date('Y-m-d');
 
@@ -154,7 +174,7 @@ try {
 <?php include ('../layout/staff_nav.php' ) ?> 
 
 <div class="w-full p-4">
-  <h1 class="text-3xl font-bold text-primarycol mb-6">Hi, <?= htmlspecialchars($_SESSION['fname']) ?></h1>
+  <h1 class="text-3xl font-bold text-primarycol mb-6">Hi, <?= htmlspecialchars($userName) ?>!</h1>
 
   <!-- Stats Cards -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
