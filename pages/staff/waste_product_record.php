@@ -297,7 +297,6 @@ try {
                                 <th>Produced</th>
                                 <th>Sold</th>
                                 <th>Wasted</th>
-                                <th>Waste Value</th>
                                 <th>Reason</th>
                                 <th>Disposal Method</th>
                                 <th>Staff</th>
@@ -320,7 +319,7 @@ try {
                                     echo "<td>" . htmlspecialchars($record['quantity_produced']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['quantity_sold']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['waste_quantity']) . "</td>";
-                                    echo "<td>₱" . number_format($record['waste_value'], 2) . "</td>";
+                                    // Removed waste value column
                                     echo "<td>" . htmlspecialchars(ucfirst($record['waste_reason'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['disposal_method'])) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['staff_name']) . "</td>";

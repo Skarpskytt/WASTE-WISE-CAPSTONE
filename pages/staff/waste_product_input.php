@@ -245,7 +245,6 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                         <p class="text-sm text-gray-500">Most wasted product:</p>
                         <p class="font-bold"><?= htmlspecialchars($topWaste['name']) ?></p>
                         <p class="text-sm"><?= number_format($topWaste['total_waste'], 2) ?> units wasted</p>
-                        <p class="text-sm">₱<?= number_format($topWaste['total_value'], 2) ?> value lost</p>
                     </div>
                     <?php endif; ?>
                     

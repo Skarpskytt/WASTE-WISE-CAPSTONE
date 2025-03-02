@@ -10,6 +10,10 @@ $userId = $_SESSION['user_id'];
 $userName = $_SESSION['fname'] . ' ' . $_SESSION['lname'];
 $branchId = $_SESSION['branch_id'];
 
+// Initialize message variables
+$successMessage = '';
+$errorMessage = '';
+
 try {
     // Fetch ingredients from ingredients table
     $ingStmt = $pdo->prepare("SELECT * FROM ingredients WHERE branch_id = ? ORDER BY stock_datetime DESC");
@@ -38,20 +42,18 @@ if (isset($_POST['submitwaste'])) {
     $notes = $_POST['notes'] ?? null;
     
     // Validate form data
-    if (!$userId || !$ingredientId || !$wasteDate || !$wasteQuantity || !$wasteReason || !$responsiblePerson) {
-        $response = [
-            'success' => false,
-            'message' => 'Please fill in all required fields.'
-        ];
+    if (!$userId || !$ingredientId || !$wasteDate || !$wasteQuantity || !$wasteReason || 
+        !$disposalMethod || !$productionStage || !$responsiblePerson) {
+        $errorMessage = 'Please fill in all required fields.';
     } else {
         // Insert waste entry into the ingredients_waste table
         try {
             $stmt = $pdo->prepare("
                 INSERT INTO ingredients_waste (
                     user_id, ingredient_id, waste_date, waste_quantity, waste_value, 
-                    waste_reason, responsible_person, created_at, branch_id,
-                    production_stage, disposal_method, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    waste_reason, responsible_person, batch_number, production_stage, disposal_method,
+                    notes, created_at, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
@@ -62,30 +64,27 @@ if (isset($_POST['submitwaste'])) {
                 $wasteValue, 
                 $wasteReason, 
                 $responsiblePerson, 
-                date('Y-m-d H:i:s'), 
-                $branchId,
+                $batchNumber,
                 $productionStage, 
                 $disposalMethod, 
-                $notes
+                $notes,
+                date('Y-m-d H:i:s'),
+                $branchId
             ]);
 
-            $response = [
-                'success' => true,
-                'message' => 'Waste entry submitted successfully.'
-            ];
+            // Redirect to the record page after successful submission
+            header('Location: waste_ingredients_input.php?success=1');
+            exit;
         } catch (PDOException $e) {
-            $response = [
-                'success' => false,
-                'message' => 'An error occurred while submitting the waste entry: ' . $e->getMessage()
-            ];
+            $errorMessage = 'An error occurred while submitting the waste entry: ' . $e->getMessage();
         }
     }
 
-    // Return the response as JSON
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
+    // If we get here, there was an error (no redirect happened)
 }
+
+// Check if redirected back with success message
+$showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -120,64 +119,32 @@ if (isset($_POST['submitwaste'])) {
             $('#closeSidebar').on('click', function() {
                 $('#sidebar').addClass('-translate-x-full');
             });
-
-            // Notification system
-            function showNotification(message, isSuccess) {
-                let notification = $('#notification');
-                notification.removeClass('bg-green-500 bg-red-500 text-white');
-
-                if (isSuccess) {
-                    notification.addClass('bg-green-500 text-white');
-                } else {
-                    notification.addClass('bg-red-500 text-white');
-                }
-
-                notification.text(message).fadeIn();
-
-                setTimeout(function() {
-                    notification.fadeOut();
-                }, 3000);
-            }
             
-            // Handle form submission with AJAX
-            $('.waste-form').on('submit', function(e) {
-                e.preventDefault();
-                
-                let form = $(this);
-                let formData = form.serialize();
-                
-                $.ajax({
-                    type: 'POST',
-                    url: 'waste_ingredients_input.php',
-                    data: formData,
-                    dataType: 'json',
-                    success: function(response) {
-                        if (response.success) {
-                            showNotification(response.message, true);
-                            form[0].reset();
-                        } else {
-                            showNotification(response.message, false);
-                        }
-                    },
-                    error: function() {
-                        showNotification('An unexpected error occurred.', false);
-                    }
-                });
-            });
+            // Auto-hide notification after 3 seconds
+            setTimeout(function() {
+                $('.notification').fadeOut();
+            }, 3000);
         });
     </script>
 
     <style>
         /* Notification Styles */
-        #notification {
+        .notification {
             position: fixed;
             top: 20px;
             right: 20px;
             padding: 10px 20px;
             border-radius: 5px;
             color: white;
-            display: none;
             z-index: 1000;
+        }
+        
+        .notification-success {
+            background-color: #47663B;
+        }
+        
+        .notification-error {
+            background-color: #ef4444;
         }
         
         /* Form section styling */
@@ -201,8 +168,18 @@ if (isset($_POST['submitwaste'])) {
             <p class="text-gray-500 mb-6">Record detailed waste information to identify patterns and reduce losses</p>
         </div>
 
-        <!-- Notification Container -->
-        <div id="notification"></div>
+        <!-- Notification Messages -->
+        <?php if (!empty($errorMessage)): ?>
+            <div class="notification notification-error">
+                <?= htmlspecialchars($errorMessage) ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($showSuccessMessage): ?>
+            <div class="notification notification-success">
+                Ingredient waste entry submitted successfully.
+            </div>
+        <?php endif; ?>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left sidebar - Statistics -->
@@ -238,8 +215,7 @@ if (isset($_POST['submitwaste'])) {
                     // Most commonly wasted ingredient
                     try {
                         $topWasteStmt = $pdo->prepare("
-                            SELECT i.ingredient_name, SUM(w.waste_quantity) as total_waste,
-                            SUM(w.waste_value) as total_value
+                            SELECT i.ingredient_name, SUM(w.waste_quantity) as total_waste
                             FROM ingredients_waste w
                             JOIN ingredients i ON w.ingredient_id = i.id
                             WHERE w.branch_id = ?
@@ -271,7 +247,7 @@ if (isset($_POST['submitwaste'])) {
                         <p class="text-sm text-gray-500">Most wasted ingredient:</p>
                         <p class="font-bold"><?= htmlspecialchars($topWaste['ingredient_name']) ?></p>
                         <p class="text-sm"><?= number_format($topWaste['total_waste'], 2) ?> units wasted</p>
-                        <p class="text-sm">₱<?= number_format($topWaste['total_value'], 2) ?> value lost</p>
+                        <!-- Removed waste value display -->
                     </div>
                     <?php endif; ?>
                     
@@ -325,7 +301,7 @@ if (isset($_POST['submitwaste'])) {
                             <div class="md:w-2/3 p-4">
                                 <h3 class="font-bold text-primarycol mb-3">Record Waste</h3>
                                 
-                                <form class="waste-form" method="POST">
+                                <form method="POST">
                                     <input type="hidden" name="ingredient_id" value="<?= htmlspecialchars($ingredientId) ?>">
                                     <input type="hidden" name="ingredient_value" value="<?= htmlspecialchars($ingredientCost) ?>">
                                     
@@ -365,9 +341,6 @@ if (isset($_POST['submitwaste'])) {
                                                 class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                         </div>
                                         
-                                        <!-- Remove recipe dropdown completely -->
-                                        
-                                        <!-- Keep production stage - useful for tracking where waste occurs -->
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Production Stage
