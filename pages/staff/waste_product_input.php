@@ -38,6 +38,17 @@ if (isset($_POST['submitwaste'])) {
     $responsiblePerson = $_POST['responsible_person'] ?? null;
     $notes = $_POST['notes'] ?? null;
     $branchId = $_SESSION['branch_id'];
+    
+    // Get donation expiry date if applicable
+    $donationExpiryDate = null;
+    if ($disposalMethod === 'donation') {
+        $donationExpiryDate = $_POST['donation_expiry_date'] ?? null;
+        if (empty($donationExpiryDate)) {
+            $errorMessage = 'Please specify an expiration date for donated products.';
+            // Don't proceed with form submission
+            goto display_page;
+        }
+    }
 
     // Validate form data
     if (!$userId || !$productId || !$wasteDate || !$wasteQuantity || !$wasteReason || 
@@ -49,8 +60,9 @@ if (isset($_POST['submitwaste'])) {
             $stmt = $pdo->prepare("
                 INSERT INTO product_waste (
                     user_id, product_id, waste_date, waste_quantity, quantity_produced, quantity_sold,
-                    waste_value, waste_reason, disposal_method, responsible_person, notes, created_at, branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    waste_value, waste_reason, disposal_method, responsible_person, notes, created_at, branch_id,
+                    donation_expiry_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
@@ -66,7 +78,8 @@ if (isset($_POST['submitwaste'])) {
                 $responsiblePerson,
                 $notes,
                 date('Y-m-d H:i:s'),
-                $branchId
+                $branchId,
+                $donationExpiryDate ? date('Y-m-d', strtotime($donationExpiryDate)) : null
             ]);
 
             // Redirect to the record page after successful submission
@@ -77,7 +90,7 @@ if (isset($_POST['submitwaste'])) {
         }
     }
 
-    // If we get here, there was an error (no redirect happened)
+    display_page: // Skip point for validation errors
 }
 
 // Check if redirected back with success message
@@ -121,6 +134,32 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             setTimeout(function() {
                 $('.notification').fadeOut();
             }, 3000);
+
+            // Handle donation expiration date field visibility
+            $('select[name="disposal_method"]').on('change', function() {
+                const forms = $(this).closest('form');
+                const expiryDateField = forms.find('.donation-expiry-container');
+                
+                if ($(this).val() === 'donation') {
+                    expiryDateField.removeClass('hidden').addClass('block');
+                    expiryDateField.find('input').prop('required', true);
+                } else {
+                    expiryDateField.removeClass('block').addClass('hidden');
+                    expiryDateField.find('input').prop('required', false);
+                }
+            });
+            
+            // Validate donation form before submission
+            $('form').on('submit', function(e) {
+                const disposalMethod = $(this).find('select[name="disposal_method"]').val();
+                const expiryDate = $(this).find('input[name="donation_expiry_date"]').val();
+                
+                if (disposalMethod === 'donation' && !expiryDate) {
+                    e.preventDefault();
+                    alert('Please specify an expiration date for the donated product.');
+                    return false;
+                }
+            });
         });
     </script>
 
@@ -385,6 +424,26 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                                 <option value="animal_feed">Animal Feed</option>
                                                 <option value="other">Other</option>
                                             </select>
+                                        </div>
+                                        
+                                        <div class="donation-expiry-container hidden col-span-2">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                <span class="text-red-500">*</span> Expiration Date for Donation
+                                            </label>
+                                            <input type="date" 
+                                                name="donation_expiry_date"
+                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary"
+                                                min="<?= date('Y-m-d') ?>">
+                                            <p class="text-xs text-gray-500 mt-1">Required for donations - helps NGOs know when the product must be used by</p>
+                                        </div>
+                                        
+                                        <div class="col-span-2 donation-expiry-container hidden">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                Donation Expiry Date
+                                            </label>
+                                            <input type="date"
+                                                name="donation_expiry_date"
+                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                         </div>
                                         
                                         <div class="col-span-2">
