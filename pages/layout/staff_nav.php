@@ -1,3 +1,68 @@
+<?php
+// First check if the user is staff and get their branch
+if (isset($_SESSION['role']) && (
+    $_SESSION['role'] === 'branch1_staff' || 
+    $_SESSION['role'] === 'branch2_staff'
+)) {
+    // Get the branch ID of the current staff user
+    $staffBranchId = $_SESSION['branch_id'];
+    
+    // Get notifications specific to this staff member's branch
+    $notificationsQuery = $pdo->prepare("
+        SELECT id, message, link, is_read, created_at, notification_type
+        FROM notifications
+        WHERE (user_id = ? OR target_branch_id = ? OR
+              (target_role = ? AND target_branch_id IS NULL))
+        ORDER BY created_at DESC
+        LIMIT 5
+    ");
+    $notificationsQuery->execute([
+        $_SESSION['user_id'], 
+        $staffBranchId,
+        $_SESSION['role']
+    ]);
+    $notifications = $notificationsQuery->fetchAll(PDO::FETCH_ASSOC);
+
+    // Count unread notifications
+    $unreadQuery = $pdo->prepare("
+        SELECT COUNT(*) FROM notifications
+        WHERE is_read = 0 AND (user_id = ? OR target_branch_id = ? OR
+              (target_role = ? AND target_branch_id IS NULL))
+    ");
+    $unreadQuery->execute([
+        $_SESSION['user_id'], 
+        $staffBranchId,
+        $_SESSION['role']
+    ]);
+    $unreadCount = $unreadQuery->fetchColumn();
+} else {
+    // Non-staff users should not see staff notifications
+    $notifications = [];
+    $unreadCount = 0;
+}
+
+// Mark notification as read if requested
+if (isset($_GET['mark_read']) && is_numeric($_GET['mark_read'])) {
+    $markReadStmt = $pdo->prepare("
+        UPDATE notifications
+        SET is_read = 1
+        WHERE id = ? AND (user_id = ? OR target_branch_id = ? OR
+              (target_role = ? AND target_branch_id IS NULL))
+    ");
+    $markReadStmt->execute([
+        (int)$_GET['mark_read'], 
+        $_SESSION['user_id'], 
+        $staffBranchId,
+        $_SESSION['role']
+    ]);
+    
+    // Redirect to remove the query parameter
+    $redirectUrl = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: $redirectUrl");
+    exit;
+}
+?>
+
 <aside id="sidebar" class="bg-base-100 w-full md:w-64 lg:w-64 h-full border-r border-gray-200 fixed md:relative lg:relative transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 z-50">
     <div class="h-full px-3 py-4 overflow-y-auto bg-white dark:bg-gray-800">
     <button id="closeSidebar" class="btn btn-ghost block md:hidden lg:hidden">
@@ -113,7 +178,64 @@
             </svg>
          </button>
          
-        
+        <div class="dropdown dropdown-bottom dropdown-end justify-end">
+    <div tabindex="0" role="button">
+        <div class="indicator">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8 mb-1">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+            </svg>
+            <?php if ($unreadCount > 0): ?>
+                <span class="indicator-item badge badge-sm badge-primary"><?= $unreadCount ?></span>
+            <?php endif; ?>
+        </div>
+    </div>
+    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-80 p-2 shadow">
+        <li class="menu-title">Branch <?= $_SESSION['branch_id'] ?> Notifications</li>
+        <?php if (empty($notifications)): ?>
+            <li><a class="text-gray-500">No new notifications</a></li>
+        <?php else: ?>
+            <?php foreach ($notifications as $notification): ?>
+                <li>
+                    <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
+                        <div class="flex justify-between items-start">
+                            <a href="<?= $notification['link'] ?>" class="flex-1">
+                                <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
+                                <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
+                            </a>
+                            <?php if (!$notification['is_read']): ?>
+                                <a href="?mark_read=<?= $notification['id'] ?>" 
+                                   class="text-xs text-primarycol hover:underline ml-2" 
+                                   onclick="event.stopPropagation(); markAsRead(<?= $notification['id'] ?>); return false;">
+                                    Mark as read
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+            <li class="menu-title pt-2">
+                <a href="/capstone/WASTE-WISE-CAPSTONE/pages/staff/all_notifications.php" class="text-sm text-primarycol hover:underline">
+                    View all notifications
+                </a>
+            </li>
+        <?php endif; ?>
+    </ul>
+</div>
+
+<!-- Add this JavaScript for marking notifications as read -->
+<script>
+function markAsRead(notificationId) {
+    fetch('?mark_read=' + notificationId, {
+        method: 'GET',
+    })
+    .then(response => {
+        window.location.reload();
+    })
+    .catch(error => {
+        console.error('Error marking notification as read:', error);
+    });
+}
+</script>
        </div>
        <div class="flex items-center">
            <div class="flex items-center ms-3 gap-4">

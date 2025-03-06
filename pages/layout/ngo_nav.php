@@ -1,3 +1,46 @@
+<?php
+// First check if the user is an NGO
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'ngo') {
+    // Only get notifications for NGO users
+    $notificationsQuery = $pdo->prepare("
+        SELECT id, message, link, is_read, created_at
+        FROM notifications
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+    ");
+    $notificationsQuery->execute([$_SESSION['user_id']]);
+    $notifications = $notificationsQuery->fetchAll(PDO::FETCH_ASSOC);
+
+    // Get count of unread notifications
+    $unreadQuery = $pdo->prepare("
+        SELECT COUNT(*) FROM notifications
+        WHERE user_id = ? AND is_read = 0
+    ");
+    $unreadQuery->execute([$_SESSION['user_id']]);
+    $unreadCount = $unreadQuery->fetchColumn();
+} else {
+    // Non-NGO users should not see notifications
+    $notifications = [];
+    $unreadCount = 0;
+}
+
+// Mark notification as read if requested
+if (isset($_GET['mark_read']) && is_numeric($_GET['mark_read'])) {
+    $markReadStmt = $pdo->prepare("
+        UPDATE notifications
+        SET is_read = 1
+        WHERE id = ? AND user_id = ?
+    ");
+    $markReadStmt->execute([(int)$_GET['mark_read'], $_SESSION['user_id']]);
+    
+    // Redirect to remove the query parameter
+    $redirectUrl = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: $redirectUrl");
+    exit;
+}
+?>
+
 <aside id="sidebar" class="bg-base-100 w-full md:w-64 lg:w-64 h-full border-r border-gray-200 fixed md:relative lg:relative transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 z-50">
     <div class="h-full px-3 py-4 overflow-y-auto bg-white dark:bg-gray-800">
     <button id="closeSidebar" class="btn btn-ghost block md:hidden lg:hidden">
@@ -80,19 +123,55 @@
        </div>
        <div class="flex items-center">
            <div class="flex items-center ms-3 gap-4">
-           <div class="dropdown dropdown-bottom dropdown-end justify-end">
-                  <div tabindex="0" role="button">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8 mb-1">
-                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                              </svg>
-                  </div>
-               <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
-                  <li><a href="#">Notification 1</a></li>
-                  <li><a href="#">Notification 2</a></li>
-                  <li><a href="#">Notification 3</a></li>
-                  <li><a href="#">Notification 4</a></li>
-               </ul>    </div>
-            <div class="dropdown dropdown-end">
+           <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'ngo'): ?>
+            <!-- Notification bell and dropdown -->
+            <div class="dropdown dropdown-bottom dropdown-end justify-end">
+                <div tabindex="0" role="button">
+                    <div class="indicator">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8 mb-1">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                        </svg>
+                        <?php if ($unreadCount > 0): ?>
+                            <span class="indicator-item badge badge-sm badge-primary"><?= $unreadCount ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-80 p-2 shadow">
+                    <li class="menu-title">Notifications</li>
+                    <?php if (empty($notifications)): ?>
+                        <li><a class="text-gray-500">No new notifications</a></li>
+                    <?php else: ?>
+                        <?php foreach ($notifications as $notification): ?>
+                            <li>
+                                <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
+                                    <div class="flex justify-between items-start">
+                                        <a href="<?= $notification['link'] ?>" class="flex-1">
+                                            <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
+                                            <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
+                                        </a>
+                                        <?php if (!$notification['is_read']): ?>
+                                            <a href="?mark_read=<?= $notification['id'] ?>" 
+                                               class="text-xs text-primarycol hover:underline ml-2" 
+                                               onclick="event.stopPropagation(); markAsRead(<?= $notification['id'] ?>); return false;">
+                                                Mark as read
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                        <li class="menu-title pt-2">
+                            <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/all_notifications.php" class="text-sm text-primarycol hover:underline">
+                                View all notifications
+                            </a>
+                        </li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+        
+        <!-- User avatar dropdown (for all user types) -->
+        <div class="dropdown dropdown-end">
             <div class="dropdown dropdown-end">
                <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
                  <div class="w-10 rounded-full">
@@ -122,3 +201,19 @@
  </nav>
  
  <hr class="bg-sec">
+
+<script>
+function markAsRead(notificationId) {
+    // Create a hidden form and submit it
+    fetch('?mark_read=' + notificationId, {
+        method: 'GET',
+    })
+    .then(response => {
+        // Refresh the page to update the notification count
+        window.location.reload();
+    })
+    .catch(error => {
+        console.error('Error marking notification as read:', error);
+    });
+}
+</script>

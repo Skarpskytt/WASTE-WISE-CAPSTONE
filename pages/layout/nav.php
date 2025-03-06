@@ -1,20 +1,82 @@
 <?php
-// Include database connection
-include('../../config/db_connect.php');
+// Include database connection if not already included
+if (!isset($pdo)) {
+    include('../../config/db_connect.php');
+}
 
-// Fetch notifications
-$notificationsQuery = "
-    SELECT * FROM notifications 
-    WHERE is_read = 0 
-    ORDER BY created_at DESC 
-    LIMIT 5
-";
-$notificationsStmt = $pdo->prepare($notificationsQuery);
-$notificationsStmt->execute();
-$notifications = $notificationsStmt->fetchAll(PDO::FETCH_ASSOC);
+// First check if the user is an admin
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
+    // Get admin notifications (show admin-specific plus high-priority branch notifications)
+    $notificationsQuery = $pdo->prepare("
+        SELECT id, message, link, is_read, created_at, notification_type, target_branch_id
+        FROM notifications
+        WHERE (user_id = ? OR target_role = 'admin' OR target_role IS NULL)
+        ORDER BY created_at DESC
+        LIMIT 10
+    ");
+    $notificationsQuery->execute([$_SESSION['user_id']]);
+    $notifications = $notificationsQuery->fetchAll(PDO::FETCH_ASSOC);
 
-// Count unread notifications
-$unreadCount = count($notifications);
+    // Count unread notifications
+    $unreadQuery = $pdo->prepare("
+        SELECT COUNT(*) FROM notifications
+        WHERE is_read = 0 AND (user_id = ? OR target_role = 'admin' OR target_role IS NULL)
+    ");
+    $unreadQuery->execute([$_SESSION['user_id']]);
+    $unreadCount = $unreadQuery->fetchColumn();
+    
+    // Group notifications by branch for easier display
+    $branch1Notifications = [];
+    $branch2Notifications = [];
+    $generalNotifications = [];
+    
+    foreach ($notifications as $notification) {
+        if ($notification['target_branch_id'] == 1) {
+            $branch1Notifications[] = $notification;
+        } else if ($notification['target_branch_id'] == 2) {
+            $branch2Notifications[] = $notification;
+        } else {
+            $generalNotifications[] = $notification;
+        }
+    }
+} else {
+    // Non-admin users should not see admin notifications
+    $notifications = [];
+    $unreadCount = 0;
+    $branch1Notifications = [];
+    $branch2Notifications = [];
+    $generalNotifications = [];
+}
+
+// Mark notification as read
+if (isset($_GET['mark_read']) && is_numeric($_GET['mark_read'])) {
+    $markReadStmt = $pdo->prepare("
+        UPDATE notifications
+        SET is_read = 1
+        WHERE id = ? AND (user_id = ? OR target_role = 'admin' OR target_role IS NULL)
+    ");
+    $markReadStmt->execute([(int)$_GET['mark_read'], $_SESSION['user_id']]);
+    
+    // Redirect to remove the query parameter
+    $redirectUrl = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: $redirectUrl");
+    exit;
+}
+
+// Mark all as read
+if (isset($_GET['mark_all_read'])) {
+    $markAllReadStmt = $pdo->prepare("
+        UPDATE notifications
+        SET is_read = 1
+        WHERE (user_id = ? OR target_role = 'admin' OR target_role IS NULL)
+    ");
+    $markAllReadStmt->execute([$_SESSION['user_id']]);
+    
+    // Redirect to remove the query parameter
+    $redirectUrl = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: $redirectUrl");
+    exit;
+}
 ?>
 
 <aside id="sidebar" class="bg-base-100 w-full md:w-64 lg:w-64 h-full border-r border-gray-200 fixed md:relative lg:relative transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 z-50">
@@ -36,7 +98,7 @@ $unreadCount = count($notifications);
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
                 </svg>                
-                <span class="ms-3">Waste Dashboard</span>
+                <span class="ms-3">Dashboard</span>
              </a>
           </li>
         
@@ -61,16 +123,16 @@ $unreadCount = count($notifications);
   <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
 </svg>
 
-                <span class="flex-1 ms-3 whitespace-nowrap">NGO</span>      
+                <span class="flex-1 ms-3 whitespace-nowrap">NGO Partnerships</span>      
              </a>
           </li>
           <li>
-             <a href="../admin/food_waste.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+             <a href="../admin/donations.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
   <path stroke-linecap="round" stroke-linejoin="round" d="m20.893 13.393-1.135-1.135a2.252 2.252 0 0 1-.421-.585l-1.08-2.16a.414.414 0 0 0-.663-.107.827.827 0 0 1-.812.21l-1.273-.363a.89.89 0 0 0-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 0 1-1.81 1.025 1.055 1.055 0 0 1-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 0 1-1.383-2.46l.007-.042a2.25 2.25 0 0 1 .29-.787l.09-.15a2.25 2.25 0 0 1 2.37-1.048l1.178.236a1.125 1.125 0 0 0 1.302-.795l.208-.73a1.125 1.125 0 0 0-.578-1.315l-.665-.332-.091.091a2.25 2.25 0 0 1-1.591.659h-.18c-.249 0-.487.1-.662.274a.931.931 0 0 1-1.458-1.137l1.411-2.353a2.25 2.25 0 0 0 .286-.76m11.928 9.869A9 9 0 0 0 8.965 3.525m11.928 9.868A9 9 0 1 1 8.965 3.525" />
 </svg>
 
-                <span class="flex-1 ms-3 whitespace-nowrap">Donation</span>      
+                <span class="flex-1 ms-3 whitespace-nowrap">Donation History</span>      
              </a>
           </li>
         
@@ -174,31 +236,102 @@ $unreadCount = count($notifications);
                 <?php endif; ?>
             </div>
         </div>
-        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-80 p-2 shadow">
-            <?php if ($notifications): ?>
-                <?php foreach ($notifications as $notification): ?>
-                    <li class="notification-item">
-                        <div class="px-4 py-3 hover:bg-gray-100">
-                            <p class="text-sm text-gray-600"><?= htmlspecialchars($notification['message']) ?></p>
-                            <p class="text-xs text-gray-500 mt-1">
-                                <?= date('M j, Y g:i A', strtotime($notification['created_at'])) ?>
-                            </p>
+        <div tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-96 p-2 shadow">
+            <ul class="menu">
+                <li class="menu-title flex justify-between items-center">
+                    <span>Notifications</span>
+                    <?php if ($unreadCount > 0): ?>
+                        <a href="?mark_all_read=1" class="btn btn-xs btn-ghost">Mark all read</a>
+                    <?php endif; ?>
+                </li>
+                
+                <?php if (!empty($branch1Notifications)): ?>
+                    <li class="menu-title">
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Branch 1</span>
+                    </li>
+                    <?php foreach ($branch1Notifications as $notification): ?>
+                        <li>
+                            <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
+                                <div class="flex justify-between items-start">
+                                    <a href="<?= $notification['link'] ?>" class="flex-1">
+                                        <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
+                                        <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
+                                    </a>
+                                    <?php if (!$notification['is_read']): ?>
+                                        <a href="?mark_read=<?= $notification['id'] ?>" 
+                                           class="text-xs text-primarycol hover:underline ml-2">
+                                            Mark as read
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                
+                <?php if (!empty($branch2Notifications)): ?>
+                    <li class="menu-title">
+                        <span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">Branch 2</span>
+                    </li>
+                    <?php foreach ($branch2Notifications as $notification): ?>
+                        <li>
+                            <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
+                                <div class="flex justify-between items-start">
+                                    <a href="<?= $notification['link'] ?>" class="flex-1">
+                                        <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
+                                        <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
+                                    </a>
+                                    <?php if (!$notification['is_read']): ?>
+                                        <a href="?mark_read=<?= $notification['id'] ?>" 
+                                           class="text-xs text-primarycol hover:underline ml-2">
+                                            Mark as read
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                
+                <?php if (!empty($generalNotifications)): ?>
+                    <li class="menu-title">
+                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-0.5 rounded">General</span>
+                    </li>
+                    <?php foreach ($generalNotifications as $notification): ?>
+                        <li>
+                            <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
+                                <div class="flex justify-between items-start">
+                                    <a href="<?= $notification['link'] ?>" class="flex-1">
+                                        <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
+                                        <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
+                                    </a>
+                                    <?php if (!$notification['is_read']): ?>
+                                        <a href="?mark_read=<?= $notification['id'] ?>" 
+                                           class="text-xs text-primarycol hover:underline ml-2">
+                                            Mark as read
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                
+                <?php if (empty($notifications)): ?>
+                    <li>
+                        <div class="px-4 py-3 text-sm text-gray-500">
+                            No notifications
                         </div>
                     </li>
-                <?php endforeach; ?>
-                <li>
-                    <a href="#" class="text-center text-primarycol hover:underline mark-all-read">
-                        Mark all as read
+                <?php endif; ?>
+                
+                <li class="menu-title pt-2">
+                    <a href="/capstone/WASTE-WISE-CAPSTONE/pages/admin/all_notifications.php" class="text-sm text-primarycol hover:underline">
+                        View all notifications
                     </a>
                 </li>
-            <?php else: ?>
-                <li>
-                    <div class="px-4 py-3 text-sm text-gray-500">
-                        No new notifications
-                    </div>
-                </li>
-            <?php endif; ?>
-        </ul>
+            </ul>
+        </div>
     </div>
 
     <!-- Profile Dropdown -->

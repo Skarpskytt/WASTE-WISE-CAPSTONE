@@ -102,6 +102,34 @@ class EmailService {
         }
     }
 
+    public function sendDonationReceiptEmail($ngoDonationData) {
+        // Make sure branch_address is included in template variables
+        if (!isset($ngoDonationData['branch_address']) && isset($ngoDonationData['branch_name'])) {
+            // Fallback to just showing branch name if address is missing
+            $ngoDonationData['branch_address'] = $ngoDonationData['branch_name'];
+        }
+
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($ngoDonationData['ngo_email'], $ngoDonationData['ngo_name']);
+            
+            $this->mailer->isHTML(true);
+            $this->mailer->Subject = 'Donation Receipt Confirmation #' . $ngoDonationData['id'];
+            
+            $this->mailer->Body = $this->getDonationReceiptTemplate($ngoDonationData);
+            
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to send donation receipt email: " . $e->getMessage());
+            throw new Exception("Failed to send receipt email: " . $e->getMessage());
+        }
+    }
+
     private function getNGOApprovalTemplate($data) {
         return "
             <h2>Welcome to Bea Bakes Waste Management!</h2>
@@ -144,5 +172,78 @@ class EmailService {
         <p>This password reset link is only valid for the next hour.</p>
         <p>Best regards,<br>Bea Bakes Team</p>
     ";
+    }
+
+    private function getDonationReceiptTemplate($data) {
+        $notes = isset($data['notes']) ? $data['notes'] : '';
+        $requestId = $data['id'];
+        
+        return "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .receipt { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; }
+                .header { text-align: center; padding-bottom: 10px; border-bottom: 2px solid #47663B; }
+                .logo { color: #47663B; font-size: 24px; font-weight: bold; }
+                .details { margin-top: 20px; }
+                .row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+                .label { font-weight: bold; }
+                .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='receipt'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>Donation Receipt Confirmation</p>
+                </div>
+                <div class='details'>
+                    <div class='row'>
+                        <span class='label'>Receipt Number:</span>
+                        <span>REC-" . date('Ymd') . "-" . $requestId . "</span>
+                    </div>
+                    <div class='row'>
+                        <span class='label'>Date:</span>
+                        <span>" . date('F j, Y') . "</span>
+                    </div>
+                    <div class='row'>
+                        <span class='label'>Recipient:</span>
+                        <span>" . htmlspecialchars($data['ngo_name']) . "</span>
+                    </div>
+                    <div class='row'>
+                        <span class='label'>Branch:</span>
+                        <span>" . htmlspecialchars($data['branch_name']) . "</span>
+                    </div>
+                    <div class='row'>
+                        <span class='label'>Product:</span>
+                        <span>" . htmlspecialchars($data['product_name']) . "</span>
+                    </div>
+                    <div class='row'>
+                        <span class='label'>Quantity:</span>
+                        <span>" . htmlspecialchars($data['quantity_requested']) . "</span>
+                    </div>
+                    
+                    " . (!empty($notes) ? "
+                    <div class='row'>
+                        <span class='label'>Notes:</span>
+                        <span>" . htmlspecialchars($notes) . "</span>
+                    </div>" : "") . "
+                    
+                    <div class='row' style='margin-top: 40px; border-top: 1px solid #ddd; padding-top: 10px;'>
+                        <span class='label'>Status:</span>
+                        <span style='color: green; font-weight: bold;'>RECEIVED</span>
+                    </div>
+                </div>
+                
+                <div class='footer'>
+                    <p>Thank you for participating in our food redistribution program.</p>
+                    <p>WasteWise &copy; " . date('Y') . "</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
     }
 }

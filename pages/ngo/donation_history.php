@@ -1,14 +1,406 @@
+<?php
+require_once '../../config/auth_middleware.php';
+require_once '../../config/db_connect.php';
+require_once '../../includes/mail/EmailService.php'; // Add this line
+
+use App\Mail\EmailService; // Add this line
+
+// Check if user is NGO
+checkAuth(['ngo']);
+
+// Get NGO's email address
+$userStmt = $pdo->prepare("SELECT email FROM users WHERE id = ?");
+$userStmt->execute([$_SESSION['user_id']]);
+$userEmail = $userStmt->fetchColumn();
+
+// Get NGO's donation history
+$stmt = $pdo->prepare("
+    SELECT 
+        dr.id,
+        dr.product_waste_id,
+        dr.quantity_requested,
+        dr.pickup_date,
+        dr.pickup_time,
+        dr.status,
+        dr.notes as ngo_notes,
+        dr.staff_notes,
+        dr.created_at,
+        dr.updated_at,
+        dr.is_received,
+        dr.received_at,
+        pw.waste_quantity as available_quantity,
+        p.name as product_name,
+        p.category,
+        pw.donation_expiry_date,
+        b.name as branch_name,
+        b.address as branch_address  /* Changed from 'location' to 'address' */
+    FROM 
+        donation_requests dr
+    JOIN 
+        product_waste pw ON dr.product_waste_id = pw.id
+    JOIN 
+        products p ON pw.product_id = p.id
+    JOIN 
+        branches b ON pw.branch_id = b.id
+    WHERE 
+        dr.ngo_id = ?
+    ORDER BY 
+        dr.updated_at DESC
+");
+$stmt->execute([$_SESSION['user_id']]);
+$donations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Confirm receipt
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
+    $requestId = (int)$_POST['request_id'];
+    $receiptNotes = isset($_POST['receipt_notes']) ? $_POST['receipt_notes'] : '';
+    
+    try {
+        // Start transaction
+        $pdo->beginTransaction();
+        
+        // Update the donation request status
+        $updateStmt = $pdo->prepare("
+            UPDATE donation_requests
+            SET is_received = 1, 
+                received_at = NOW(),
+                notes = CONCAT(notes, '\n\nReceipt Notes: ', ?)
+            WHERE id = ? AND ngo_id = ?
+        ");
+        $updateStmt->execute([$receiptNotes, $requestId, $_SESSION['user_id']]);
+        
+        // Get donation details for notification and email
+        $detailsStmt = $pdo->prepare("
+            SELECT 
+                dr.id,
+                dr.quantity_requested,
+                p.name as product_name,
+                b.name as branch_name,
+                b.address as branch_address, /* Add this line to include branch address */
+                CONCAT(u.fname, ' ', u.lname) as ngo_name,
+                u.email as ngo_email
+            FROM 
+                donation_requests dr
+            JOIN 
+                product_waste pw ON dr.product_waste_id = pw.id
+            JOIN 
+                products p ON pw.product_id = p.id
+            JOIN 
+                branches b ON pw.branch_id = b.id
+            JOIN
+                users u ON dr.ngo_id = u.id
+            WHERE 
+                dr.id = ?
+        ");
+        $detailsStmt->execute([$requestId]);
+        $donationDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$donationDetails) {
+            throw new Exception("Donation details not found");
+        }
+        
+        // Create notification for admin
+        $notifyStmt = $pdo->prepare("
+            INSERT INTO notifications (
+                target_role,
+                message,
+                notification_type,
+                link,
+                is_read
+            ) VALUES (
+                'admin',
+                ?,
+                'donation_received',
+                ?,
+                0
+            )
+        ");
+        
+        $notifyMessage = "Donation #" . $requestId . " (" . $donationDetails['product_name'] . 
+                         ") has been received by " . $donationDetails['ngo_name'];
+        $notifyLink = "/capstone/WASTE-WISE-CAPSTONE/pages/admin/donation_details.php?id=" . $requestId;
+        
+        $notifyStmt->execute([$notifyMessage, $notifyLink]);
+        
+        // Generate and send receipt via email
+        $receiptSuccess = sendReceiptEmail(
+            $donationDetails['ngo_email'],
+            $donationDetails['ngo_name'],
+            $donationDetails,
+            $receiptNotes,
+            $requestId
+        );
+        
+        $pdo->commit();
+        
+        if ($receiptSuccess) {
+            $successMessage = "Receipt confirmed. An acknowledgment has been sent to your email.";
+        } else {
+            $successMessage = "Receipt confirmed, but there was an issue sending the email acknowledgment.";
+        }
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $errorMessage = "Error: " . $e->getMessage();
+    }
+}
+
+/**
+ * Send receipt acknowledgment via email
+ */
+function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $notes, $requestId) {
+    try {
+        // Create donation receipt data
+        $receiptData = [
+            'id' => $requestId,
+            'ngo_email' => $recipientEmail,
+            'ngo_name' => $recipientName,
+            'branch_name' => $donationDetails['branch_name'],
+            'branch_address' => $donationDetails['branch_address'], // Add this line
+            'product_name' => $donationDetails['product_name'],
+            'quantity_requested' => $donationDetails['quantity_requested'],
+            'notes' => $notes
+        ];
+        
+        // Create EmailService instance and send receipt
+        $emailService = new EmailService();
+        $emailService->sendDonationReceiptEmail($receiptData);
+        
+        return true;
+    } catch (Exception $e) {
+        // Log email error but don't display to user
+        error_log("Email error: " . $e->getMessage());
+        return false;
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NGO Donation</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donation History | WasteWise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primarycol: '#47663B',
+                        sec: '#E8ECD7',
+                        third: '#EED3B1',
+                        fourth: '#1F4529',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-  
-<?php include ('../layout/ngo_nav.php' ) ?> 
+<body class="flex h-screen bg-slate-100">
+    <?php include '../layout/ngo_nav.php'; ?>
 
-
+    <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto">
+        <div class="text-2xl font-bold text-primarycol">Donation History</div>
+        
+        <?php if (isset($successMessage)): ?>
+            <div class="alert alert-success shadow-lg mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span><?= htmlspecialchars($successMessage) ?></span>
+            </div>
+        <?php endif; ?>
+        
+        <?php if (isset($errorMessage)): ?>
+            <div class="alert alert-error shadow-lg mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span><?= htmlspecialchars($errorMessage) ?></span>
+            </div>
+        <?php endif; ?>
+        
+        <div class="bg-white shadow-md rounded-lg p-6">
+            <div class="overflow-x-auto">
+                <table class="table w-full">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Branch</th>
+                            <th>Pickup Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (count($donations) === 0): ?>
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-gray-500">
+                                    No donation history found.
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($donations as $donation): ?>
+                                <tr class="hover">
+                                    <td><?= $donation['id'] ?></td>
+                                    <td><?= htmlspecialchars($donation['product_name']) ?></td>
+                                    <td><?= $donation['quantity_requested'] ?></td>
+                                    <td><?= htmlspecialchars($donation['branch_name']) ?></td>
+                                    <td>
+                                        <?= date('M d, Y', strtotime($donation['pickup_date'])) ?>
+                                        <span class="text-xs text-gray-500">
+                                            (<?= date('h:i A', strtotime($donation['pickup_time'])) ?>)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($donation['status'] === 'approved'): ?>
+                                            <?php if ($donation['is_received']): ?>
+                                                <span class="badge badge-success">Received</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-warning">Ready for Pickup</span>
+                                            <?php endif; ?>
+                                        <?php elseif ($donation['status'] === 'rejected'): ?>
+                                            <span class="badge badge-error">Rejected</span>
+                                        <?php elseif ($donation['status'] === 'pending'): ?>
+                                            <span class="badge badge-info">Pending</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm bg-primarycol text-white view-details-btn" 
+                                                data-id="<?= $donation['id'] ?>">
+                                            Details
+                                        </button>
+                                        
+                                        <?php if ($donation['status'] === 'approved' && !$donation['is_received']): ?>
+                                            <button class="btn btn-sm bg-green-600 text-white confirm-receipt-btn"
+                                                    data-id="<?= $donation['id'] ?>"
+                                                    data-product="<?= htmlspecialchars($donation['product_name']) ?>">
+                                                Confirm Receipt
+                                            </button>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Receipt Confirmation Modal -->
+    <dialog id="receipt_modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Confirm Donation Receipt</h3>
+            <form method="POST" action="">
+                <input type="hidden" name="request_id" id="modal_request_id">
+                <p class="mb-4">
+                    You are confirming receipt of: <span id="modal_product_name" class="font-semibold"></span>
+                </p>
+                
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Additional Notes (Optional)</span>
+                    </label>
+                    <textarea name="receipt_notes" class="textarea textarea-bordered h-24" 
+                              placeholder="Any notes about the condition, quantity, etc."></textarea>
+                </div>
+                
+                <div class="alert alert-info mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>A receipt confirmation will be sent to your email (<?= htmlspecialchars($userEmail) ?>).</span>
+                </div>
+                
+                <div class="modal-action">
+                    <button type="button" class="btn" onclick="document.getElementById('receipt_modal').close()">
+                        Cancel
+                    </button>
+                    <button type="submit" name="confirm_receipt" class="btn btn-primary bg-primarycol">
+                        Confirm Receipt
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+    
+    <!-- Details Modal -->
+    <?php foreach ($donations as $donation): ?>
+        <dialog id="details_modal_<?= $donation['id'] ?>" class="modal">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg mb-4">Donation Request #<?= $donation['id'] ?></h3>
+                
+                <div class="bg-sec rounded-lg p-4 mb-4">
+                    <h4 class="font-semibold text-primarycol mb-2">Product Information</h4>
+                    <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['product_name']) ?></p>
+                    <p><span class="font-medium">Category:</span> <?= htmlspecialchars($donation['category']) ?></p>
+                    <p><span class="font-medium">Quantity Requested:</span> <?= $donation['quantity_requested'] ?></p>
+                    <p><span class="font-medium">Expiry Date:</span> <?= date('M d, Y', strtotime($donation['donation_expiry_date'])) ?></p>
+                </div>
+                
+                <div class="bg-sec rounded-lg p-4 mb-4">
+                    <h4 class="font-semibold text-primarycol mb-2">Branch Information</h4>
+                    <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['branch_name']) ?></p>
+                    <p><span class="font-medium">Address:</span> <?= htmlspecialchars($donation['branch_address']) ?></p>
+                </div>
+                
+                <div class="bg-sec rounded-lg p-4 mb-4">
+                    <h4 class="font-semibold text-primarycol mb-2">Pickup Information</h4>
+                    <p><span class="font-medium">Date:</span> <?= date('M d, Y', strtotime($donation['pickup_date'])) ?></p>
+                    <p><span class="font-medium">Time:</span> <?= date('h:i A', strtotime($donation['pickup_time'])) ?></p>
+                </div>
+                
+                <?php if (!empty($donation['staff_notes'])): ?>
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-semibold text-yellow-800 mb-2">Staff Notes</h4>
+                        <p><?= nl2br(htmlspecialchars($donation['staff_notes'])) ?></p>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($donation['ngo_notes'])): ?>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-semibold text-blue-800 mb-2">Your Notes</h4>
+                        <p><?= nl2br(htmlspecialchars($donation['ngo_notes'])) ?></p>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if ($donation['is_received']): ?>
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-semibold text-green-800 mb-2">Receipt Information</h4>
+                        <p><span class="font-medium">Received On:</span> <?= date('M d, Y h:i A', strtotime($donation['received_at'])) ?></p>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="modal-action">
+                    <button class="btn" onclick="document.getElementById('details_modal_<?= $donation['id'] ?>').close()">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </dialog>
+    <?php endforeach; ?>
+    
+    <script>
+        // Show details modal
+        document.querySelectorAll('.view-details-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const requestId = this.getAttribute('data-id');
+                document.getElementById('details_modal_' + requestId).showModal();
+            });
+        });
+        
+        // Show receipt confirmation modal
+        document.querySelectorAll('.confirm-receipt-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const requestId = this.getAttribute('data-id');
+                const productName = this.getAttribute('data-product');
+                
+                document.getElementById('modal_request_id').value = requestId;
+                document.getElementById('modal_product_name').textContent = productName;
+                document.getElementById('receipt_modal').showModal();
+            });
+        });
+    </script>
 </body>
 </html>
