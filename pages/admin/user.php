@@ -1,5 +1,3 @@
-
-
 <?php
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
@@ -43,18 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_ngo'])) {
         $adminStmt->execute();
         $adminId = $adminStmt->fetchColumn();
         
-        // Create notification for both admin and NGO user
-        $notification = "NGO {$ngoData['organization_name']} has been approved.";
-        $notifStmt = $pdo->prepare("
-            INSERT INTO notifications (user_id, message, type, is_read, created_at) 
-            VALUES (?, ?, 'ngo_approval', 0, NOW())
-        ");
-        
         // Notification for admin
         $adminNotification = "NGO " . $ngoData['organization_name'] . " has been approved";
         $notifStmt = $pdo->prepare("
-            INSERT INTO notifications (user_id, message, type, is_read, created_at) 
-            VALUES (?, ?, 'admin_notification', 0, NOW())
+            INSERT INTO notifications (user_id, message, is_read, created_at) 
+            VALUES (?, ?, 0, NOW())
         ");
         $notifStmt->execute([$adminId, $adminNotification]);
         
@@ -114,8 +105,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reject_ngo'])) {
         // Create notification for NGO user
         $ngoNotification = "Your NGO partnership application has been rejected.";
         $notifStmt = $pdo->prepare("
-            INSERT INTO notifications (user_id, message, type, is_read, created_at) 
-            VALUES (?, ?, 'ngo_rejection', 0, NOW())
+            INSERT INTO notifications (user_id, message, is_read, created_at) 
+            VALUES (?, ?, 0, NOW())
         ");
         $notifStmt->execute([$userId, $ngoNotification]);
         
@@ -178,8 +169,8 @@ if (isset($_POST['update_user'])) {
             
             // Create notification
             $notifStmt = $pdo->prepare("
-                INSERT INTO notifications (user_id, message, type, is_read, created_at) 
-                VALUES (?, ?, 'user_update', 0, NOW())
+                INSERT INTO notifications (user_id, message, is_read, created_at) 
+                VALUES (?, ?, 0, NOW())
             ");
             $notifStmt->execute([
                 $userId, 
@@ -241,8 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Create notification
             $notification = "New user {$fname} {$lname} ({$role}) has been created.";
             $notifStmt = $pdo->prepare("
-                INSERT INTO notifications (message, type) 
-                VALUES (?, 'info')
+                INSERT INTO notifications (message, created_at) 
+                VALUES (?, NOW())
             ");
             $notifStmt->execute([$notification]);
             
@@ -410,7 +401,6 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
         </a>
     </div>
 </td>
-
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
