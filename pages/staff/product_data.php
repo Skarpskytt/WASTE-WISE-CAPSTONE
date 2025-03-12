@@ -180,12 +180,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
 
 // Retrieve products from database for the current branch
 try {
+    // Pagination setup
+    $itemsPerPage = 10;
+    $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+    $offset = ($page - 1) * $itemsPerPage;
+    
+    // Count total products for pagination
+    $countStmt = $pdo->prepare("
+        SELECT COUNT(*) FROM products 
+        WHERE branch_id = :branch_id
+    ");
+    $countStmt->execute([':branch_id' => $_SESSION['branch_id']]);
+    $totalProducts = $countStmt->fetchColumn();
+    $totalPages = ceil($totalProducts / $itemsPerPage);
+    
+    // Modify the existing query to add LIMIT and OFFSET
     $stmt = $pdo->prepare("
         SELECT * FROM products 
         WHERE branch_id = :branch_id
         ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
     ");
-    $stmt->execute([':branch_id' => $_SESSION['branch_id']]);
+    $stmt->bindValue(':branch_id', $_SESSION['branch_id'], PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $itemsPerPage, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
     $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $errors[] = "Error retrieving products: " . $e->getMessage();
@@ -307,7 +326,7 @@ try {
         <li class="text-gray-400">/</li>
         <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
         <li class="text-gray-400">/</li>
-        <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+        <li><a href="waste_product_recWord.php" class="hover:text-primarycol">View Product Waste Records</a></li>
       </ol>
     </nav>
     <h1 class="text-3xl font-bold mb-6 text-primarycol">Product Data</h1>
@@ -460,6 +479,26 @@ try {
             ?>
           </tbody>
         </table>
+        <!-- Add this right before closing the </div> that contains the table -->
+        <?php if ($totalPages > 1): ?>
+        <div class="flex justify-center mt-4">
+          <div class="join">
+            <?php if ($page > 1): ?>
+              <a href="?page=<?= ($page - 1) ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+            <?php endif; ?>
+            
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+              <a href="?page=<?= $i ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                <?= $i ?>
+              </a>
+            <?php endfor; ?>
+            
+            <?php if ($page < $totalPages): ?>
+              <a href="?page=<?= ($page + 1) ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>

@@ -70,6 +70,49 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
 $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
 
+// Pagination setup
+$itemsPerPage = 10;
+$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($page - 1) * $itemsPerPage;
+
+// Build the SQL query to get waste records
+$countSql = "
+    SELECT COUNT(*) 
+    FROM ingredients_waste w
+    JOIN ingredients i ON w.ingredient_id = i.id
+    WHERE w.branch_id = ?
+";
+
+$countParams = [$branchId];
+
+// Apply search filter to count query
+if (!empty($search)) {
+    $countSql .= " AND (i.ingredient_name LIKE ? OR w.waste_reason LIKE ? OR w.disposal_method LIKE ? OR w.production_stage LIKE ?)";
+    $countParams[] = "%$search%";
+    $countParams[] = "%$search%";
+    $countParams[] = "%$search%";
+    $countParams[] = "%$search%";
+}
+
+// Apply date filter to count query
+if (!empty($start_date)) {
+    $countSql .= " AND DATE(w.waste_date) >= ?";
+    $countParams[] = $start_date;
+}
+if (!empty($end_date)) {
+    $countSql .= " AND DATE(w.waste_date) <= ?";
+    $countParams[] = $end_date;
+}
+
+try {
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($countParams);
+    $totalRecords = $countStmt->fetchColumn();
+    $totalPages = ceil($totalRecords / $itemsPerPage);
+} catch (PDOException $e) {
+    $error = "Error calculating pagination: " . $e->getMessage();
+}
+
 // Build the SQL query to get waste records
 $sql = "
     SELECT w.*, i.ingredient_name, i.category, i.unit,
@@ -102,7 +145,9 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-$sql .= " ORDER BY w.waste_date DESC";
+$sql .= " ORDER BY w.waste_date DESC LIMIT ? OFFSET ?";
+$params[] = $itemsPerPage;
+$params[] = $offset;
 
 try {
     $stmt = $pdo->prepare($sql);
@@ -367,6 +412,26 @@ try {
                         </tbody>
                     </table>
                 </div>
+                <!-- Add right before closing the </div> that contains the table -->
+                <?php if (isset($totalPages) && $totalPages > 1): ?>
+                <div class="flex justify-center mt-4">
+                  <div class="join">
+                    <?php if ($page > 1): ?>
+                      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+                    <?php endif; ?>
+                    
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                        <?= $i ?>
+                      </a>
+                    <?php endfor; ?>
+                    
+                    <?php if ($page < $totalPages): ?>
+                      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+                    <?php endif; ?>
+                  </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

@@ -187,9 +187,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_ingredient'])) {
     }
 }
 
-// Fetch ingredients data from the database - filter by branch_id
-$stmt = $pdo->prepare("SELECT * FROM ingredients WHERE branch_id = ? ORDER BY id DESC");
-$stmt->execute([$_SESSION['branch_id']]);
+// Pagination setup
+$itemsPerPage = 10;
+$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($page - 1) * $itemsPerPage;
+
+// Count total ingredients for pagination
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM ingredients WHERE branch_id = ?");
+$countStmt->execute([$_SESSION['branch_id']]);
+$totalIngredients = $countStmt->fetchColumn();
+$totalPages = ceil($totalIngredients / $itemsPerPage);
+
+// Fetch ingredients with pagination
+$stmt = $pdo->prepare("SELECT * FROM ingredients WHERE branch_id = ? ORDER BY id DESC LIMIT ? OFFSET ?");
+$stmt->bindValue(1, $_SESSION['branch_id'], PDO::PARAM_INT);
+$stmt->bindValue(2, $itemsPerPage, PDO::PARAM_INT);
+$stmt->bindValue(3, $offset, PDO::PARAM_INT);
+$stmt->execute();
 $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -353,25 +367,69 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // Add data loading for edit modal
+    $(document).ready(function() {
+      $('.openEditModal').on('click', function() {
+        // Existing code...
+        const unitCategory = $(this).data('unit-category');
+        const unit = $(this).data('unit');
+        const costPerUnit = $(this).data('cost-per-unit');
+        const density = $(this).data('density');
+        
+        $('#edit_unit_category').val(unitCategory);
+        
+        // First update unit options based on category
+        const editUnitSelect = document.getElementById('edit_unit');
+        const editDensityContainer = document.getElementById('edit_density_container');
+        
+        // Hide all options first
+        Array.from(editUnitSelect.options).forEach(option => {
+          option.style.display = 'none';
+        });
+        
+        // Show only relevant options
+        Array.from(editUnitSelect.options).forEach(option => {
+          if (option.dataset.category === unitCategory || option.value === '') {
+            option.style.display = 'block';
+          }
+        });
+        
+        // Then set the selected unit
+        $('#edit_unit').val(unit);
+        $('#edit_cost_per_unit').val(costPerUnit);
+        $('#edit_density').val(density);
+        
+        // Show density field if needed
+        if (unitCategory === 'volume') {
+          $('#edit_density_container').show();
+        } else {
+          $('#edit_density_container').hide();
+        }
+      });
+    });
+
+    // Modify the image preview logic in your jQuery script (around line 302-303):
+
+    // Preview edit image
     $('.openEditModal').on('click', function() {
-      // Existing code...
-      const unitCategory = $(this).data('unit-category');
-      const unit = $(this).data('unit');
-      const costPerUnit = $(this).data('cost-per-unit');
-      const density = $(this).data('density');
+      // Existing data attributes...
+      const imagePath = $(this).data('image');
       
-      $('#edit_unit_category').val(unitCategory);
-      updateEditUnitOptions(); // Update the unit options first
-      $('#edit_unit').val(unit);
+      $('#ingredient_id').val(ingredientId);
+      $('#edit_itemname').val(ingredientName);
+      $('#edit_category').val(category);
+      $('#edit_supplier').val(supplier);
+      $('#edit_stockdate').val(stockDate);
       $('#edit_cost_per_unit').val(costPerUnit);
-      $('#edit_density').val(density);
+      $('#current_image').val(imagePath);
       
-      // Show density field if needed
-      if (unitCategory === 'volume') {
-        $('#edit_density_container').show();
+      // Fix image path for display
+      if (imagePath.includes('default-ingredient.jpg')) {
+        $('#edit_image_preview').attr('src', imagePath);
       } else {
-        $('#edit_density_container').hide();
+        $('#edit_image_preview').attr('src', './' + imagePath);
       }
+      
+      // Rest of your code...
     });
   </script>
 </head>
@@ -615,9 +673,31 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </thead>
           <tbody>
             <?php foreach ($ingredients as $index => $ingredient): 
-              $imgPath = (!empty($ingredient['item_image']) && file_exists(__DIR__ . '/uploads/ingredients/' . basename($ingredient['item_image']))) 
-                ? 'uploads/ingredients/' . basename($ingredient['item_image']) 
-                : '../../assets/images/default-ingredient.jpg';
+  // Properly format image path for display
+  $imgPath = '';
+  if (!empty($ingredient['item_image'])) {
+    if (strpos($ingredient['item_image'], 'C:') === 0) {
+      // Handle absolute Windows paths
+      $filename = basename($ingredient['item_image']);
+      $imgPath = 'uploads/ingredients/' . $filename;
+    } else if (strpos($ingredient['item_image'], 'uploads/') === 0) {
+      // Path already relative, use as-is
+      $imgPath = $ingredient['item_image'];
+    } else {
+      // For any other format, try to use the base filename
+      $filename = basename($ingredient['item_image']);
+      $imgPath = 'uploads/ingredients/' . $filename;
+    }
+  } else {
+    // Default image
+    $imgPath = '../../assets/images/default-ingredient.jpg';
+  }
+  
+  $stockDate = date('Y-m-d', strtotime($ingredient['stock_datetime']));
+  
+  // Format unit display
+  $unitDisplay = '';
+  // ...rest of your code
                 $stockDate = date('Y-m-d', strtotime($ingredient['stock_datetime']));
                 
                 // Format unit display
@@ -683,6 +763,26 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php endif; ?>
           </tbody>
         </table>
+        <!-- Add this right before closing the </div> that contains the table -->
+        <?php if ($totalPages > 1): ?>
+        <div class="flex justify-center mt-4">
+          <div class="join">
+            <?php if ($page > 1): ?>
+              <a href="?page=<?= ($page - 1) ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+            <?php endif; ?>
+            
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+              <a href="?page=<?= $i ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                <?= $i ?>
+              </a>
+            <?php endfor; ?>
+            
+            <?php if ($page < $totalPages): ?>
+              <a href="?page=<?= ($page + 1) ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>
@@ -757,8 +857,17 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_unit">
             Unit
           </label>
-          <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
-            id="edit_unit" name="edit_unit" type="text" required>
+          <select class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+            id="edit_unit" name="edit_unit" required>
+            <option value="">Select Unit</option>
+            <?php foreach ($unitCategories as $category => $units): ?>
+              <?php foreach ($units as $unit): ?>
+                <option value="<?= $unit ?>" data-category="<?= $category ?>" style="display:none;">
+                  <?= $unit ?>
+                </option>
+              <?php endforeach; ?>
+            <?php endforeach; ?>
+          </select>
         </div>
         
         <!-- Cost and Density in same row -->
