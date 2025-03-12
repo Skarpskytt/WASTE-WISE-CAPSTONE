@@ -8,6 +8,13 @@ checkAuth(['staff']);
 $errors = [];
 $successMessage = '';
 
+// Check and create uploads directory if needed
+$uploadDir = __DIR__ . "/uploads/products/";
+if (!is_dir($uploadDir)) {
+    mkdir($uploadDir, 0777, true);
+    echo "<!-- Created directory: $uploadDir -->";
+}
+
 // Handle EDIT product submission
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
     $productId = $_POST['product_id'];
@@ -39,7 +46,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["edit_item_image"]["tmp_name"], $targetPath)) {
-                $itemImage = 'uploads/products/' . $filename;
+                // Store only the relative path in the database
+                $itemImage = './uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
             }
@@ -131,7 +139,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
-                $itemImage = 'uploads/products/' . $filename;
+                // Store only the relative path in the database
+                $itemImage = './uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
             }
@@ -188,7 +197,7 @@ try {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Product Data - WasteWise</title>
+  <title>Product Data - Bea Bakes</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -292,6 +301,15 @@ try {
 
 <div class="p-7">
   <div>
+    <nav class="mb-4">
+      <ol class="flex items-center gap-2 text-gray-600">
+        <li><a href="product_data.php" class="hover:text-primarycol">Product</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+      </ol>
+    </nav>
     <h1 class="text-3xl font-bold mb-6 text-primarycol">Product Data</h1>
     <p class="text-gray-500 mt-2">Manage your Products</p>
   </div>
@@ -319,7 +337,7 @@ try {
             <div class="flex flex-wrap -mx-3 mb-6">
                 <!-- Item Name -->
                 <div class="w-full md:w/full px-3 mb-6">
-                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemname">Item Name</label>
+                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemname">Product Name</label>
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
                     id="itemname" type="text" name="itemname" placeholder="Item Name" required />
                 </div>
@@ -386,14 +404,23 @@ try {
             if (!empty($inventory)) {
                 $count = 1;
                 foreach ($inventory as $item) {
-                    $imageName = basename($item['image'] ?? '');
-                    $imgPath = !empty($imageName) && file_exists(__DIR__ . '/uploads/products/' . $imageName)
-                        ? 'uploads/products/' . $imageName
-                        : '../../assets/images/default-product.jpg';
+                    $imagePath = !empty($item['image']) ? $item['image'] : '../../assets/images/default-product.jpg';
+                    
+                    // Fix image path to ensure browser can access it correctly
+                    if (strpos($imagePath, 'C:') === 0) {
+                        // For absolute Windows paths, extract just the filename from the path
+                        $filename = basename($imagePath);
+                        // Point to the correct web-accessible path
+                        $imagePath = './uploads/products/' . $filename;
+                    } else if (strpos($imagePath, 'uploads/') === 0) {
+                        // Path is already relative, but make sure it starts with ./
+                        $imagePath = './' . $imagePath;
+                    }
+                    
                     echo "<tr>";
                     echo "<th>" . $count++ . "</th>";
                     echo "<td class='flex justify-center'>";
-                    echo "<img src='" . htmlspecialchars($imgPath) . "' class='h-8 w-8 object-cover rounded' alt='" . htmlspecialchars($item['name']) . "'>";
+                    echo "<img src='" . htmlspecialchars($imagePath) . "' class='h-8 w-8 object-cover rounded' alt='" . htmlspecialchars($item['name']) . "'>";
                     echo "</td>";
                     echo "<td>" . htmlspecialchars($item['name']) . "</td>";
                     echo "<td>" . htmlspecialchars($item['category']) . "</td>";
@@ -407,7 +434,7 @@ try {
                                     data-category='" . htmlspecialchars($item['category']) . "' 
                                     data-stockdate='" . htmlspecialchars($item['stock_date']) . "' 
                                     data-price='" . htmlspecialchars($item['price_per_unit']) . "' 
-                                    data-image='" . htmlspecialchars($imgPath) . "' 
+                                    data-image='" . htmlspecialchars($imagePath) . "' 
                                     class='openEditModal rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
                                     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
                                       <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />

@@ -200,6 +200,15 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
 
     <div class="p-5 w-full">
         <div>
+        <nav class="mb-4">
+      <ol class="flex items-center gap-2 text-gray-600">
+        <li><a href="product_data.php" class="hover:text-primarycol">Product</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+      </ol>
+    </nav>
             <h1 class="text-3xl font-bold mb-2 text-primarycol">Bakery Product Waste Tracking</h1>
             <p class="text-gray-500 mb-6">Track product waste to reduce losses and improve production efficiency</p>
         </div>
@@ -320,9 +329,38 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 </div>
                                 
                                 <?php if(!empty($productImage)): ?>
-                                <img src="../../uploads/products/<?= basename(htmlspecialchars($productImage)) ?>"
-                                    alt="<?= htmlspecialchars($productName) ?>"
-                                    class="h-32 w-full object-cover rounded-md mb-3">
+                                    <?php
+                                    // Fix image path to ensure browser can access it correctly
+                                    $imagePath = $productImage;
+                                    
+                                    if (strpos($imagePath, 'C:') === 0) {
+                                        // For absolute Windows paths, extract just the filename from the path
+                                        $filename = basename($imagePath);
+                                        // Point to the correct web-accessible path - use ./uploads instead of ../../uploads
+                                        $imagePath = './uploads/products/' . $filename;
+                                    } else if (strpos($imagePath, './uploads/') === 0) {
+                                        // Path is already in the correct format
+                                        $imagePath = $productImage;
+                                    } else if (strpos($imagePath, 'uploads/') === 0) {
+                                        // Add ./ prefix
+                                        $imagePath = './' . $imagePath;
+                                    } else if (strpos($imagePath, '../../assets/') === 0) {
+                                        // Default image path
+                                        $imagePath = $productImage;
+                                    } else {
+                                        // For any other format, extract filename and use local path
+                                        $filename = basename($imagePath);
+                                        $imagePath = './uploads/products/' . $filename;
+                                    }
+                                    ?>
+                                    <img src="<?= htmlspecialchars($imagePath) ?>"
+                                         alt="<?= htmlspecialchars($productName) ?>"
+                                         class="h-32 w-full object-cover rounded-md mb-3">
+                                <?php else: ?>
+                                    <!-- Show default image if no product image is available -->
+                                    <img src="../../assets/images/default-product.jpg"
+                                         alt="<?= htmlspecialchars($productName) ?>"
+                                         class="h-32 w-full object-cover rounded-md mb-3">
                                 <?php endif; ?>
 
                                 <h2 class="text-lg font-bold"><?= htmlspecialchars($productName) ?></h2>

@@ -211,6 +211,15 @@ try {
 
     <div class="p-6 w-full">
         <div class="mb-6">
+        <nav class="mb-4">
+      <ol class="flex items-center gap-2 text-gray-600">
+        <li><a href="ingredients.php" class="hover:text-primarycol">Ingredients</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_ingredients_input.php" class="hover:text-primarycol">Record Waste</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_ingredients_record.php" class="hover:text-primarycol">View Ingredients Waste Records</a></li>
+      </ol>
+    </nav>
             <h1 class="text-3xl font-bold mb-2 text-primarycol">Ingredient Waste Records</h1>
             <p class="text-gray-500">View and manage all waste records for bakery ingredients</p>
         </div>

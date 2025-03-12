@@ -10,6 +10,13 @@ $userId = $_SESSION['user_id'];
 $userName = $_SESSION['fname'] . ' ' . $_SESSION['lname'];
 $branchId = $_SESSION['branch_id'];
 
+// Ensure upload directories exist
+$uploadPath = __DIR__ . "/uploads/ingredients";
+if (!is_dir($uploadPath)) {
+    // Create the directory with full permissions (adjust as needed for security)
+    mkdir($uploadPath, 0777, true);
+}
+
 // Initialize message variables
 $successMessage = '';
 $errorMessage = '';
@@ -164,6 +171,15 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
 
     <div class="p-5 w-full">
         <div>
+        <nav class="mb-4">
+      <ol class="flex items-center gap-2 text-gray-600">
+        <li><a href="ingredients.php" class="hover:text-primarycol">Ingredients</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_ingredients_input.php" class="hover:text-primarycol">Record Waste</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_ingredients_record.php" class="hover:text-primarycol">View Ingredients Waste Records</a></li>
+      </ol>
+    </nav>
             <h1 class="text-3xl font-bold mb-2 text-primarycol">Bakery Ingredient Waste Tracking</h1>
             <p class="text-gray-500 mb-6">Record detailed waste information to identify patterns and reduce losses</p>
         </div>
@@ -285,10 +301,36 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 </div>
                                 
                                 <?php if(!empty($ingredientImage)): ?>
-                                <img src="../../<?= htmlspecialchars($ingredientImage) ?>"
-                                    alt="<?= htmlspecialchars($ingredientName) ?>"
-                                    class="h-32 w-full object-cover rounded-md mb-3">
-                                <?php endif; ?>
+    <?php
+    // Fix image path to ensure browser can access it correctly
+    $imagePath = $ingredientImage;
+    
+    if (strpos($imagePath, 'C:') === 0) {
+        // For absolute Windows paths, extract just the filename from the path
+        $filename = basename($imagePath);
+        // Point to the correct web-accessible path
+        $imagePath = './uploads/ingredients/' . $filename;
+    } else if (strpos($imagePath, './uploads/') === 0) {
+        // Path already starts with ./
+        $imagePath = $ingredientImage;
+    } else if (strpos($imagePath, 'uploads/') === 0) {
+        // Path doesn't have ./ prefix, add it
+        $imagePath = './' . $imagePath;
+    } else {
+        // For any other format, try to use the base filename
+        $filename = basename($imagePath);
+        $imagePath = './uploads/ingredients/' . $filename;
+    }
+    ?>
+    <img src="<?= htmlspecialchars($imagePath) ?>"
+        alt="<?= htmlspecialchars($ingredientName) ?>"
+        class="h-32 w-full object-cover rounded-md mb-3">
+<?php else: ?>
+    <!-- Show default image if no ingredient image is available -->
+    <img src="../../assets/images/default-ingredient.jpg"
+        alt="<?= htmlspecialchars($ingredientName) ?>"
+        class="h-32 w-full object-cover rounded-md mb-3">
+<?php endif; ?>
 
                                 <h2 class="text-lg font-bold"><?= htmlspecialchars($ingredientName) ?></h2>
 

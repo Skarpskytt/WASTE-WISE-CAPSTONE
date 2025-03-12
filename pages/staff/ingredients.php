@@ -61,10 +61,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_ingredient'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["edit_item_image"]["tmp_name"], $targetPath)) {
-              $itemImage = 'uploads/ingredients/' . $filename; // Store relative path
-          } else {
-              $errors[] = "Error: Failed to move uploaded file.";
-          }
+                // Store only the relative path in the database for consistent access
+                $itemImage = 'uploads/ingredients/' . $filename;
+            } else {
+                $errors[] = "Error: Failed to move uploaded file.";
+            }
         }
     }
 
@@ -381,6 +382,15 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <div class="p-7">
   <div>
+  <nav class="mb-4">
+      <ol class="flex items-center gap-2 text-gray-600">
+        <li><a href="ingredients.php" class="hover:text-primarycol">Ingredients</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_ingredients_input.php" class="hover:text-primarycol">Record Waste</a></li>
+        <li class="text-gray-400">/</li>
+        <li><a href="waste_ingredients_record.php" class="hover:text-primarycol">View Ingredients Waste Records</a></li>
+      </ol>
+    </nav>
     <h1 class="text-3xl font-bold mb-6 text-primarycol">Ingredients Data</h1>
     <p class="text-gray-500 mt-2">Manage your ingredients</p>
   </div>
