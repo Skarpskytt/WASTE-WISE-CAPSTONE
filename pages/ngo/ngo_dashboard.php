@@ -7,14 +7,33 @@ checkAuth(['ngo']);
 
 $ngoId = $_SESSION['user_id'];
 
-// Fetch basic NGO information
+// Fetch more detailed NGO information
 $ngoInfoQuery = $pdo->prepare("
-    SELECT CONCAT(fname, ' ', lname) as full_name 
+    SELECT 
+        id,
+        CONCAT(fname, ' ', lname) as full_name,
+        email,
+        phone,
+        organization_name,
+        COALESCE(profile_image, 'default.jpg') as profile_image,
+        created_at,
+        (SELECT COUNT(*) FROM donation_requests WHERE ngo_id = users.id) as total_requests
     FROM users 
-    WHERE id = ?
+    WHERE id = ? AND role = 'ngo'
 ");
 $ngoInfoQuery->execute([$ngoId]);
 $ngoInfo = $ngoInfoQuery->fetch(PDO::FETCH_ASSOC);
+
+// Add a personalized welcome message variable
+$greeting = "";
+$hour = date('H');
+if ($hour < 12) {
+    $greeting = "Good Morning";
+} elseif ($hour < 17) {
+    $greeting = "Good Afternoon";
+} else {
+    $greeting = "Good Evening";
+}
 
 // Get total donations received (count)
 $totalDonationsQuery = $pdo->prepare("
@@ -164,7 +183,14 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
 
     <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto">
         <div class="flex justify-between items-center">
-            <div class="text-2xl font-bold text-primarycol">Welcome, <?= htmlspecialchars($ngoInfo['full_name']) ?></div>
+            <div>
+                <div class="text-2xl font-bold text-primarycol">
+                    <?= $greeting ?>, <?= htmlspecialchars($ngoInfo['full_name']) ?>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <?= htmlspecialchars($ngoInfo['organization_name'] ?? 'NGO Dashboard') ?> | Member since <?= date('F Y', strtotime($ngoInfo['created_at'])) ?>
+                </div>
+            </div>
             <div class="text-sm text-gray-500">Dashboard Overview</div>
         </div>
 

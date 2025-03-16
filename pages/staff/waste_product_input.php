@@ -14,22 +14,41 @@ $branchId = $_SESSION['branch_id'];
 $successMessage = '';
 $errorMessage = '';
 
+// Update the calculation of current inventory in the existing code
 try {
     // Fetch products from the products table
     $prodStmt = $pdo->prepare("SELECT * FROM products WHERE branch_id = ? ORDER BY created_at DESC");
     $prodStmt->execute([$branchId]);
     $products = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // For each product, fetch the last waste record to show current inventory status
+    foreach ($products as &$product) {
+        $wasteStmt = $pdo->prepare("
+            SELECT SUM(waste_quantity) as total_waste, SUM(quantity_sold) as total_sold
+            FROM product_waste 
+            WHERE product_id = ? AND branch_id = ?
+        ");
+        $wasteStmt->execute([$product['id'], $branchId]);
+        $wasteData = $wasteStmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Calculate current inventory (quantity_produced - waste - sold)
+        $totalWaste = $wasteData['total_waste'] ?? 0;
+        $totalSold = $wasteData['total_sold'] ?? 0;
+        
+        $product['current_inventory'] = $product['quantity_produced'] - $totalWaste - $totalSold;
+        if ($product['current_inventory'] < 0) $product['current_inventory'] = 0;
+    }
 } catch (PDOException $e) {
     die("Error retrieving data: " . $e->getMessage());
 }
 
+// Update the waste submission process to properly handle quantity_produced
 if (isset($_POST['submitwaste'])) {
     // Extract form data
     $userId = $_SESSION['user_id'];
     $productId = $_POST['product_id'] ?? null;
     $wasteDate = $_POST['waste_date'] ?? null;
     $wasteQuantity = $_POST['waste_quantity'] ?? null;
-    $quantityProduced = $_POST['quantity_produced'] ?? null;
     $quantitySold = $_POST['quantity_sold'] ?? null;
     $costPerUnit = $_POST['product_value'] ?? 0;
     $wasteValue = $wasteQuantity * $costPerUnit;
@@ -52,17 +71,20 @@ if (isset($_POST['submitwaste'])) {
 
     // Validate form data
     if (!$userId || !$productId || !$wasteDate || !$wasteQuantity || !$wasteReason || 
-        !$disposalMethod || !$responsiblePerson || !$quantityProduced || !$quantitySold) {
+        !$disposalMethod || !$responsiblePerson || !$quantitySold) {
         $errorMessage = 'Please fill in all required fields.';
     } else {
-        // Insert waste entry into the product_waste table
         try {
+            // Start transaction
+            $pdo->beginTransaction();
+            
+            // Insert waste entry into the product_waste table
             $stmt = $pdo->prepare("
                 INSERT INTO product_waste (
-                    user_id, product_id, waste_date, waste_quantity, quantity_produced, quantity_sold,
+                    user_id, product_id, waste_date, waste_quantity, quantity_sold,
                     waste_value, waste_reason, disposal_method, responsible_person, notes, created_at, branch_id,
                     donation_expiry_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
@@ -70,7 +92,6 @@ if (isset($_POST['submitwaste'])) {
                 $productId,
                 date('Y-m-d H:i:s', strtotime($wasteDate)),
                 $wasteQuantity,
-                $quantityProduced,
                 $quantitySold,
                 $wasteValue,
                 $wasteReason,
@@ -82,10 +103,29 @@ if (isset($_POST['submitwaste'])) {
                 $donationExpiryDate ? date('Y-m-d', strtotime($donationExpiryDate)) : null
             ]);
 
+            // Update product quantity_produced
+            // Make sure we're using quantity_produced instead of quantity
+            $updateStmt = $pdo->prepare("
+                UPDATE products 
+                SET quantity_produced = quantity_produced - ? - ?
+                WHERE id = ? AND branch_id = ?
+            ");
+            $updateStmt->execute([
+                $quantitySold,
+                $wasteQuantity,
+                $productId, 
+                $branchId
+            ]);
+            
+            // Commit transaction
+            $pdo->commit();
+
             // Redirect to the record page after successful submission
             header('Location: waste_product_input.php?success=1');
             exit;
         } catch (PDOException $e) {
+            // Roll back transaction if there was an error
+            $pdo->rollBack();
             $errorMessage = 'An error occurred while submitting the waste entry: ' . $e->getMessage();
         }
     }
@@ -157,6 +197,20 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 if (disposalMethod === 'donation' && !expiryDate) {
                     e.preventDefault();
                     alert('Please specify an expiration date for the donated product.');
+                    return false;
+                }
+            });
+
+            // Validate that quantity sold + quantity wasted doesn't exceed inventory
+            $('form').on('submit', function(e) {
+                const form = $(this);
+                const quantitySold = parseFloat(form.find('input[name="quantity_sold"]').val()) || 0;
+                const quantityWasted = parseFloat(form.find('input[name="waste_quantity"]').val()) || 0;
+                const maxInventory = parseFloat(form.find('input[name="quantity_sold"]').attr('max')) || 0;
+                
+                if (quantitySold + quantityWasted > maxInventory) {
+                    e.preventDefault();
+                    alert('Error: The combined quantity of sold and wasted items cannot exceed the current inventory (' + maxInventory + ' units).');
                     return false;
                 }
             });
@@ -311,12 +365,15 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 <h2 class="text-xl font-bold mb-4 text-gray-800">Record Product Waste</h2>
                 
                 <div class="grid grid-cols-1 gap-6">
+                    <!-- Product cards with waste forms -->
                     <?php foreach ($products as $product):
                         $productId = $product['id'];
                         $productName = $product['name'] ?? 'N/A';
                         $productCategory = $product['category'] ?? 'N/A';
                         $productPrice = $product['price_per_unit'] ?? 0;
                         $productImage = $product['image'] ?? '';
+                        $currentInventory = $product['current_inventory'];
+                        $quantityProduced = $product['quantity_produced'];
                     ?>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
                         <div class="flex flex-col md:flex-row">
@@ -326,8 +383,24 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <span class="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
                                         <?= htmlspecialchars($productCategory) ?>
                                     </span>
+                                    
+                                    <!-- Add inventory status badge -->
+                                    <?php if ($currentInventory <= 0): ?>
+                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">
+                                        Out of Stock
+                                    </span>
+                                    <?php elseif ($currentInventory <= 5): ?>
+                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-800">
+                                        Low Stock
+                                    </span>
+                                    <?php else: ?>
+                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                                        In Stock
+                                    </span>
+                                    <?php endif; ?>
                                 </div>
                                 
+                                <!-- Product image code remains the same -->
                                 <?php if(!empty($productImage)): ?>
                                     <?php
                                     // Fix image path to ensure browser can access it correctly
@@ -368,9 +441,23 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <p class="text-gray-600 text-sm mt-2">
                                     Price: ₱<?= htmlspecialchars(number_format($productPrice, 2)) ?> per unit
                                 </p>
+                                
+                                <!-- Enhanced product quantity information -->
+                                <div class="mt-3 p-2 bg-gray-100 rounded-md">
+                                    <p class="text-sm font-medium text-gray-700">
+                                        Current Inventory: 
+                                        <span class="font-bold <?= $currentInventory <= 0 ? 'text-red-600' : '' ?>">
+                                            <?= htmlspecialchars($currentInventory) ?> units
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        Total Quantity Produced: <?= htmlspecialchars($quantityProduced) ?> units
+                                    </p>
+                                </div>
                             </div>
                             
-                            <!-- Waste form - Changed to standard submission -->
+                            <!-- Waste form - Only show when there's inventory available -->
+                            <?php if ($currentInventory > 0): ?>
                             <div class="md:w-2/3 p-4">
                                 <h3 class="font-bold text-primarycol mb-3">Record Waste</h3>
                                 
@@ -379,19 +466,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <input type="hidden" name="product_value" value="<?= htmlspecialchars($productPrice) ?>">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <!-- Production tracking fields -->
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                Quantity Produced
-                                            </label>
-                                            <input type="number"
-                                                name="quantity_produced"
-                                                min="0.01"
-                                                step="any"
-                                                required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                                        </div>
-                                        
+                                        <!-- Sales tracking field -->
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Quantity Sold
@@ -399,9 +474,13 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             <input type="number"
                                                 name="quantity_sold"
                                                 min="0"
+                                                max="<?= htmlspecialchars($currentInventory) ?>"
                                                 step="any"
                                                 required
                                                 class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                Maximum: <?= htmlspecialchars($currentInventory) ?> units
+                                            </p>
                                         </div>
                                         
                                         <!-- Waste info -->
@@ -412,11 +491,13 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             <input type="number"
                                                 name="waste_quantity"
                                                 min="0.01"
+                                                max="<?= htmlspecialchars($currentInventory) ?>"
                                                 step="any"
                                                 required
                                                 class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                         </div>
                                         
+                                        <!-- Remaining form fields remain the same -->
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Date of Waste
@@ -464,7 +545,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             </select>
                                         </div>
                                         
-                                        <div class="donation-expiry-container hidden col-span-2">
+                                        <div class="donation-expiry-container hidden">
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 <span class="text-red-500">*</span> Expiration Date for Donation
                                             </label>
@@ -472,16 +553,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                                 name="donation_expiry_date"
                                                 class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary"
                                                 min="<?= date('Y-m-d') ?>">
-                                            <p class="text-xs text-gray-500 mt-1">Required for donations - helps NGOs know when the product must be used by</p>
-                                        </div>
-                                        
-                                        <div class="col-span-2 donation-expiry-container hidden">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                Donation Expiry Date
-                                            </label>
-                                            <input type="date"
-                                                name="donation_expiry_date"
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                            <p class="text-xs text-gray-500 mt-1">Required for donations</p>
                                         </div>
                                         
                                         <div class="col-span-2">
@@ -506,6 +578,18 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     </div>
                                 </form>
                             </div>
+                            <?php else: ?>
+                            <!-- Message when there's no inventory -->
+                            <div class="md:w-2/3 p-4 flex items-center justify-center">
+                                <div class="text-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <h3 class="font-bold text-gray-700 mb-1">No Inventory Available</h3>
+                                    <p class="text-gray-500 text-sm">This product is out of stock. No waste can be recorded.</p>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <?php endforeach; ?>

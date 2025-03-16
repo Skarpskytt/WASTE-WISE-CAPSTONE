@@ -88,7 +88,7 @@ if (isset($_GET['mark_all_read'])) {
         </button>
        <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
        <div class="mb-3">
-        <a href="staff_dashboard.php" class="flex ms-2 md:me-24">
+        <a href="admindashboard.php" class="flex ms-2 md:me-24">
            <img src="/capstone/WASTE-WISE-CAPSTONE/assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
            <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Bea Bakes</span>
          </a>
@@ -101,29 +101,68 @@ if (isset($_GET['mark_all_read'])) {
                 <span class="ms-3">Dashboard</span>
              </a>
           </li>
-        
-             <a href="../admin/branch1_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
-                </svg>                           
-                <span class="flex-1 ms-3 whitespace-nowrap">Branch 1 Data</span>      
-             </a>
-          </li> 
-          <li>
-             <a href="../admin/branch2_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
-                </svg>                
-                <span class="flex-1 ms-3 whitespace-nowrap">Branch 2 Data</span>
-             </a>
-          </li>
+              <li>
+                <details class="dropdown group" onclick="event.stopPropagation()">
+                  <summary class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer list-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
+                    </svg>
+                    <span class="flex-1 ms-3 whitespace-nowrap">Branch 1</span>
+                  </summary>
+                  <ul class="ml-6 mt-2 space-y-2 overflow-hidden transition-all duration-300 max-h-0 group-open:max-h-[500px]">
+                    <li>
+                      <a href="../admin/branch1_product_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <span class="flex-1 ms-3 whitespace-nowrap">Product Waste</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="../admin/branch1_ingredients_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <span class="flex-1 ms-3 whitespace-nowrap">Ingredient Waste</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="../admin/branch1_ingredient_waste.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <span class="flex-1 ms-3 whitespace-nowrap">Stocks</span>
+                      </a>
+                    </li>
+                  </ul>
+                </details>
+              </li>
+
+              <li>
+                <details class="dropdown group" onclick="event.stopPropagation()">
+                  <summary class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer list-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
+                    </svg>
+                    <span class="flex-1 ms-3 whitespace-nowrap">Branch 2</span>
+                  </summary>
+                  <ul class="ml-6 mt-2 space-y-2 overflow-hidden transition-all duration-300 max-h-0 group-open:max-h-[500px]">
+                    <li>
+                      <a href="../admin/branch2_product_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <span class="flex-1 ms-3 whitespace-nowrap">Product Waste</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="../admin/branch2_ingredients_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <span class="flex-1 ms-3 whitespace-nowrap">Ingredient Waste</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="../admin/branch2_ingredient_waste.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <span class="flex-1 ms-3 whitespace-nowrap">Stocks</span>
+                      </a>
+                    </li>
+                  </ul>
+                </details>
+              </li>
           <li>
              <a href="../admin/ngo.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
   <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
 </svg>
 
-                <span class="flex-1 ms-3 whitespace-nowrap">NGO Partnerships</span>      
+                <span class="flex-1 ms-3 whitespace-nowrap">NGOs</span>      
              </a>
           </li>
           <li>
@@ -224,113 +263,148 @@ if (isset($_GET['mark_all_read'])) {
        </div>
        <div class="flex items-center">
            <div class="flex items-center ms-3 gap-4">
-    <!-- Notification Bell -->
+    <!-- Notification Bell with enhanced styling -->
     <div class="dropdown dropdown-end">
-        <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+        <div tabindex="0" role="button" class="btn btn-ghost btn-circle relative">
             <div class="indicator">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
                 <?php if ($unreadCount > 0): ?>
-                    <span class="badge badge-sm indicator-item badge-error"><?= $unreadCount ?></span>
+                    <span class="badge badge-sm badge-error animate-pulse absolute -top-1 -right-1 px-1.5 py-0.5 text-xs text-white font-bold rounded-full"><?= $unreadCount ?></span>
                 <?php endif; ?>
             </div>
         </div>
-        <div tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-96 p-2 shadow">
-            <ul class="menu">
-                <li class="menu-title flex justify-between items-center">
-                    <span>Notifications</span>
-                    <?php if ($unreadCount > 0): ?>
-                        <a href="?mark_all_read=1" class="btn btn-xs btn-ghost">Mark all read</a>
-                    <?php endif; ?>
-                </li>
-                
+        <div tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-96 p-0 shadow-lg overflow-hidden">
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 flex justify-between items-center sticky top-0">
+                <h3 class="font-medium text-lg">Notifications</h3>
+                <?php if ($unreadCount > 0): ?>
+                    <a href="?mark_all_read=1" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">Mark all read</a>
+                <?php endif; ?>
+            </div>
+            
+            <div class="max-h-[70vh] overflow-y-auto">
                 <?php if (!empty($branch1Notifications)): ?>
-                    <li class="menu-title">
-                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Branch 1</span>
-                    </li>
+                    <div class="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-100">
+                        <span class="text-xs font-medium text-blue-800 dark:text-blue-300">Branch 1</span>
+                    </div>
                     <?php foreach ($branch1Notifications as $notification): ?>
-                        <li>
-                            <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
-                                <div class="flex justify-between items-start">
-                                    <a href="<?= $notification['link'] ?>" class="flex-1">
-                                        <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
-                                        <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
-                                    </a>
+                        <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-blue-50/30 dark:bg-blue-800/10' ?>">
+                            <a href="<?= $notification['link'] ?>" class="block px-4 py-3 relative">
+                                <?php if (!$notification['is_read']): ?>
+                                    <span class="absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-blue-500 rounded-full"></span>
+                                <?php endif; ?>
+                                <div class="flex items-start">
+                                    <div class="mr-3 bg-blue-100 text-blue-800 rounded-full p-2 flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                        </svg>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium mb-0.5 <?= $notification['is_read'] ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white' ?>">
+                                            <?= htmlspecialchars($notification['message']) ?>
+                                        </p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                                            <?= date('M d, h:i A', strtotime($notification['created_at'])) ?>
+                                        </p>
+                                    </div>
                                     <?php if (!$notification['is_read']): ?>
-                                        <a href="?mark_read=<?= $notification['id'] ?>" 
-                                           class="text-xs text-primarycol hover:underline ml-2">
-                                            Mark as read
+                                        <a href="?mark_read=<?= $notification['id'] ?>" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
+                                            Mark read
                                         </a>
                                     <?php endif; ?>
                                 </div>
-                            </div>
-                        </li>
+                            </a>
+                        </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
                 
                 <?php if (!empty($branch2Notifications)): ?>
-                    <li class="menu-title">
-                        <span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">Branch 2</span>
-                    </li>
+                    <div class="px-4 py-2 bg-green-50 dark:bg-green-900/20 border-b border-gray-100">
+                        <span class="text-xs font-medium text-green-800 dark:text-green-300">Branch 2</span>
+                    </div>
                     <?php foreach ($branch2Notifications as $notification): ?>
-                        <li>
-                            <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
-                                <div class="flex justify-between items-start">
-                                    <a href="<?= $notification['link'] ?>" class="flex-1">
-                                        <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
-                                        <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
-                                    </a>
+                        <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-green-50/30 dark:bg-green-800/10' ?>">
+                            <a href="<?= $notification['link'] ?>" class="block px-4 py-3 relative">
+                                <?php if (!$notification['is_read']): ?>
+                                    <span class="absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-green-500 rounded-full"></span>
+                                <?php endif; ?>
+                                <div class="flex items-start">
+                                    <div class="mr-3 bg-green-100 text-green-800 rounded-full p-2 flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium mb-0.5 <?= $notification['is_read'] ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white' ?>">
+                                            <?= htmlspecialchars($notification['message']) ?>
+                                        </p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                                            <?= date('M d, h:i A', strtotime($notification['created_at'])) ?>
+                                        </p>
+                                    </div>
                                     <?php if (!$notification['is_read']): ?>
-                                        <a href="?mark_read=<?= $notification['id'] ?>" 
-                                           class="text-xs text-primarycol hover:underline ml-2">
-                                            Mark as read
+                                        <a href="?mark_read=<?= $notification['id'] ?>" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
+                                            Mark read
                                         </a>
                                     <?php endif; ?>
                                 </div>
-                            </div>
-                        </li>
+                            </a>
+                        </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
                 
                 <?php if (!empty($generalNotifications)): ?>
-                    <li class="menu-title">
-                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-0.5 rounded">General</span>
-                    </li>
+                    <div class="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100">
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">General</span>
+                    </div>
                     <?php foreach ($generalNotifications as $notification): ?>
-                        <li>
-                            <div class="<?= $notification['is_read'] ? '' : 'font-bold bg-blue-50' ?> p-2">
-                                <div class="flex justify-between items-start">
-                                    <a href="<?= $notification['link'] ?>" class="flex-1">
-                                        <p class="text-sm"><?= htmlspecialchars($notification['message']) ?></p>
-                                        <p class="text-xs text-gray-500"><?= date('M d, h:i A', strtotime($notification['created_at'])) ?></p>
-                                    </a>
+                        <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-gray-200/50 dark:bg-gray-600/20' ?>">
+                            <a href="<?= $notification['link'] ?>" class="block px-4 py-3 relative">
+                                <?php if (!$notification['is_read']): ?>
+                                    <span class="absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-gray-500 rounded-full"></span>
+                                <?php endif; ?>
+                                <div class="flex items-start">
+                                    <div class="mr-3 bg-gray-100 text-gray-700 rounded-full p-2 flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium mb-0.5 <?= $notification['is_read'] ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white' ?>">
+                                            <?= htmlspecialchars($notification['message']) ?>
+                                        </p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                                            <?= date('M d, h:i A', strtotime($notification['created_at'])) ?>
+                                        </p>
+                                    </div>
                                     <?php if (!$notification['is_read']): ?>
-                                        <a href="?mark_read=<?= $notification['id'] ?>" 
-                                           class="text-xs text-primarycol hover:underline ml-2">
-                                            Mark as read
+                                        <a href="?mark_read=<?= $notification['id'] ?>" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
+                                            Mark read
                                         </a>
                                     <?php endif; ?>
                                 </div>
-                            </div>
-                        </li>
+                            </a>
+                        </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
                 
                 <?php if (empty($notifications)): ?>
-                    <li>
-                        <div class="px-4 py-3 text-sm text-gray-500">
-                            No notifications
-                        </div>
-                    </li>
+                    <div class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <p class="font-medium">No notifications</p>
+                        <p class="text-sm mt-1">You're all caught up!</p>
+                    </div>
                 <?php endif; ?>
-                
-                <li class="menu-title pt-2">
-                    <a href="/capstone/WASTE-WISE-CAPSTONE/pages/admin/all_notifications.php" class="text-sm text-primarycol hover:underline">
-                        View all notifications
-                    </a>
-                </li>
-            </ul>
+            </div>
+            
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-t border-gray-200 text-center">
+                <a href="/capstone/WASTE-WISE-CAPSTONE/pages/admin/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
+                    View all notifications
+                </a>
+            </div>
         </div>
     </div>
 
@@ -343,7 +417,7 @@ if (isset($_GET['mark_all_read'])) {
         </div>
         <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
             <li>
-                <a class="justify-between">
+                <a href="/capstone/WASTE-WISE-CAPSTONE/pages/admin/editprofile.php" class="justify-between">
                     Profile
                     <span class="badge">New</span>
                 </a>

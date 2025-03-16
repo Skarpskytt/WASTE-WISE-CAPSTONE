@@ -21,7 +21,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
     $itemName = htmlspecialchars(trim($_POST['edit_itemname']));
     $category = htmlspecialchars(trim($_POST['edit_category']));
     $stockDate = $_POST['edit_stockdate'];
+    $expiryDate = $_POST['edit_expirydate']; // Get expiry date from form
     $pricePerUnit = floatval($_POST['edit_price_per_unit']);
+    $quantityProduced = intval($_POST['edit_quantity_produced']); // Changed from edit_quantity
     
     // Handle image update if a new one is provided
     $itemImage = $_POST['current_image']; // Keep existing image by default
@@ -62,7 +64,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
                     name = :name,
                     category = :category,
                     stock_date = :stock_date,
+                    expiry_date = :expiry_date,
                     price_per_unit = :price_per_unit,
+                    quantity_produced = :quantity_produced,
                     image = :image
                 WHERE id = :id AND branch_id = :branch_id
             ");
@@ -71,7 +75,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
                 ':name' => $itemName,
                 ':category' => $category,
                 ':stock_date' => $stockDate,
+                ':expiry_date' => $expiryDate,
                 ':price_per_unit' => $pricePerUnit,
+                ':quantity_produced' => $quantityProduced,
                 ':image' => $itemImage,
                 ':id' => $productId,
                 ':branch_id' => $_SESSION['branch_id'] // Security check to ensure users only edit their branch's products
@@ -107,7 +113,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
     $itemName = htmlspecialchars(trim($_POST['itemname']));
     $category = htmlspecialchars(trim($_POST['category']));
     $stockDate = $_POST['stockdate'];
+    $expiryDate = $_POST['expirydate']; // Get expiry date from form
     $pricePerUnit = floatval($_POST['price_per_unit']);
+    $quantityProduced = intval($_POST['quantity_produced']); // Changed from quantity
     $branchId = $_SESSION['branch_id']; // Get branch_id from session
     
     if (!$branchId) {
@@ -151,24 +159,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
     if (!DateTime::createFromFormat('Y-m-d', $stockDate)) {
         $errors[] = "Error: Invalid stock date format.";
     }
+    
+    // Validate Expiry Date
+    if (!DateTime::createFromFormat('Y-m-d', $expiryDate)) {
+        $errors[] = "Error: Invalid expiry date format.";
+    }
+    
+    // Check if expiry date is after stock date
+    if (strtotime($expiryDate) <= strtotime($stockDate)) {
+        $errors[] = "Error: Expiry date must be after stock date.";
+    }
 
     // If no errors, insert into database using PDO
     if (empty($errors)) {
         try {
-            // Modified INSERT query to remove quantity and unit fields
+            // Modified INSERT query to include quantity
             $stmt = $pdo->prepare("
                 INSERT INTO products (
-                    name, category, stock_date, price_per_unit, image, branch_id
+                    name, category, stock_date, expiry_date, price_per_unit, quantity_produced, image, branch_id
                 ) VALUES (
-                    :name, :category, :stock_date, :price_per_unit, :image, :branch_id
+                    :name, :category, :stock_date, :expiry_date, :price_per_unit, :quantity_produced, :image, :branch_id
                 )
             ");
             $stmt->execute([
                 ':name' => $itemName,
                 ':category' => $category,
                 ':stock_date' => $stockDate,
-                ':image' => $itemImage,
+                ':expiry_date' => $expiryDate,
                 ':price_per_unit' => $pricePerUnit,
+                ':quantity_produced' => $quantityProduced,
+                ':image' => $itemImage,
                 ':branch_id' => $branchId
             ]);
             $successMessage = "Product added successfully.";
@@ -249,7 +269,9 @@ try {
         const productName = $(this).data('name');
         const category = $(this).data('category');
         const stockDate = $(this).data('stockdate');
+        const expiryDate = $(this).data('expirydate');
         const pricePerUnit = $(this).data('price');
+        const quantityProduced = $(this).data('quantity-produced'); // Changed from quantity
         const imagePath = $(this).data('image');
         
         // Populate edit form with current values
@@ -257,7 +279,9 @@ try {
         $('#edit_itemname').val(productName);
         $('#edit_category').val(category);
         $('#edit_stockdate').val(stockDate);
+        $('#edit_expirydate').val(expiryDate);
         $('#edit_price_per_unit').val(pricePerUnit);
+        $('#edit_quantity_produced').val(quantityProduced); // Changed from edit_quantity
         $('#current_image').val(imagePath);
         $('#edit_image_preview').attr('src', imagePath);
         
@@ -360,24 +384,40 @@ try {
                     <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
                     id="itemname" type="text" name="itemname" placeholder="Item Name" required />
                 </div>
+                
+                <!-- Category and Stock Date side by side -->
                 <div class="flex w-full">
-                <div class="w-full md:w/full px-3 mb-6">
-                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="category">Category </label>
-                    <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                    id="category" type="text" name="category" placeholder="Category" required />
-                </div>
-                <div class="w-full md:w/full px-3 mb-6">
-                     <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">Stock Date</label>
-                      <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                       id="stockdate" name="stockdate" required />
-                </div>
+                    <div class="w-full md:w-1/2 px-3 mb-6">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="category">Category </label>
+                        <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                        id="category" type="text" name="category" placeholder="Category" required />
+                    </div>
+                    <div class="w-full md:w-1/2 px-3 mb-6">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">Stock Date</label>
+                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                        id="stockdate" name="stockdate" required />
+                    </div>
                 </div>
                 
-                <!-- Price per Unit -->
+                <!-- Expiry Date and Price per Unit side by side -->
+                <div class="flex w-full">
+                    <div class="w-full md:w-1/2 px-3 mb-6">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expirydate">Expiry Date</label>
+                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                        id="expirydate" name="expirydate" required />
+                    </div>
+                    <div class="w-full md:w-1/2 px-3 mb-6">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price_per_unit">Price per Unit</label>
+                        <input type="number" step="0.01" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                        id="price_per_unit" name="price_per_unit" placeholder="Price per Unit" required />
+                    </div>
+                </div>
+                
+                <!-- Quantity Produced (renamed from Quantity) -->
                 <div class="w-full md:w/full px-3 mb-6">
-                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price_per_unit">Price per Unit</label>
-                    <input type="number" step="0.01" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                    id="price_per_unit" name="price_per_unit" placeholder="Price per Unit" required />
+                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="quantity_produced">Quantity Produced</label>
+                    <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                    id="quantity_produced" name="quantity_produced" placeholder="Quantity Produced" required />
                 </div>
             </div>
             
@@ -414,7 +454,9 @@ try {
               <th>Item Name</th>
               <th>Category</th>
               <th>Stock Date</th>
+              <th>Expiry Date</th>
               <th>Price per Unit</th>
+              <th>Quantity Produced</th>
               <th class="text-center">Action</th>
             </tr>
           </thead>
@@ -444,7 +486,9 @@ try {
                     echo "<td>" . htmlspecialchars($item['name']) . "</td>";
                     echo "<td>" . htmlspecialchars($item['category']) . "</td>";
                     echo "<td>" . htmlspecialchars($item['stock_date']) . "</td>";
+                    echo "<td>" . htmlspecialchars($item['expiry_date']) . "</td>";
                     echo "<td>" . htmlspecialchars($item['price_per_unit']) . "</td>";
+                    echo "<td>" . htmlspecialchars($item['quantity_produced']) . "</td>";
                     echo "<td class='p-2'>
                             <div class='flex justify-center space-x-2'>
                                 <button 
@@ -452,7 +496,9 @@ try {
                                     data-name='" . htmlspecialchars($item['name']) . "' 
                                     data-category='" . htmlspecialchars($item['category']) . "' 
                                     data-stockdate='" . htmlspecialchars($item['stock_date']) . "' 
+                                    data-expirydate='" . htmlspecialchars($item['expiry_date']) . "' 
                                     data-price='" . htmlspecialchars($item['price_per_unit']) . "' 
+                                    data-quantity-produced='" . htmlspecialchars($item['quantity_produced']) . "' 
                                     data-image='" . htmlspecialchars($imagePath) . "' 
                                     class='openEditModal rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
                                     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
@@ -474,7 +520,7 @@ try {
                     echo "</tr>";
                 }
             } else {
-                echo "<tr><td colspan='7' class='text-center'>No products found.</td></tr>";
+                echo "<tr><td colspan='9' class='text-center'>No products found.</td></tr>";
             }
             ?>
           </tbody>
@@ -504,7 +550,7 @@ try {
   </div>
 </div>
 
-<!-- Edit Product Modal -->
+<!-- Edit Product Modal (Updated Layout) -->
 <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
   <div class="bg-white p-6 rounded-lg w-full max-w-lg">
     <div class="flex justify-between items-center border-b pb-3">
@@ -545,12 +591,31 @@ try {
           id="edit_stockdate" name="edit_stockdate" type="date" required>
       </div>
       
+      <!-- Expiry Date and Price per Unit side by side -->
+      <div class="flex gap-4 mb-4">
+        <div class="w-1/2">
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_expirydate">
+            Expiry Date
+          </label>
+          <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+            id="edit_expirydate" name="edit_expirydate" type="date" required>
+        </div>
+        
+        <div class="w-1/2">
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_price_per_unit">
+            Price per Unit
+          </label>
+          <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+            id="edit_price_per_unit" name="edit_price_per_unit" type="number" step="0.01" required>
+        </div>
+      </div>
+      
       <div class="mb-4">
-        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_price_per_unit">
-          Price per Unit
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_quantity_produced">
+          Quantity Produced
         </label>
         <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
-          id="edit_price_per_unit" name="edit_price_per_unit" type="number" step="0.01" required>
+          id="edit_quantity_produced" name="edit_quantity_produced" type="number" min="0" required>
       </div>
       
       <div class="mb-4">

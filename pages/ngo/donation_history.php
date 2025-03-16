@@ -1,17 +1,42 @@
 <?php
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
-require_once '../../includes/mail/EmailService.php'; // Add this line
+require_once '../../includes/mail/EmailService.php';
 
-use App\Mail\EmailService; // Add this line
+use App\Mail\EmailService;
 
 // Check if user is NGO
 checkAuth(['ngo']);
 
-// Get NGO's email address
-$userStmt = $pdo->prepare("SELECT email FROM users WHERE id = ?");
-$userStmt->execute([$_SESSION['user_id']]);
-$userEmail = $userStmt->fetchColumn();
+$ngoId = $_SESSION['user_id'];
+
+// Get NGO's information
+$ngoStmt = $pdo->prepare("
+    SELECT 
+        CONCAT(fname, ' ', lname) as full_name,
+        email,
+        organization_name,
+        profile_image
+    FROM users 
+    WHERE id = ? AND role = 'ngo'
+");
+$ngoStmt->execute([$ngoId]);
+$ngoInfo = $ngoStmt->fetch(PDO::FETCH_ASSOC);
+$userEmail = $ngoInfo['email'];
+
+// Add donation stats
+$statsStmt = $pdo->prepare("
+    SELECT
+        COUNT(*) as total_requests,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN is_received = 1 THEN 1 ELSE 0 END) as received
+    FROM donation_requests
+    WHERE ngo_id = ?
+");
+$statsStmt->execute([$ngoId]);
+$donationStats = $statsStmt->fetch(PDO::FETCH_ASSOC);
 
 // Get NGO's donation history
 $stmt = $pdo->prepare("
@@ -33,7 +58,7 @@ $stmt = $pdo->prepare("
         p.category,
         pw.donation_expiry_date,
         b.name as branch_name,
-        b.address as branch_address  /* Changed from 'location' to 'address' */
+        b.address as branch_address
     FROM 
         donation_requests dr
     JOIN 
@@ -64,10 +89,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
             UPDATE donation_requests
             SET is_received = 1, 
                 received_at = NOW(),
+                status = 'completed',
                 notes = CONCAT(notes, '\n\nReceipt Notes: ', ?)
             WHERE id = ? AND ngo_id = ?
         ");
         $updateStmt->execute([$receiptNotes, $requestId, $_SESSION['user_id']]);
+        
+        // Mark the product as claimed in the product_waste table
+        $updateProductStmt = $pdo->prepare("
+            UPDATE product_waste pw
+            JOIN donation_requests dr ON pw.id = dr.product_waste_id
+            SET pw.is_claimed = 1
+            WHERE dr.id = ?
+        ");
+        $updateProductStmt->execute([$requestId]);
         
         // Get donation details for notification and email
         $detailsStmt = $pdo->prepare("
@@ -76,8 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
                 dr.quantity_requested,
                 p.name as product_name,
                 b.name as branch_name,
-                b.address as branch_address, /* Add this line to include branch address */
+                b.address as branch_address,
                 CONCAT(u.fname, ' ', u.lname) as ngo_name,
+                u.organization_name,
                 u.email as ngo_email
             FROM 
                 donation_requests dr
@@ -116,8 +152,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
             )
         ");
         
+        $orgName = !empty($donationDetails['organization_name']) ? $donationDetails['organization_name'] : $donationDetails['ngo_name'];
         $notifyMessage = "Donation #" . $requestId . " (" . $donationDetails['product_name'] . 
-                         ") has been received by " . $donationDetails['ngo_name'];
+                         ") has been confirmed as received by " . $orgName;
         $notifyLink = "/capstone/WASTE-WISE-CAPSTONE/pages/admin/donation_details.php?id=" . $requestId;
         
         $notifyStmt->execute([$notifyMessage, $notifyLink]);
@@ -156,7 +193,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
             'ngo_email' => $recipientEmail,
             'ngo_name' => $recipientName,
             'branch_name' => $donationDetails['branch_name'],
-            'branch_address' => $donationDetails['branch_address'], // Add this line
+            'branch_address' => $donationDetails['branch_address'],
             'product_name' => $donationDetails['product_name'],
             'quantity_requested' => $donationDetails['quantity_requested'],
             'notes' => $notes
@@ -202,7 +239,29 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
     <?php include '../layout/ngo_nav.php'; ?>
 
     <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto">
-        <div class="text-2xl font-bold text-primarycol">Donation History</div>
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <div class="text-2xl font-bold text-primarycol">Donation History</div>
+                <div class="text-sm text-gray-500">
+                    <?= htmlspecialchars($ngoInfo['organization_name'] ?? $ngoInfo['full_name']) ?>
+                </div>
+            </div>
+            
+            <div class="stats shadow">
+                <div class="stat place-items-center">
+                    <div class="stat-title">Approved</div>
+                    <div class="stat-value text-green-500"><?= $donationStats['approved'] ?></div>
+                </div>
+                <div class="stat place-items-center">
+                    <div class="stat-title">Pending</div>
+                    <div class="stat-value text-yellow-500"><?= $donationStats['pending'] ?></div>
+                </div>
+                <div class="stat place-items-center">
+                    <div class="stat-title">Received</div>
+                    <div class="stat-value text-blue-500"><?= $donationStats['received'] ?></div>
+                </div>
+            </div>
+        </div>
         
         <?php if (isset($successMessage)): ?>
             <div class="alert alert-success shadow-lg mb-6">
@@ -263,6 +322,8 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                             <span class="badge badge-error">Rejected</span>
                                         <?php elseif ($donation['status'] === 'pending'): ?>
                                             <span class="badge badge-info">Pending</span>
+                                        <?php elseif ($donation['status'] === 'completed'): ?>
+                                            <span class="badge badge-success">Completed</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -336,7 +397,9 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['product_name']) ?></p>
                     <p><span class="font-medium">Category:</span> <?= htmlspecialchars($donation['category']) ?></p>
                     <p><span class="font-medium">Quantity Requested:</span> <?= $donation['quantity_requested'] ?></p>
-                    <p><span class="font-medium">Expiry Date:</span> <?= date('M d, Y', strtotime($donation['donation_expiry_date'])) ?></p>
+                    <?php if (!empty($donation['donation_expiry_date'])): ?>
+                        <p><span class="font-medium">Expiry Date:</span> <?= date('M d, Y', strtotime($donation['donation_expiry_date'])) ?></p>
+                    <?php endif; ?>
                 </div>
                 
                 <div class="bg-sec rounded-lg p-4 mb-4">

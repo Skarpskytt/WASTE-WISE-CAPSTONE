@@ -2,8 +2,8 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Check for admin access only
-checkAuth(['admin']);
+// Check if user is NGO
+checkAuth(['ngo']);
 
 // Get user ID from session
 $userId = $_SESSION['user_id'];
@@ -12,7 +12,7 @@ $errorMsg = '';
 
 // Fetch current user data
 try {
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND role = 'ngo'");
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -29,13 +29,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fname = trim($_POST['fname'] ?? '');
     $lname = trim($_POST['lname'] ?? '');
     $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $organization = trim($_POST['organization_name'] ?? '');
     $currentPassword = $_POST['current_password'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     
     // Basic validation
-    if (empty($fname) || empty($lname) || empty($email)) {
-        $errorMsg = "Name and email fields are required";
+    if (empty($fname) || empty($lname) || empty($email) || empty($organization)) {
+        $errorMsg = "Name, email, and organization fields are required";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errorMsg = "Invalid email format";
     } else {
@@ -76,18 +78,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Update user data including password
                     $updateStmt = $pdo->prepare("
                         UPDATE users 
-                        SET fname = ?, lname = ?, email = ?, password = ?
+                        SET fname = ?, lname = ?, email = ?, phone = ?, organization_name = ?, password = ?
                         WHERE id = ?
                     ");
-                    $updateStmt->execute([$fname, $lname, $email, $hashedPassword, $userId]);
+                    $updateStmt->execute([$fname, $lname, $email, $phone, $organization, $hashedPassword, $userId]);
                 } else {
                     // Update user data without changing password
                     $updateStmt = $pdo->prepare("
                         UPDATE users 
-                        SET fname = ?, lname = ?, email = ?
+                        SET fname = ?, lname = ?, email = ?, phone = ?, organization_name = ?
                         WHERE id = ?
                     ");
-                    $updateStmt->execute([$fname, $lname, $email, $userId]);
+                    $updateStmt->execute([$fname, $lname, $email, $phone, $organization, $userId]);
                 }
                 
                 // Commit transaction
@@ -120,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edit Profile</title>
+  <title>NGO Profile | WasteWise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -166,15 +168,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     });
 });
  </script>
-   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 
 <body class="flex min-h-screen bg-gray-50">
 
-<?php include '../layout/nav.php' ?>
+<?php include '../layout/ngo_nav.php' ?>
 
 <div class="p-6 w-full">
-    <h1 class="text-3xl font-bold mb-6 text-primarycol">Edit Profile</h1>
+    <h1 class="text-3xl font-bold mb-6 text-primarycol">NGO Profile</h1>
     
     <?php if (!empty($successMsg)): ?>
     <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
@@ -189,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
     
     <div class="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">Personal Information</h2>
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Organization Information</h2>
         
         <form method="POST" action="">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -209,6 +210,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="mb-6">
                 <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                 <input type="email" name="email" id="email" value="<?= htmlspecialchars($user['email']) ?>" required
+                    class="w-full border-gray-300 rounded-md shadow-sm focus:ring-primarycol focus:border-primarycol border p-2">
+            </div>
+            
+            <div class="mb-6">
+                <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input type="text" name="phone" id="phone" value="<?= htmlspecialchars($user['phone'] ?? '') ?>"
+                    class="w-full border-gray-300 rounded-md shadow-sm focus:ring-primarycol focus:border-primarycol border p-2">
+            </div>
+            
+            <div class="mb-6">
+                <label for="organization_name" class="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
+                <input type="text" name="organization_name" id="organization_name" value="<?= htmlspecialchars($user['organization_name'] ?? '') ?>" required
                     class="w-full border-gray-300 rounded-md shadow-sm focus:ring-primarycol focus:border-primarycol border p-2">
             </div>
             
@@ -279,7 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div>
                             <span class="block text-sm font-medium text-gray-500">Account Type</span>
                             <span class="block text-md">
-                                <?= ucfirst($user['role']) ?>
+                                NGO
                             </span>
                         </div>
                         
@@ -289,29 +302,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <?= date('F j, Y', strtotime($user['created_at'])) ?>
                             </span>
                         </div>
-                        
-                        <div>
-                            <span class="block text-sm font-medium text-gray-500">Last Updated</span>
-                            <span class="block text-md">
-                                <?= date('F j, Y', strtotime($user['updated_at'])) ?>
-                            </span>
-                        </div>
                     </div>
                 </div>
             </div>
             
-            <div class="flex justify-between">
-                <button type="submit" class="bg-primarycol hover:bg-fourth text-white font-medium py-2 px-6 rounded-md focus:outline-none">
-                    Save Changes
+            <div class="mt-6">
+                <button type="submit" class="btn bg-primarycol hover:bg-fourth text-white">
+                    Update Profile
                 </button>
-                
-                <a href="dashboard.php" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-md">
-                    Cancel
-                </a>
             </div>
         </form>
     </div>
 </div>
-
 </body>
 </html>

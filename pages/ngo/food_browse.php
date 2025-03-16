@@ -5,6 +5,9 @@ require_once '../../config/db_connect.php';
 // Check for NGO access only
 checkAuth(['ngo']);
 
+// Add this near the top of your file, right after checkAuth(['ngo']);
+$ngoId = $_SESSION['user_id']; // Make sure $ngoId is defined
+
 // Initialize messages
 $successMessage = null;
 $errorMessage = null;
@@ -116,7 +119,8 @@ $sql = "SELECT pw.*, p.name as product_name, p.category, pw.donation_expiry_date
         JOIN products p ON pw.product_id = p.id
         JOIN users u ON pw.user_id = u.id
         JOIN branches b ON pw.branch_id = b.id
-        WHERE pw.disposal_method = 'donation'";  // Changed from 'donate' to 'donation'
+        WHERE pw.disposal_method = 'donation' 
+        AND pw.is_claimed = 0"; /* Make sure we only show unclaimed items */
 
 $params = [];
 
@@ -160,6 +164,22 @@ try {
 $catSql = "SELECT DISTINCT category FROM products ORDER BY category";
 $catStmt = $pdo->query($catSql);
 $categories = $catStmt->fetchAll(PDO::FETCH_COLUMN);
+
+// Get NGO name for greeting
+$ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organization_name FROM users WHERE id = ?");
+$ngoQuery->execute([$ngoId]);
+$ngoInfo = $ngoQuery->fetch(PDO::FETCH_ASSOC);
+
+// After loading donations, add this code to check which ones the NGO has already requested
+
+// Get IDs of donations this NGO has already requested
+$requestedQuery = $pdo->prepare("
+    SELECT product_waste_id 
+    FROM donation_requests 
+    WHERE ngo_id = ?
+");
+$requestedQuery->execute([$ngoId]);
+$requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 ?>
 
 <!DOCTYPE html>
@@ -190,7 +210,15 @@ $categories = $catStmt->fetchAll(PDO::FETCH_COLUMN);
     <?php include '../layout/ngo_nav.php' ?>
 
     <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto">
-        <div class="text-2xl font-bold text-primarycol">Browse Available Donations</div>
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <div class="text-2xl font-bold text-primarycol">Browse Available Donations</div>
+                <div class="text-sm text-gray-500">Welcome, <?= htmlspecialchars($ngoInfo['organization_name'] ?? $ngoInfo['full_name']) ?></div>
+            </div>
+            <div>
+                <a href="donation_history.php" class="btn btn-sm bg-primarycol text-white">View My Requests</a>
+            </div>
+        </div>
 
         <?php if (isset($_GET['success']) && $_GET['success'] === 'requested'): ?>
             <div class="alert alert-success shadow-lg mb-6">
@@ -271,7 +299,16 @@ $categories = $catStmt->fetchAll(PDO::FETCH_COLUMN);
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <?php if (count($donations) > 0): ?>
                     <?php foreach ($donations as $item): ?>
-                        <div class="bg-white border border-gray-200 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+                        <?php $alreadyRequested = in_array($item['id'], $requestedDonations); ?>
+                        <div class="bg-white border <?= $alreadyRequested ? 'border-yellow-400' : 'border-gray-200' ?> p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+                            <!-- If already requested, show a badge -->
+                            <?php if ($alreadyRequested): ?>
+                                <div class="mb-2">
+                                    <span class="inline-block bg-yellow-400 text-white text-xs px-2 py-1 rounded-full ml-1">
+                                        Already Requested
+                                    </span>
+                                </div>
+                            <?php endif; ?>
                             <div class="flex flex-col h-full">
                                 <div class="mb-2">
                                     <span class="inline-block bg-primarycol text-white text-xs px-2 py-1 rounded-full">

@@ -152,6 +152,7 @@ $stmt = $pdo->query("
         dr.pickup_time,
         dr.notes as ngo_notes,
         dr.status,
+        dr.is_received, /* Make sure to include this field */
         dr.staff_notes,
         dr.created_at,
         dr.updated_at,
@@ -374,12 +375,14 @@ $processedRequests = array_filter($requests, function($req) {
                                     <td><?= htmlspecialchars($request['product_name']) ?></td>
                                     <td><?= htmlspecialchars($request['quantity_requested']) ?></td>
                                     <td>
-                                        <?php if ($request['status'] === 'approved'): ?>
+                                        <?php if ($request['status'] === 'approved' && !$request['is_received']): ?>
                                             <span class="badge bg-green-100 text-green-800 px-2 py-1">Approved</span>
                                         <?php elseif ($request['status'] === 'rejected'): ?>
                                             <span class="badge bg-red-100 text-red-800 px-2 py-1">Rejected</span>
-                                        <?php elseif ($request['status'] === 'completed'): ?>
+                                        <?php elseif ($request['status'] === 'completed' || $request['is_received']): ?>
                                             <span class="badge bg-blue-100 text-blue-800 px-2 py-1">Completed</span>
+                                        <?php elseif ($request['status'] === 'pending'): ?>
+                                            <span class="badge bg-yellow-100 text-yellow-800 px-2 py-1">Pending</span>
                                         <?php endif; ?>
                                     </td>
                                     <td><?= date('M d, Y', strtotime($request['updated_at'] ?? $request['created_at'])) ?></td>
@@ -509,8 +512,10 @@ $processedRequests = array_filter($requests, function($req) {
                 return 'bg-red-100 text-red-800';
             case 'completed':
                 return 'bg-blue-100 text-blue-800';
-            default:
+            case 'pending':
                 return 'bg-yellow-100 text-yellow-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
         }
     }
     ?>
