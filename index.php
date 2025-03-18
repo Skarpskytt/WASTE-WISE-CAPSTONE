@@ -127,7 +127,7 @@ function togglePassword() {
         </div>
         <div>
           <div></div> <!-- Empty div for spacing -->
-          <a href="forgot_password.php" class="text-sm text-primarycol hover:underline">
+          <a href="auth/forgot_password.php" class="text-sm text-primarycol hover:underline">
             Forgot your password?
           </a>
         </div>
@@ -138,7 +138,7 @@ function togglePassword() {
         </div>
       </form>
       <div class="mt-4 text-sm text-gray-600 text-center">
-        <p>Don't have an account? <a href="signup.php" class="text-black hover:underline">Sign up here</a></p>
+        <p>Don't have an account? <a href="auth/signup.php" class="text-black hover:underline">Sign up here</a></p>
       </div>
     </div>
   </div>
