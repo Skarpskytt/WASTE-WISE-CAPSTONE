@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 $host = 'localhost'; // Using IP instead of hostname
 $db   = 'u697061521_wastewise';
 $user = 'u697061521_roots';
-$pass = '*zdn+?ycj9W';
+$pass = '*vA^I$vuS*3R';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
