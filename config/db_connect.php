@@ -2,10 +2,10 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-$host = 'gold-chinchilla-937194.hostingersite.com'; // Using IP instead of hostname
+$host = 'localhost'; // Using IP instead of hostname
 $db   = 'u697061521_wastewise';
-$user = 'u697061521_rooot';
-$pass = 'y5ra[x+L';
+$user = 'u697061521_roots';
+$pass = 'f=L8D7dMqrv';
 $charset = 'utf8mb4';
 
 
