@@ -9,7 +9,7 @@ function checkAuth($allowed_roles = []) {
     if (!isset($_SESSION['user_id'])) {
         $_SESSION['error'] = 'Please log in to access this page.';
         // Fix typo in path: capstozne -> capstone
-        header('Location: /capstone/WASTE-WISE-CAPSTONE/auth/login.php');
+        header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
         exit();
     }
 
