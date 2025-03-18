@@ -4,7 +4,7 @@ ini_set('display_errors', 1);
 
 $host = 'localhost'; // Using IP instead of hostname
 $db   = 'u697061521_wastewise';
-$user = 'u697061521_roots';
+$user = 'u697061521_rooot';
 $pass = 'y5ra[x+L';
 $charset = 'utf8mb4';
 
