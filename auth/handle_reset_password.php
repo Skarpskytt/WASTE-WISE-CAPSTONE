@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if (!$reset) {
             $_SESSION['error'] = "This password reset link has expired or is invalid.";
-            header('Location: login.php');
+            header('Location: ../index.php');
             exit();
         }
         
@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$token]);
         
         $_SESSION['success'] = "Your password has been reset successfully. You can now login with your new password.";
-        header('Location: login.php');
+        header('Location: ../index.php');
         exit();
         
     } catch (Exception $e) {
@@ -60,5 +60,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // If we get here, redirect to login
-header('Location: login.php');
+header('Location: ../index.php');
 exit();

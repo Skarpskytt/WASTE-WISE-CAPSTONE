@@ -30,7 +30,7 @@ try {
 
     if (!$reset) {
         $_SESSION['error'] = "This password reset link has expired or is invalid.";
-        header('Location: login.php');
+        header('Location: ../index.php');
         exit();
     }
 } catch (PDOException $e) {
@@ -128,7 +128,7 @@ try {
                 </form>
 
                 <div class="mt-4 text-center">
-                    <a href="login.php" class="text-sm text-primarycol hover:underline">Back to Login</a>
+                    <a href="../index.php" class="text-sm text-primarycol hover:underline">Back to Login</a>
                 </div>
             </div>
         </div>

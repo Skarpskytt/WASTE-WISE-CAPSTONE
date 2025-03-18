@@ -40,11 +40,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             if (!$user['is_active'] && $ngoStatus === 'pending') {
                 $_SESSION['pending_message'] = "Your NGO account is currently under review. You will be notified via email once approved.";
-                header('Location: index.php');
+                header('Location: ../index.php');
                 exit();
             } elseif (!$user['is_active'] && $ngoStatus === 'rejected') {
                 $_SESSION['error'] = "Your NGO account application has been rejected.";
-                header('Location: index.php');
+                header('Location: ../index.php');
                 exit();
             }
         }
@@ -82,11 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } else {
             $_SESSION['error'] = $error;
         }
-        header('Location: index.php');
+        header('Location: ../index.php');
         exit();
     }
 }
 
-header('Location: index.php');
+header('Location: ../index.php');
 exit();
 ?>
