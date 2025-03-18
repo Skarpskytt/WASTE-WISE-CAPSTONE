@@ -67,7 +67,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         // Send OTP via email using existing EmailService
         $emailService = new \App\Mail\EmailService();
-        $emailService->sendOTPEmail($user, $otp);
+        $emailService->sendOTPEmail([
+            'email' => $user['email'],
+            'fname' => $user['fname'],
+            'otp' => $otp
+        ]);
 
         header('Location: verify_otp.php');
         exit();

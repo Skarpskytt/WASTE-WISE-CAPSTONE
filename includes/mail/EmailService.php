@@ -12,28 +12,25 @@ class EmailService {
     private $mailer;
     
     public function __construct() {
-        // Load environment variables
-        $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-        $dotenv->load();
-        
-        $this->initializeMailer();
-    }
-
-    private function initializeMailer() {
         $this->mailer = new PHPMailer(true);
         
-        // Disable debugging in production
-        $this->mailer->SMTPDebug = 0;
+        // Enable debug output
+        $this->mailer->SMTPDebug = 2;
+        $this->mailer->Debugoutput = function($str, $level) {
+            error_log("PHPMailer Debug: $str");
+        };
+
+        // Server settings
         $this->mailer->isSMTP();
-        $this->mailer->Host = $_ENV['MAIL_HOST'];
+        $this->mailer->Host = 'smtp.gmail.com';
         $this->mailer->SMTPAuth = true;
-        $this->mailer->Username = $_ENV['MAIL_USERNAME'];
-        $this->mailer->Password = $_ENV['MAIL_PASSWORD'];
+        $this->mailer->Username = 'bakesbea226@gmail.com'; // Your Gmail address
+        $this->mailer->Password = 'ayqtxmeivyellcai'; // Your App Password
         $this->mailer->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $this->mailer->Port = $_ENV['MAIL_PORT'];
+        $this->mailer->Port = 587;
         
         // Set default sender
-        $this->mailer->setFrom($_ENV['MAIL_FROM_ADDRESS'], $_ENV['MAIL_FROM_NAME']);
+        $this->mailer->setFrom('bakesbea226@gmail.com', 'Waste Wise System');
     }
 
     public function sendNGOApprovalEmail($ngoData) {
@@ -80,25 +77,19 @@ class EmailService {
         }
     }
 
-    public function sendPasswordResetEmail($userData, $resetLink) {
+    public function sendPasswordResetEmail($user, $resetLink) {
         try {
             $this->mailer->clearAddresses();
-            $this->mailer->addAddress($userData['email'], $userData['fname'] . ' ' . $userData['lname']);
-            
+            $this->mailer->addAddress($user['email']); // Get email from user array
             $this->mailer->isHTML(true);
             $this->mailer->Subject = 'Password Reset Request';
             
-            $this->mailer->Body = $this->getPasswordResetTemplate($userData, $resetLink);
-            
-            $sent = $this->mailer->send();
-            if (!$sent) {
-                throw new Exception($this->mailer->ErrorInfo);
-            }
-            return true;
-            
+            $this->mailer->Body = $this->getPasswordResetTemplate($user, $resetLink);
+
+            return $this->mailer->send();
         } catch (Exception $e) {
             error_log("Failed to send password reset email: " . $e->getMessage());
-            throw new Exception("Failed to send password reset email: " . $e->getMessage());
+            throw new \Exception('Failed to send password reset email');
         }
     }
 
@@ -130,22 +121,32 @@ class EmailService {
         }
     }
 
-    public function sendOTPEmail($userData, $otp) {
+    public function sendOTPEmail($userData) {
         try {
+            // Add debug logging
+            error_log("Sending OTP email with data: " . print_r($userData, true));
+            
             $this->mailer->clearAddresses();
-            $this->mailer->addAddress($userData['email'], $userData['fname'] . ' ' . $userData['lname']);
-            
+            $this->mailer->addAddress($userData['email']);
             $this->mailer->isHTML(true);
-            $this->mailer->Subject = 'Login Verification Code';
+            $this->mailer->Subject = 'Your OTP Verification Code';
             
-            $this->mailer->Body = $this->getOTPTemplate($userData, $otp);
-            
+            // Use otp instead of code
+            $this->mailer->Body = "
+                <h2>Login Verification Code</h2>
+                <p>Dear {$userData['fname']},</p>
+                <p>Your login verification code is: <strong>{$userData['otp']}</strong></p>
+                <p>This code will expire in 5 minutes.</p>
+                <p>If you did not request this code, please ignore this email or contact support if you have concerns.</p>
+                <br>
+                <p>WasteWise © 2025</p>
+            ";
+
             $sent = $this->mailer->send();
             if (!$sent) {
                 throw new Exception($this->mailer->ErrorInfo);
             }
             return true;
-            
         } catch (Exception $e) {
             error_log("Failed to send OTP email: " . $e->getMessage());
             throw new Exception("Failed to send OTP email: " . $e->getMessage());

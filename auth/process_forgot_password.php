@@ -28,14 +28,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$user['id'], $token, $expiry]);
             
-            // Generate reset link
-            $resetLink = "http://{$_SERVER['HTTP_HOST']}/capstone/WASTE-WISE-CAPSTONE/auth/reset_password.php?token=" . $token;
+            // Generate reset link with correct path
+            $resetLink = "http://{$_SERVER['HTTP_HOST']}/auth/reset_password.php?token=" . $token;
             
             // Send email
             $emailService = new EmailService();
             $emailService->sendPasswordResetEmail($user, $resetLink);
             
-            $_SESSION['success'] = "If your email exists in our system, you will receive password reset instructions.";
+            $_SESSION['success'] = "Password reset instructions have been sent to your email.";
         } else {
             // Don't reveal if email exists or not for security
             $_SESSION['success'] = "If your email exists in our system, you will receive password reset instructions.";

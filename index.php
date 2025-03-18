@@ -9,7 +9,9 @@ use CustomSession\SessionHandler;
 
 // Test session functionality
 try {
-    $session = SessionHandler::getInstance();
+    $pdo = new \PDO('mysql:hos t=localhost;dbname=wastewise', 'root', '');
+    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+    $session = SessionHandler::getInstance($pdo);
 } catch (Exception $e) {
     error_log("Session Error: " . $e->getMessage());
 }
@@ -112,7 +114,7 @@ function togglePassword() {
         <?php unset($_SESSION['pending_message']); ?>
       <?php endif; ?>
       
-      <form action="save_login.php" method="POST" class="space-y-4">
+      <form action="auth/save_login.php" method="POST" class="space-y-4">
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
           <input type="email" id="email" name="email" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>

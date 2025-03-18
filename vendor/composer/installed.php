@@ -3,7 +3,7 @@
         'name' => 'wastewise/capstone',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'b690b348d8170677e83084a3c3729a9f13005802',
+        'reference' => '6e91523ce433cc49e91600c70e12156b65e370ef',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -184,7 +184,7 @@
         'wastewise/capstone' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'b690b348d8170677e83084a3c3729a9f13005802',
+            'reference' => '6e91523ce433cc49e91600c70e12156b65e370ef',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

@@ -4,22 +4,20 @@ namespace CustomSession;
 
 class SessionHandler
 {
-    private static $instance = null;
     private $pdo;
+    private static $instance;
 
-    private function __construct()
+    private function __construct($pdo)
     {
-        try {
-            $this->pdo = new \PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
-            $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        } catch (\PDOException $e) {
-            die("Database connection failed: " . $e->getMessage());
-        }
+        $this->pdo = $pdo;
     }
 
-    public static function getInstance()
+    public static function getInstance($pdo)
     {
-        return self::$instance ??= new self();
+        if (self::$instance === null) {
+            self::$instance = new self($pdo);
+        }
+        return self::$instance;
     }
 
     public function open($savePath, $sessionName)
@@ -36,7 +34,8 @@ class SessionHandler
     {
         $stmt = $this->pdo->prepare('SELECT session_data FROM sessions WHERE session_id = ?');
         $stmt->execute([$id]);
-        return $stmt->fetch(\PDO::FETCH_ASSOC)['session_data'] ?? '';
+        $session = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $session ? $session['session_data'] : '';
     }
 
     public function write($id, $data)
@@ -58,8 +57,29 @@ class SessionHandler
     }
 }
 
+// Move session handler setup before any session operations
 if (session_status() == PHP_SESSION_NONE) {
-    session_set_save_handler(SessionHandler::getInstance());
-    session_start();
+    try {
+        $pdo = new \PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        
+        $handler = SessionHandler::getInstance($pdo);
+        session_set_save_handler(
+            [$handler, 'open'],
+            [$handler, 'close'],
+            [$handler, 'read'],
+            [$handler, 'write'],
+            [$handler, 'destroy'],
+            [$handler, 'gc']
+        );
+        
+        // Register shutdown function to ensure session data is saved
+        register_shutdown_function('session_write_close');
+        
+        // Start the session after setting the handler
+        session_start();
+    } catch (\PDOException $e) {
+        die("Database connection failed: " . $e->getMessage());
+    }
 }
 ?>
