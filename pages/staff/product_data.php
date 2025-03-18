@@ -2,31 +2,31 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Change access permissions to staff only
+
 checkAuth(['staff']);
 
 $errors = [];
 $successMessage = '';
 
-// Check and create uploads directory if needed
+
 $uploadDir = __DIR__ . "/uploads/products/";
 if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0777, true);
     echo "<!-- Created directory: $uploadDir -->";
 }
 
-// Handle EDIT product submission
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
     $productId = $_POST['product_id'];
     $itemName = htmlspecialchars(trim($_POST['edit_itemname']));
     $category = htmlspecialchars(trim($_POST['edit_category']));
     $stockDate = $_POST['edit_stockdate'];
-    $expiryDate = $_POST['edit_expirydate']; // Get expiry date from form
+    $expiryDate = $_POST['edit_expirydate']; 
     $pricePerUnit = floatval($_POST['edit_price_per_unit']);
-    $quantityProduced = intval($_POST['edit_quantity_produced']); // Changed from edit_quantity
+    $quantityProduced = intval($_POST['edit_quantity_produced']); 
     
-    // Handle image update if a new one is provided
-    $itemImage = $_POST['current_image']; // Keep existing image by default
+
+    $itemImage = $_POST['current_image'];
     
     if (isset($_FILES['edit_item_image']) && $_FILES['edit_item_image']['error'] === 0) {
         $allowed = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp"];
@@ -48,7 +48,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["edit_item_image"]["tmp_name"], $targetPath)) {
-                // Store only the relative path in the database
+
                 $itemImage = './uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
@@ -56,7 +56,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
         }
     }
 
-    // If no errors, update database
+
     if (empty($errors)) {
         try {
             $stmt = $pdo->prepare("
@@ -80,7 +80,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
                 ':quantity_produced' => $quantityProduced,
                 ':image' => $itemImage,
                 ':id' => $productId,
-                ':branch_id' => $_SESSION['branch_id'] // Security check to ensure users only edit their branch's products
+                ':branch_id' => $_SESSION['branch_id'] 
             ]);
             
             $successMessage = "Product updated successfully.";
@@ -90,7 +90,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_product'])) {
     }
 }
 
-// Handle DELETE product
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_product'])) {
     $productId = $_POST['product_id'];
     
@@ -98,7 +98,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_product'])) {
         $stmt = $pdo->prepare("DELETE FROM products WHERE id = :id AND branch_id = :branch_id");
         $stmt->execute([
             ':id' => $productId,
-            ':branch_id' => $_SESSION['branch_id'] // Security check
+            ':branch_id' => $_SESSION['branch_id'] 
         ]);
         
         $successMessage = "Product deleted successfully.";
@@ -107,38 +107,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_product'])) {
     }
 }
 
-// Handle form submission for adding product
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
-    // Validate and sanitize inputs
+
     $itemName = htmlspecialchars(trim($_POST['itemname']));
     $category = htmlspecialchars(trim($_POST['category']));
     $stockDate = $_POST['stockdate'];
-    $expiryDate = $_POST['expirydate']; // Get expiry date from form
+    $expiryDate = $_POST['expirydate'];
     $pricePerUnit = floatval($_POST['price_per_unit']);
-    $quantityProduced = intval($_POST['quantity_produced']); // Changed from quantity
-    $branchId = $_SESSION['branch_id']; // Get branch_id from session
+    $quantityProduced = intval($_POST['quantity_produced']);
+    $branchId = $_SESSION['branch_id']; 
     
     if (!$branchId) {
         $errors[] = "Error: Branch ID not found in session.";
     }
 
-    // Process image upload
-    $itemImage = "../../assets/images/default-product.jpg"; // Default image path
+
+    $itemImage = "../../assets/images/default-product.jpg"; 
     
     if (isset($_FILES['item_image']) && $_FILES['item_image']['error'] === 0) {
         $allowed = ["jpg" => "image/jpeg", "jpeg" => "image/jpeg", "png" => "image/png", "webp" => "image/webp"];
-        $filename = time() . '_' . $_FILES['item_image']['name']; // Add timestamp to prevent duplicates
+        $filename = time() . '_' . $_FILES['item_image']['name']; 
         $filetype = $_FILES['item_image']['type'];
         $filesize = $_FILES['item_image']['size'];
 
-        // Verify file extension
+ 
         $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         if (!array_key_exists($ext, $allowed)) {
             $errors[] = "Error: Please select a valid file format (JPG, JPEG, PNG, WEBP).";
         } elseif ($filesize > 2 * 1024 * 1024) {
             $errors[] = "Error: File size exceeds the 2MB limit.";
         } else {
-            // Create uploads directory if it doesn't exist
+
             $uploadDir = __DIR__ . "/uploads/products/";
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
@@ -147,7 +147,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
             $targetPath = $uploadDir . $filename;
 
             if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
-                // Store only the relative path in the database
+    
                 $itemImage = './uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
@@ -155,30 +155,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
         }
     }
 
-    // Validate Stock Date
+
     if (!DateTime::createFromFormat('Y-m-d', $stockDate)) {
         $errors[] = "Error: Invalid stock date format.";
     }
     
-    // Validate Expiry Date
+
     if (!DateTime::createFromFormat('Y-m-d', $expiryDate)) {
         $errors[] = "Error: Invalid expiry date format.";
     }
     
-    // Check if expiry date is after stock date
+  
     if (strtotime($expiryDate) <= strtotime($stockDate)) {
         $errors[] = "Error: Expiry date must be after stock date.";
     }
 
-    // If no errors, insert into database using PDO
+
     if (empty($errors)) {
         try {
-            // Modified INSERT query to include quantity
+
             $stmt = $pdo->prepare("
                 INSERT INTO products (
-                    name, category, stock_date, expiry_date, price_per_unit, quantity_produced, image, branch_id
+                    name, category, stock_date, expiry_date, price_per_unit, quantity_produced, image, branch_id, status
                 ) VALUES (
-                    :name, :category, :stock_date, :expiry_date, :price_per_unit, :quantity_produced, :image, :branch_id
+                    :name, :category, :stock_date, :expiry_date, :price_per_unit, :quantity_produced, :image, :branch_id, 'active'
                 )
             ");
             $stmt->execute([
@@ -198,36 +198,142 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
     }
 }
 
-// Retrieve products from database for the current branch
+
+// Add this code before the existing query section (around line 147)
+$statusFilter = isset($_GET['status']) && in_array($_GET['status'], ['active', 'waste_processed']) 
+    ? $_GET['status'] 
+    : 'all';
+
 try {
-    // Pagination setup
+
     $itemsPerPage = 10;
     $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
     $offset = ($page - 1) * $itemsPerPage;
     
-    // Count total products for pagination
+
+    // Modify the count query with the filter
     $countStmt = $pdo->prepare("
         SELECT COUNT(*) FROM products 
         WHERE branch_id = :branch_id
+        " . ($statusFilter !== 'all' ? " AND status = :status" : "") . "
     ");
-    $countStmt->execute([':branch_id' => $_SESSION['branch_id']]);
+    $countStmt->bindValue(':branch_id', $_SESSION['branch_id'], PDO::PARAM_INT);
+    if ($statusFilter !== 'all') {
+        $countStmt->bindValue(':status', $statusFilter, PDO::PARAM_STR);
+    }
+    $countStmt->execute();
     $totalProducts = $countStmt->fetchColumn();
     $totalPages = ceil($totalProducts / $itemsPerPage);
     
-    // Modify the existing query to add LIMIT and OFFSET
+
+    // Modify the main query with the filter
     $stmt = $pdo->prepare("
         SELECT * FROM products 
         WHERE branch_id = :branch_id
+        " . ($statusFilter !== 'all' ? " AND status = :status" : "") . "
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     ");
     $stmt->bindValue(':branch_id', $_SESSION['branch_id'], PDO::PARAM_INT);
+    if ($statusFilter !== 'all') {
+        $stmt->bindValue(':status', $statusFilter, PDO::PARAM_STR);
+    }
     $stmt->bindValue(':limit', $itemsPerPage, PDO::PARAM_INT);
     $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
     $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $errors[] = "Error retrieving products: " . $e->getMessage();
+}
+
+// Add this before the HTML part, after the main product query section (around line 145)
+// Automatically mark expired products as waste processed
+try {
+    $today = date('Y-m-d');
+    $expiredStmt = $pdo->prepare("
+        UPDATE products 
+        SET status = 'waste_processed' 
+        WHERE expiry_date < :today 
+        AND status = 'active' 
+        AND branch_id = :branch_id
+    ");
+    $expiredStmt->execute([
+        ':today' => $today,
+        ':branch_id' => $_SESSION['branch_id']
+    ]);
+    
+    // If any products were updated, set a message
+    $expiredCount = $expiredStmt->rowCount();
+    if ($expiredCount > 0) {
+        $successMessage = "$expiredCount expired product(s) automatically marked as waste processed.";
+    }
+} catch (PDOException $e) {
+    // Silently fail, this is just an automated process
+}
+
+// Add this code to handle expired products
+try {
+    $today = date('Y-m-d');
+    
+    // First find expired products
+    $expiredStmt = $pdo->prepare("
+        SELECT * FROM products 
+        WHERE expiry_date < ? 
+        AND status = 'active' 
+        AND branch_id = ?
+    ");
+    $expiredStmt->execute([$today, $_SESSION['branch_id']]);
+    $expiredProducts = $expiredStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Process each expired product
+    foreach ($expiredProducts as $product) {
+        // Start transaction
+        $pdo->beginTransaction();
+        
+        try {
+            // Insert waste entry for expired product
+            $wasteStmt = $pdo->prepare("
+                INSERT INTO product_waste (
+                    user_id, product_id, waste_date, waste_quantity,
+                    quantity_sold, waste_value, waste_reason,
+                    disposal_method, responsible_person, notes,
+                    created_at, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            $wasteStmt->execute([
+                $_SESSION['user_id'],
+                $product['id'],
+                $today,
+                $product['quantity_produced'], // Full quantity as waste
+                0, // No sales
+                $product['quantity_produced'] * $product['price_per_unit'],
+                'expired',
+                'waste_processed',
+                'System',
+                'Automatically processed due to expiration',
+                date('Y-m-d H:i:s'),
+                $_SESSION['branch_id']
+            ]);
+            
+            // Update product status
+            $updateStmt = $pdo->prepare("
+                UPDATE products 
+                SET status = 'waste_processed' 
+                WHERE id = ? AND branch_id = ?
+            ");
+            $updateStmt->execute([$product['id'], $_SESSION['branch_id']]);
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            // Log error but continue processing other products
+            error_log("Error processing expired product {$product['id']}: " . $e->getMessage());
+        }
+    }
+} catch (PDOException $e) {
+    // Log error but don't stop execution
+    error_log("Error checking for expired products: " . $e->getMessage());
 }
 ?>
 
@@ -263,7 +369,7 @@ try {
           $('#sidebar').addClass('-translate-x-full');
       });
       
-      // Open edit modal
+
       $('.openEditModal').on('click', function() {
         const productId = $(this).data('id');
         const productName = $(this).data('name');
@@ -271,7 +377,7 @@ try {
         const stockDate = $(this).data('stockdate');
         const expiryDate = $(this).data('expirydate');
         const pricePerUnit = $(this).data('price');
-        const quantityProduced = $(this).data('quantity-produced'); // Changed from quantity
+        const quantityProduced = $(this).data('quantity-produced'); 
         const imagePath = $(this).data('image');
         
         // Populate edit form with current values
@@ -281,20 +387,19 @@ try {
         $('#edit_stockdate').val(stockDate);
         $('#edit_expirydate').val(expiryDate);
         $('#edit_price_per_unit').val(pricePerUnit);
-        $('#edit_quantity_produced').val(quantityProduced); // Changed from edit_quantity
+        $('#edit_quantity_produced').val(quantityProduced); 
         $('#current_image').val(imagePath);
         $('#edit_image_preview').attr('src', imagePath);
         
-        // Show the modal
+
         $('#editModal').removeClass('hidden');
       });
-      
-      // Close edit modal
+
       $('#closeEditModal').on('click', function() {
         $('#editModal').addClass('hidden');
       });
       
-      // Open delete confirmation
+
       $('.openDeleteModal').on('click', function() {
         const productId = $(this).data('id');
         const productName = $(this).data('name');
@@ -305,12 +410,11 @@ try {
         $('#deleteModal').removeClass('hidden');
       });
       
-      // Close delete modal
+
       $('#closeDeleteModal').on('click', function() {
         $('#deleteModal').addClass('hidden');
       });
       
-      // Preview edit image
       $('#edit_item_image').on('change', function() {
         const file = this.files[0];
         if (file) {
@@ -322,7 +426,7 @@ try {
         }
       });
       
-      // Preview add image
+
       $('#dropzone-file').on('change', function() {
         const file = this.files[0];
         if (file) {
@@ -357,7 +461,6 @@ try {
     <p class="text-gray-500 mt-2">Manage your Products</p>
   </div>
 
-  <!-- Display Success or Error Messages -->
   <?php if (!empty($successMessage)): ?>
     <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mt-4" role="alert">
       <span class="block sm:inline"><?= htmlspecialchars($successMessage) ?></span>
@@ -372,185 +475,237 @@ try {
     </div>
   <?php endif; ?>
 
-  <div class="flex flex-col mx-3 mt-6 lg:flex-row gap-4">
-    <!-- Add Product Form -->
-    <div class="w-full lg:w-1/3 m-1">
-        <form class="w-full bg-white shadow-xl p-6 border" action="product_data.php" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="add_product" value="1" />
-            <div class="flex flex-wrap -mx-3 mb-6">
-                <!-- Item Name -->
-                <div class="w-full md:w/full px-3 mb-6">
-                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemname">Product Name</label>
-                    <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                    id="itemname" type="text" name="itemname" placeholder="Item Name" required />
-                </div>
-                
-                <!-- Category and Stock Date side by side -->
-                <div class="flex w-full">
-                    <div class="w-full md:w-1/2 px-3 mb-6">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="category">Category </label>
-                        <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="category" type="text" name="category" placeholder="Category" required />
-                    </div>
-                    <div class="w-full md:w-1/2 px-3 mb-6">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">Stock Date</label>
-                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="stockdate" name="stockdate" required />
-                    </div>
-                </div>
-                
-                <!-- Expiry Date and Price per Unit side by side -->
-                <div class="flex w-full">
-                    <div class="w-full md:w-1/2 px-3 mb-6">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expirydate">Expiry Date</label>
-                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="expirydate" name="expirydate" required />
-                    </div>
-                    <div class="w-full md:w-1/2 px-3 mb-6">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price_per_unit">Price per Unit</label>
-                        <input type="number" step="0.01" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="price_per_unit" name="price_per_unit" placeholder="Price per Unit" required />
-                    </div>
-                </div>
-                
-                <!-- Quantity Produced (renamed from Quantity) -->
-                <div class="w-full md:w/full px-3 mb-6">
-                    <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="quantity_produced">Quantity Produced</label>
-                    <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                    id="quantity_produced" name="quantity_produced" placeholder="Quantity Produced" required />
-                </div>
-            </div>
-            
-            <!-- Add Product Button -->
-            <div class="w-full md:w/full px-3 mb-6">
-                <button type="submit" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition-colors">Add Product</button>
-            </div>
-            
-            <!-- Item Image Upload -->
-            <div class="w-full px-3 mb-8">
-                <label class="mx-auto cursor-pointer flex w-full max-w-lg flex-col items-center justify-center rounded-xl border-2 border-dashed border-primarycol bg-white p-6 text-center" for="dropzone-file">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
+  <!-- Add Product Form -->
+  <div class="w-full bg-white shadow-xl p-6 border mb-8 mt-4">
+    <h2 class="text-xl font-semibold text-gray-700 mb-4">Add New Product</h2>
+    <form class="w-full" action="product_data.php" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="add_product" value="1" />
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Product Name -->
+        <div class="mb-4">
+          <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="itemname">Product Name</label>
+          <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+          id="itemname" type="text" name="itemname" placeholder="Item Name" required />
+        </div>
 
-                <h2 class="mt-4 text-xl font-medium text-gray-700 tracking-wide">Item Image</h2>
-                <p class="mt-2 text-gray-500 tracking-wide">Upload or drag & drop your file PNG, JPG, or WEBP.</p>
-                <img id="add_image_preview" class="mt-4 max-h-40 hidden" alt="Image preview" />
-                <input id="dropzone-file" type="file" class="hidden" name="item_image" accept="image/png, image/jpeg, image/webp"/>
-                </label>
-            </div>
-        </form>
-    </div>
+        <!-- Category -->
+        <div class="mb-4">
+          <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="category">Category</label>
+          <input class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+          id="category" type="text" name="category" placeholder="Category" required />
+        </div>
 
-    <!-- Products Table -->
-    <div class="w-full lg:w-2/3 m-1 bg-slate-100 shadow-xl text-lg rounded-sm border border-gray-200">
-      <div class="overflow-x-auto p-4">
-        <table class="table table-zebra w-full">
-          <!-- Table Head -->
-          <thead>
-            <tr class="bg-sec">
-              <th>#</th>
-              <th class="flex justify-center">Image</th>
-              <th>Item Name</th>
-              <th>Category</th>
-              <th>Stock Date</th>
-              <th>Expiry Date</th>
-              <th>Price per Unit</th>
-              <th>Quantity Produced</th>
-              <th class="text-center">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php
-            if (!empty($inventory)) {
-                $count = 1;
-                foreach ($inventory as $item) {
-                    $imagePath = !empty($item['image']) ? $item['image'] : '../../assets/images/default-product.jpg';
-                    
-                    // Fix image path to ensure browser can access it correctly
-                    if (strpos($imagePath, 'C:') === 0) {
-                        // For absolute Windows paths, extract just the filename from the path
-                        $filename = basename($imagePath);
-                        // Point to the correct web-accessible path
-                        $imagePath = './uploads/products/' . $filename;
-                    } else if (strpos($imagePath, 'uploads/') === 0) {
-                        // Path is already relative, but make sure it starts with ./
-                        $imagePath = './' . $imagePath;
-                    }
-                    
-                    echo "<tr>";
-                    echo "<th>" . $count++ . "</th>";
-                    echo "<td class='flex justify-center'>";
-                    echo "<img src='" . htmlspecialchars($imagePath) . "' class='h-8 w-8 object-cover rounded' alt='" . htmlspecialchars($item['name']) . "'>";
-                    echo "</td>";
-                    echo "<td>" . htmlspecialchars($item['name']) . "</td>";
-                    echo "<td>" . htmlspecialchars($item['category']) . "</td>";
-                    echo "<td>" . htmlspecialchars($item['stock_date']) . "</td>";
-                    echo "<td>" . htmlspecialchars($item['expiry_date']) . "</td>";
-                    echo "<td>" . htmlspecialchars($item['price_per_unit']) . "</td>";
-                    echo "<td>" . htmlspecialchars($item['quantity_produced']) . "</td>";
-                    echo "<td class='p-2'>
-                            <div class='flex justify-center space-x-2'>
-                                <button 
-                                    data-id='" . htmlspecialchars($item['id']) . "' 
-                                    data-name='" . htmlspecialchars($item['name']) . "' 
-                                    data-category='" . htmlspecialchars($item['category']) . "' 
-                                    data-stockdate='" . htmlspecialchars($item['stock_date']) . "' 
-                                    data-expirydate='" . htmlspecialchars($item['expiry_date']) . "' 
-                                    data-price='" . htmlspecialchars($item['price_per_unit']) . "' 
-                                    data-quantity-produced='" . htmlspecialchars($item['quantity_produced']) . "' 
-                                    data-image='" . htmlspecialchars($imagePath) . "' 
-                                    class='openEditModal rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
-                                    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                                      <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
-                                    </svg>
-                                    Edit
-                                </button>
-                                <button 
-                                    data-id='" . htmlspecialchars($item['id']) . "' 
-                                    data-name='" . htmlspecialchars($item['name']) . "' 
-                                    class='openDeleteModal rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
-                                    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                                      <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
-                                    </svg>
-                                    Delete
-                                </button>
-                            </div>
-                          </td>";
-                    echo "</tr>";
-                }
-            } else {
-                echo "<tr><td colspan='9' class='text-center'>No products found.</td></tr>";
-            }
-            ?>
-          </tbody>
-        </table>
-        <!-- Add this right before closing the </div> that contains the table -->
-        <?php if ($totalPages > 1): ?>
-        <div class="flex justify-center mt-4">
-          <div class="join">
-            <?php if ($page > 1): ?>
-              <a href="?page=<?= ($page - 1) ?>" class="join-item btn bg-sec hover:bg-third">«</a>
-            <?php endif; ?>
-            
-            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-              <a href="?page=<?= $i ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
-                <?= $i ?>
-              </a>
-            <?php endfor; ?>
-            
-            <?php if ($page < $totalPages): ?>
-              <a href="?page=<?= ($page + 1) ?>" class="join-item btn bg-sec hover:bg-third">»</a>
-            <?php endif; ?>
+        <!-- Stock Date -->
+        <div class="mb-4">
+          <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">Stock Date</label>
+          <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+          id="stockdate" name="stockdate" required />
+        </div>
+
+        <!-- Expiry Date -->
+        <div class="mb-4">
+          <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expirydate">Expiry Date</label>
+          <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+          id="expirydate" name="expirydate" required />
+        </div>
+
+        <!-- Price per Unit -->
+        <div class="mb-4">
+          <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="price_per_unit">Price per Unit</label>
+          <input type="number" step="0.01" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+          id="price_per_unit" name="price_per_unit" placeholder="Price per Unit" required />
+        </div>
+
+        <!-- Quantity Produced -->
+        <div class="mb-4">
+          <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="quantity_produced">Quantity Produced</label>
+          <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+          id="quantity_produced" name="quantity_produced" placeholder="Quantity Produced" required />
+        </div>
+      </div>
+
+      <!-- Image Upload -->
+      <div class="mt-4 mb-6">
+        <label class="mx-auto cursor-pointer flex w-full max-w-lg flex-col items-center justify-center rounded-xl border-2 border-dashed border-primarycol bg-white p-6 text-center" for="dropzone-file">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          <h2 class="mt-4 text-xl font-medium text-gray-700 tracking-wide">Item Image</h2>
+          <p class="mt-2 text-gray-500 tracking-wide">Upload or drag & drop your file PNG, JPG, or WEBP.</p>
+          <img id="add_image_preview" class="mt-4 max-h-40 hidden" alt="Image preview" />
+          <input id="dropzone-file" type="file" class="hidden" name="item_image" accept="image/png, image/jpeg, image/webp"/>
+        </label>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="flex justify-end">
+        <button type="submit" class="bg-primarycol text-white font-bold py-2 px-6 rounded hover:bg-green-600 transition-colors">Add Product</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Product List Table -->
+  <div class="w-full bg-white shadow-xl text-lg rounded-lg border border-gray-200">
+    <div class="overflow-x-auto p-6">
+      <!-- Filter Section -->
+      <div class="flex flex-col sm:flex-row items-center justify-between mb-6">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4 sm:mb-0">Product Status Filter</h2>
+        <div class="flex flex-wrap gap-3">
+          <a href="?status=all<?= (isset($_GET['page']) ? '&page=' . $_GET['page'] : '') ?>" 
+             class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 <?= ($statusFilter === 'all' ? 'bg-primarycol text-white shadow-lg' : 'bg-gray-100 text-gray-700 hover:bg-gray-200') ?>">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+            All Products
+          </a>
+          <a href="?status=active<?= (isset($_GET['page']) ? '&page=' . $_GET['page'] : '') ?>" 
+             class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 <?= ($statusFilter === 'active' ? 'bg-primarycol text-white shadow-lg' : 'bg-gray-100 text-gray-700 hover:bg-gray-200') ?>">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Active
+          </a>
+          <a href="?status=waste_processed<?= (isset($_GET['page']) ? '&page=' . $_GET['page'] : '') ?>" 
+             class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 <?= ($statusFilter === 'waste_processed' ? 'bg-primarycol text-white shadow-lg' : 'bg-gray-100 text-gray-700 hover:bg-gray-200') ?>">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Waste Processed
+          </a>
+        </div>
+      </div>
+
+      <!-- Status Summary Section -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div class="text-sm text-gray-500">Total Products</div>
+          <div class="text-2xl font-bold text-gray-700"><?= $totalProducts ?></div>
+        </div>
+        <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+          <div class="text-sm text-green-600">Active Products</div>
+          <div class="text-2xl font-bold text-green-700">
+            <?= array_reduce($inventory, function($count, $item) {
+              return $count + ($item['status'] === 'active' ? 1 : 0);
+            }, 0) ?>
           </div>
         </div>
-        <?php endif; ?>
+        <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+          <div class="text-sm text-red-600">Waste Processed</div>
+          <div class="text-2xl font-bold text-red-700">
+            <?= array_reduce($inventory, function($count, $item) {
+              return $count + ($item['status'] === 'waste_processed' ? 1 : 0);
+            }, 0) ?>
+          </div>
+        </div>
       </div>
+
+      <!-- Products Table -->
+      <table class="table table-zebra w-full">
+        <thead>
+          <tr class="bg-sec">
+            <th>#</th>
+            <th class="flex justify-center">Image</th>
+            <th>Item Name</th>
+            <th>Category</th>
+            <th>Stock Date</th>
+            <th>Expiry Date</th>
+            <th>Price per Unit</th>
+            <th>Quantity Produced</th>
+            <th>Status</th>
+            <th class="text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          if (!empty($inventory)) {
+              $count = 1;
+              foreach ($inventory as $item) {
+                  $imagePath = !empty($item['image']) ? $item['image'] : '../../assets/images/default-product.jpg';
+                  
+                  if (strpos($imagePath, 'C:') === 0) {
+                      $filename = basename($imagePath);
+                      $imagePath = './uploads/products/' . $filename;
+                  } else if (strpos($imagePath, 'uploads/') === 0) {
+                      $imagePath = './' . $imagePath;
+                  }
+                  
+                  echo "<tr>";
+                  echo "<th>" . $count++ . "</th>";
+                  echo "<td class='flex justify-center'>";
+                  echo "<img src='" . htmlspecialchars($imagePath) . "' class='h-8 w-8 object-cover rounded' alt='" . htmlspecialchars($item['name']) . "'>";
+                  echo "</td>";
+                  echo "<td>" . htmlspecialchars($item['name']) . "</td>";
+                  echo "<td>" . htmlspecialchars($item['category']) . "</td>";
+                  echo "<td>" . htmlspecialchars($item['stock_date']) . "</td>";
+                  echo "<td>" . htmlspecialchars($item['expiry_date']) . "</td>";
+                  echo "<td>" . htmlspecialchars($item['price_per_unit']) . "</td>";
+                  echo "<td>" . htmlspecialchars($item['quantity_produced']) . "</td>";
+                  echo "<td>
+                          <span class='px-2 py-1 rounded-full text-xs font-semibold " . 
+                          ($item['status'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800') . 
+                          "'>" . ($item['status'] === 'active' ? 'Active' : 'Waste Processed') . "</span>
+                        </td>";
+                  echo "<td class='p-2'>
+                          <div class='flex justify-center space-x-2'>
+                              <button 
+                                  data-id='" . htmlspecialchars($item['id']) . "' 
+                                  data-name='" . htmlspecialchars($item['name']) . "' 
+                                  data-category='" . htmlspecialchars($item['category']) . "' 
+                                  data-stockdate='" . htmlspecialchars($item['stock_date']) . "' 
+                                  data-expirydate='" . htmlspecialchars($item['expiry_date']) . "' 
+                                  data-price='" . htmlspecialchars($item['price_per_unit']) . "' 
+                                  data-quantity-produced='" . htmlspecialchars($item['quantity_produced']) . "' 
+                                  data-image='" . htmlspecialchars($imagePath) . "' 
+                                  class='openEditModal rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'>
+                                  <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
+                                  </svg>
+                                  Edit
+                              </button>
+                              <button 
+                                  data-id='" . htmlspecialchars($item['id']) . "' 
+                                  data-name='" . htmlspecialchars($item['name']) . "' 
+                                  class='openDeleteModal rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
+                                  <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+                                  </svg>
+                                  Delete
+                              </button>
+                          </div>
+                        </td>";
+                  echo "</tr>";
+              }
+          } else {
+              echo "<tr><td colspan='9' class='text-center'>No products found.</td></tr>";
+          }
+          ?>
+        </tbody>
+      </table>
+
+      <?php if ($totalPages > 1): ?>
+      <div class="flex justify-center mt-4">
+        <div class="join">
+          <?php if ($page > 1): ?>
+            <a href="?status=<?= $statusFilter ?>&page=<?= ($page - 1) ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+          <?php endif; ?>
+          
+          <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <a href="?status=<?= $statusFilter ?>&page=<?= $i ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+              <?= $i ?>
+            </a>
+          <?php endfor; ?>
+          
+          <?php if ($page < $totalPages): ?>
+            <a href="?status=<?= $statusFilter ?>&page=<?= ($page + 1) ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
     </div>
   </div>
 </div>
 
-<!-- Edit Product Modal (Updated Layout) -->
+
 <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
   <div class="bg-white p-6 rounded-lg w-full max-w-lg">
     <div class="flex justify-between items-center border-b pb-3">
@@ -591,7 +746,7 @@ try {
           id="edit_stockdate" name="edit_stockdate" type="date" required>
       </div>
       
-      <!-- Expiry Date and Price per Unit side by side -->
+
       <div class="flex gap-4 mb-4">
         <div class="w-1/2">
           <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_expirydate">
@@ -643,7 +798,7 @@ try {
   </div>
 </div>
 
-<!-- Delete Product Modal -->
+
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
   <div class="bg-white p-6 rounded-lg w-full max-w-md">
     <div class="flex justify-between items-center border-b pb-3">

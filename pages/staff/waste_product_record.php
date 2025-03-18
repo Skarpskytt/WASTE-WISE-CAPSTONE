@@ -372,7 +372,6 @@ try {
                                     echo "<td>" . htmlspecialchars($record['quantity_produced']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['quantity_sold']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['waste_quantity']) . "</td>";
-                                    // Removed waste value column
                                     echo "<td>" . htmlspecialchars(ucfirst($record['waste_reason'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['disposal_method'])) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['staff_name']) . "</td>";

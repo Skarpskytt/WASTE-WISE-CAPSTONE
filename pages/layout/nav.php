@@ -120,11 +120,6 @@ if (isset($_GET['mark_all_read'])) {
                         <span class="flex-1 ms-3 whitespace-nowrap">Ingredient Waste</span>
                       </a>
                     </li>
-                    <li>
-                      <a href="../admin/branch1_ingredient_waste.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-                        <span class="flex-1 ms-3 whitespace-nowrap">Stocks</span>
-                      </a>
-                    </li>
                   </ul>
                 </details>
               </li>
@@ -146,11 +141,6 @@ if (isset($_GET['mark_all_read'])) {
                     <li>
                       <a href="../admin/branch2_ingredients_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                         <span class="flex-1 ms-3 whitespace-nowrap">Ingredient Waste</span>
-                      </a>
-                    </li>
-                    <li>
-                      <a href="../admin/branch2_ingredient_waste.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-                        <span class="flex-1 ms-3 whitespace-nowrap">Stocks</span>
                       </a>
                     </li>
                   </ul>

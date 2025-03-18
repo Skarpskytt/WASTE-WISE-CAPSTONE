@@ -242,104 +242,143 @@ $processedRequests = array_filter($requests, function($req) {
             });
         });
     </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #47663B;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #3b5231;
+        }
+    </style>
 </head>
 
 <body class="flex h-screen bg-slate-100">
     
     <?php include '../layout/nav.php' ?>
     
-    <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto">
-        <div>
-            <h2 class="text-3xl font-bold mb-6 text-primarycol">NGO Food Requests</h2>
-        </div>
-        
-        <!-- Status Messages -->
-        <?php if (isset($successMessage)): ?>
-            <div class="alert alert-success shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span><?= htmlspecialchars($successMessage) ?></span>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (isset($errorMessage)): ?>
-            <div class="alert alert-error shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span><?= htmlspecialchars($errorMessage) ?></span>
-            </div>
-        <?php endif; ?>
-        
-        <!-- Pending Requests Section -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-xl font-bold mb-4 text-primarycol flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Pending Requests
-                <?php if (count($pendingRequests) > 0): ?>
-                    <span class="ml-3 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                        <?= count($pendingRequests) ?>
+    <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto custom-scrollbar bg-gradient-to-br from-white to-sec/20">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <h2 class="text-3xl font-bold text-primarycol">NGO Food Requests</h2>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-medium text-gray-500">Total Requests:</span>
+                    <span class="px-3 py-1 text-sm font-semibold bg-primarycol text-white rounded-full">
+                        <?= count($requests) ?>
                     </span>
-                <?php endif; ?>
-            </h3>
-            
-            <?php if (count($pendingRequests) === 0): ?>
-                <div class="text-center py-6 text-gray-500">No pending requests found.</div>
-            <?php else: ?>
-                <div class="overflow-x-auto">
-                    <table class="table table-zebra w-full">
-                        <thead class="bg-sec text-primarycol">
-                            <tr>
-                                <th class="py-3">Request ID</th>
-                                <th>NGO</th>
-                                <th>Food Item</th>
-                                <th>Quantity</th>
-                                <th>Pickup Date</th>
-                                <th>Requested On</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($pendingRequests as $request): ?>
-                                <tr>
-                                    <td><?= $request['id'] ?></td>
-                                    <td><?= htmlspecialchars($request['ngo_name']) ?></td>
-                                    <td><?= htmlspecialchars($request['product_name']) ?></td>
-                                    <td><?= htmlspecialchars($request['quantity_requested']) ?></td>
-                                    <td>
-                                        <?= date('M d, Y', strtotime($request['pickup_date'])) ?>
-                                        <span class="text-xs text-gray-500">
-                                            (<?= date('h:i A', strtotime($request['pickup_time'])) ?>)
-                                        </span>
-                                    </td>
-                                    <td><?= date('M d, Y', strtotime($request['created_at'])) ?></td>
-                                    <td>
-                                        <div class="flex space-x-2">
-                                            <button class="btn btn-sm bg-primarycol text-white view-details-btn" 
-                                                    data-id="<?= $request['id'] ?>">
-                                                Details
-                                            </button>
-                                            <button class="btn btn-sm bg-green-600 text-white respond-btn" 
-                                                    data-id="<?= $request['id'] ?>" 
-                                                    data-action="approve">
-                                                Approve
-                                            </button>
-                                            <button class="btn btn-sm bg-red-600 text-white respond-btn" 
-                                                    data-id="<?= $request['id'] ?>" 
-                                                    data-action="reject">
-                                                Reject
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
                 </div>
-            <?php endif; ?>
+            </div>
+            <div class="flex space-x-4">
+                <div class="stats shadow">
+                    <div class="stat place-items-center">
+                        <div class="stat-title text-primarycol">Pending</div>
+                        <div class="stat-value text-yellow-600"><?= count($pendingRequests) ?></div>
+                    </div>
+                    <div class="stat place-items-center">
+                        <div class="stat-title text-primarycol">Processed</div>
+                        <div class="stat-value text-green-600"><?= count($processedRequests) ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Status Messages -->
+        <?php if (isset($successMessage)): ?>
+            <div class="alert alert-success shadow-lg mb-6 animate-fadeIn">
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="font-medium"><?= htmlspecialchars($successMessage) ?></span>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Enhanced Pending Requests Section -->
+        <div class="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-bold text-primarycol flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Pending Requests
+                    <?php if (count($pendingRequests) > 0): ?>
+                        <span class="ml-3 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">
+                            <?= count($pendingRequests) ?>
+                        </span>
+                    <?php endif; ?>
+                </h3>
+            </div>
+
+            <!-- Enhanced Table -->
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr class="bg-primarycol text-white">
+                            <th class="px-4 py-3 text-left">Request ID</th>
+                            <th class="px-4 py-3">NGO</th>
+                            <th class="px-4 py-3">Food Item</th>
+                            <th class="px-4 py-3">Quantity</th>
+                            <th class="px-4 py-3">Pickup Date</th>
+                            <th class="px-4 py-3">Requested On</th>
+                            <th class="px-4 py-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <?php foreach ($pendingRequests as $request): ?>
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-4 py-3 font-medium">#<?= $request['id'] ?></td>
+                                <td class="px-4 py-3"><?= htmlspecialchars($request['ngo_name']) ?></td>
+                                <td class="px-4 py-3"><?= htmlspecialchars($request['product_name']) ?></td>
+                                <td class="px-4 py-3"><?= htmlspecialchars($request['quantity_requested']) ?></td>
+                                <td class="px-4 py-3">
+                                    <div class="flex flex-col">
+                                        <span class="font-medium"><?= date('M d, Y', strtotime($request['pickup_date'])) ?></span>
+                                        <span class="text-xs text-gray-500"><?= date('h:i A', strtotime($request['pickup_time'])) ?></span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3"><?= date('M d, Y', strtotime($request['created_at'])) ?></td>
+                                <td class="px-4 py-3">
+                                    <div class="flex space-x-2">
+                                        <button class="btn btn-sm bg-primarycol hover:bg-primarycol/90 text-white transition-colors view-details-btn" 
+                                                data-id="<?= $request['id'] ?>">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            Details
+                                        </button>
+                                        <button class="btn btn-sm bg-green-600 hover:bg-green-700 text-white transition-colors respond-btn" 
+                                                data-id="<?= $request['id'] ?>" 
+                                                data-action="approve">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            Approve
+                                        </button>
+                                        <button class="btn btn-sm bg-red-600 hover:bg-red-700 text-white transition-colors respond-btn" 
+                                                data-id="<?= $request['id'] ?>" 
+                                                data-action="reject">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            Reject
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
         
         <!-- Processed Requests Section -->

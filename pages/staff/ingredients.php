@@ -31,6 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_ingredient'])) {
     $category = htmlspecialchars(trim($_POST['edit_category']));
     $supplierName = htmlspecialchars(trim($_POST['edit_supplier']));
     $stockDate = $_POST['edit_stockdate'];
+    $expiryDate = !empty($_POST['edit_expirydate']) ? $_POST['edit_expirydate'] : null;
     
     // New fields
     $unitCategory = $_POST['edit_unit_category'] ?? '';
@@ -78,6 +79,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_ingredient'])) {
                     category = :category,
                     supplier_name = :supplier,
                     stock_datetime = :stock_date,
+                    expiry_date = :expiry_date,
                     unit_category = :unit_category,
                     unit = :unit,
                     cost_per_unit = :cost_per_unit,
@@ -91,6 +93,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_ingredient'])) {
                 ':category' => $category,
                 ':supplier' => $supplierName,
                 ':stock_date' => $stockDate,
+                ':expiry_date' => $expiryDate,
                 ':unit_category' => $unitCategory,
                 ':unit' => $unit,
                 ':cost_per_unit' => $costPerUnit,
@@ -124,13 +127,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_ingredient'])) 
     }
 }
 
-// Modify the add ingredient handler to remove price_per_unit
+// Modify the add ingredient handler to include expiry date
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_ingredient'])) {
     // Map form fields to variables
     $ingredient_name = $_POST['itemname'] ?? '';
     $category = $_POST['category'] ?? '';
     $supplier_name = $_POST['supplier'] ?? null; // Optional
     $stock_datetime = $_POST['stockdate'] ?? date('Y-m-d H:i:s');
+    $expiry_date = !empty($_POST['expirydate']) ? $_POST['expirydate'] : null;
     $branchId = $_SESSION['branch_id'];
     
     // New fields
@@ -165,15 +169,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_ingredient'])) {
     try {
         $stmt = $pdo->prepare("
             INSERT INTO ingredients 
-                (ingredient_name, category, supplier_name, stock_datetime, 
+                (ingredient_name, category, supplier_name, stock_datetime, expiry_date,
                  unit_category, unit, cost_per_unit, density, item_image, branch_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $ingredient_name,
             $category,
             $supplier_name,
             $stock_datetime,
+            $expiry_date,
             $unit_category,
             $unit,
             $cost_per_unit,
@@ -431,6 +436,31 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
       
       // Rest of your code...
     });
+
+    // Add this to your existing JavaScript
+    $('.openEditModal').on('click', function() {
+      const ingredientId = $(this).data('id');
+      const ingredientName = $(this).data('name');
+      const category = $(this).data('category');
+      const supplier = $(this).data('supplier');
+      const stockDate = $(this).data('stockdate');
+      const expiryDate = $(this).data('expirydate'); // Add this line
+      const unitCategory = $(this).data('unit-category');
+      const unit = $(this).data('unit');
+      const costPerUnit = $(this).data('cost-per-unit');
+      const density = $(this).data('density');
+      const imagePath = $(this).data('image');
+      
+      // Populate edit form with current values
+      $('#ingredient_id').val(ingredientId);
+      $('#edit_itemname').val(ingredientName);
+      $('#edit_category').val(category);
+      $('#edit_supplier').val(supplier);
+      $('#edit_stockdate').val(stockDate);
+      $('#edit_expirydate').val(expiryDate); // Add this line
+      $('#edit_unit_category').val(unitCategory);
+      // ... rest of your code
+    });
   </script>
 </head>
 
@@ -529,6 +559,19 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
           id="stockdate"
           name="stockdate"
           required
+        />
+        </div>
+
+        <!-- Expiry Date -->
+        <div class="w-full md:w-1/2 px-3 mb-6">
+        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expirydate">
+          Expiry Date
+        </label>
+        <input
+          type="date"
+          class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]"
+          id="expirydate"
+          name="expirydate"
         />
         </div>
 
@@ -665,6 +708,7 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <th>Category</th>
               <th>Supplier</th>
               <th>Stock Date</th>
+              <th>Expiry Date</th>
               <th>Unit</th>
               <th>Cost/Unit</th>
               <th>Density</th>
@@ -721,6 +765,7 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <td><?= htmlspecialchars($ingredient['category'] ?? 'N/A') ?></td>
                 <td><?= !empty($ingredient['supplier_name']) ? htmlspecialchars($ingredient['supplier_name']) : 'N/A' ?></td>
                 <td><?= htmlspecialchars($stockDate) ?></td>
+                <td><?= !empty($ingredient['expiry_date']) ? htmlspecialchars(date('Y-m-d', strtotime($ingredient['expiry_date']))) : 'N/A' ?></td>
                 <td><?= $unitDisplay ?></td>
                 <td>₱<?= number_format($ingredient['cost_per_unit'] ?? 0, 2) ?></td>
                 <td><?= !empty($ingredient['density']) ? number_format($ingredient['density'], 3) . ' g/ml' : 'N/A' ?></td>
@@ -732,6 +777,7 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
                       data-category="<?= htmlspecialchars($ingredient['category'] ?? '') ?>" 
                       data-supplier="<?= htmlspecialchars($ingredient['supplier_name'] ?? '') ?>" 
                       data-stockdate="<?= htmlspecialchars($stockDate) ?>" 
+                      data-expirydate="<?= !empty($ingredient['expiry_date']) ? htmlspecialchars(date('Y-m-d', strtotime($ingredient['expiry_date']))) : '' ?>"
                       data-unit-category="<?= htmlspecialchars($ingredient['unit_category'] ?? '') ?>"
                       data-unit="<?= htmlspecialchars($ingredient['unit'] ?? '') ?>"
                       data-cost-per-unit="<?= htmlspecialchars($ingredient['cost_per_unit'] ?? 0) ?>"
@@ -838,6 +884,14 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </label>
           <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
             id="edit_stockdate" name="edit_stockdate" type="date" required>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="edit_expirydate">
+            Expiry Date
+          </label>
+          <input class="appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:border-primarycol"
+            id="edit_expirydate" name="edit_expirydate" type="date">
         </div>
         
         <!-- Unit Category and Unit in same row -->

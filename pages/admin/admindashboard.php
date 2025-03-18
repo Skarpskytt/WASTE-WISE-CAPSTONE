@@ -114,6 +114,62 @@ for ($branchId = 1; $branchId <= 2; $branchId++) {
     ];
 }
 
+// Get branch-specific totals for both product and ingredient waste
+$branchTotals = [];
+for ($branchId = 1; $branchId <= 2; $branchId++) {
+    // Product waste totals
+    $prodStmt = $pdo->prepare("
+        SELECT 
+            SUM(waste_value) as product_waste_value,
+            SUM(waste_quantity) as product_waste_quantity,
+            COUNT(*) as product_waste_count
+        FROM product_waste 
+        WHERE branch_id = ? AND waste_date BETWEEN ? AND ?
+    ");
+    $prodStmt->execute([$branchId, $startDateFormatted, $endDateFormatted]);
+    $prodTotals = $prodStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Ingredient waste totals
+    $ingStmt = $pdo->prepare("
+        SELECT 
+            SUM(waste_value) as ingredient_waste_value,
+            SUM(waste_quantity) as ingredient_waste_quantity,
+            COUNT(*) as ingredient_waste_count
+        FROM ingredients_waste 
+        WHERE branch_id = ? AND waste_date BETWEEN ? AND ?
+    ");
+    $ingStmt->execute([$branchId, $startDateFormatted, $endDateFormatted]);
+    $ingTotals = $ingStmt->fetch(PDO::FETCH_ASSOC);
+
+    $branchTotals[$branchId] = [
+        'total_value' => ($prodTotals['product_waste_value'] ?? 0) + ($ingTotals['ingredient_waste_value'] ?? 0),
+        'total_quantity' => ($prodTotals['product_waste_quantity'] ?? 0) + ($ingTotals['ingredient_waste_quantity'] ?? 0),
+        'total_records' => ($prodTotals['product_waste_count'] ?? 0) + ($ingTotals['ingredient_waste_count'] ?? 0)
+    ];
+}
+
+// Calculate total waste value percent change
+$totalCurrentValue = $branchTotals[1]['total_value'] + $branchTotals[2]['total_value'];
+$prevStartDate = date('Y-m-d 00:00:00', strtotime($startDate . ' -30 days'));
+$prevEndDate = date('Y-m-d 23:59:59', strtotime($startDate . ' -1 day'));
+
+$prevValueStmt = $pdo->prepare("
+    SELECT SUM(waste_value) as total_prev_value
+    FROM (
+        SELECT waste_value FROM product_waste 
+        WHERE waste_date BETWEEN ? AND ?
+        UNION ALL
+        SELECT waste_value FROM ingredients_waste 
+        WHERE waste_date BETWEEN ? AND ?
+    ) combined_waste
+");
+$prevValueStmt->execute([$prevStartDate, $prevEndDate, $prevStartDate, $prevEndDate]);
+$prevTotalValue = $prevValueStmt->fetchColumn() ?: 0;
+
+$valuePercentChange = $prevTotalValue > 0 
+    ? (($totalCurrentValue - $prevTotalValue) / $prevTotalValue) * 100 
+    : 0;
+
 // Get top wasted items across all branches for selected period
 $topItemsStmt = $pdo->prepare("
     SELECT 
@@ -224,273 +280,212 @@ $recentTransactions = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
 <body class="flex h-screen bg-slate-100">
 <?php include '../layout/nav.php' ?>
 
-<div class="p-6 overflow-y-auto w-full">
-    <!-- Date filter form -->
-    <div class="mb-6 flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-primarycol">Branch Comparison Dashboard</h1>
-        <form method="GET" class="flex space-x-2">
-            <input type="date" name="start_date" value="<?= htmlspecialchars($startDate); ?>" class="input input-bordered" placeholder="Start Date">
-            <input type="date" name="end_date" value="<?= htmlspecialchars($endDate); ?>" class="input input-bordered" placeholder="End Date">
-            <button type="submit" class="btn btn-primary bg-primarycol">Filter</button>
-            <a href="admindashboard.php" class="btn">Reset</a>
+<!-- Update the main content div -->
+<div class="p-6 overflow-y-auto w-full bg-gradient-to-br from-gray-50 to-sec/10">
+    <!-- Enhanced Header -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-primarycol">Branch Monitoring Dashboard</h1>
+        <form method="GET" class="flex space-x-3">
+            <input type="date" name="start_date" value="<?= htmlspecialchars($startDate); ?>" 
+                   class="input input-bordered input-sm">
+            <input type="date" name="end_date" value="<?= htmlspecialchars($endDate); ?>" 
+                   class="input input-bordered input-sm">
+            <button type="submit" class="btn btn-sm bg-primarycol hover:bg-primarycol/90 text-white">
+                Filter
+            </button>
         </form>
     </div>
 
-    <!-- Recommendations Panel -->
-    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6" role="alert">
-        <h3 class="font-bold text-lg mb-2">Smart Recommendations</h3>
-        <ul class="list-disc pl-5">
-            <?php
-            $highWasteBranch = ($branchStats[1]['total_value'] > $branchStats[2]['total_value']) ? $branchStats[1]['name'] : $branchStats[2]['name'];
-            $mostWastedReason = ($branchStats[1]['top_reason_value'] > $branchStats[2]['top_reason_value']) ? 
-                $branchStats[1]['top_reason'] : $branchStats[2]['top_reason'];
-            ?>
-            <li class="mb-1">Focus on waste reduction strategies at <?= $highWasteBranch ?></li>
-            <li class="mb-1">Review <?= $mostWastedReason ?> waste reason across branches</li>
-            <li class="mb-1">Compare disposal methods between branches to standardize best practices</li>
-        </ul>
-    </div>
-
-    <!-- Branch Comparison Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <?php foreach ($branchStats as $branchId => $stats): ?>
-        <div class="bg-white rounded-lg shadow-md p-5 border-t-4 <?= $branchId == 1 ? 'border-primarycol' : 'border-third' ?>">
-            <h2 class="text-xl font-bold mb-4"><?= htmlspecialchars($stats['name']) ?> Overview</h2>
-            
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-sec rounded-lg p-3">
-                    <h3 class="text-sm text-gray-600">Total Waste Value</h3>
-                    <p class="text-xl font-bold">₱<?= number_format($stats['total_value'], 2) ?></p>
-                    
-                    <?php if ($stats['trend'] > 0): ?>
-                        <p class="text-sm text-red-500">↑ <?= number_format(abs($stats['trend']), 1) ?>%</p>
-                    <?php elseif ($stats['trend'] < 0): ?>
-                        <p class="text-sm text-green-500">↓ <?= number_format(abs($stats['trend']), 1) ?>%</p>
-                    <?php else: ?>
-                        <p class="text-sm text-gray-500">— 0.0%</p>
-                    <?php endif; ?>
-                </div>
-                
-                <div class="bg-sec rounded-lg p-3">
-                    <h3 class="text-sm text-gray-600">Total Waste Quantity</h3>
-                    <p class="text-xl font-bold"><?= number_format($stats['total_quantity']) ?> units</p>
-                    <p class="text-sm text-gray-500"><?= $stats['record_count'] ?> records</p>
-                </div>
-                
-                <div class="bg-sec rounded-lg p-3 col-span-2">
-                    <h3 class="text-sm text-gray-600 mb-1">Most Common Waste Reason</h3>
-                    <p class="text-lg font-bold"><?= ucfirst(htmlspecialchars($stats['top_reason'])) ?></p>
-                    <p class="text-sm text-gray-500">
-                        <?= $stats['top_reason_count'] ?> occurrences, 
-                        ₱<?= number_format($stats['top_reason_value'], 2) ?> loss
-                    </p>
-                </div>
+    <!-- Four Main Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <!-- Total Waste Value Card -->
+        <div class="bg-white rounded-lg shadow-sm p-3 border-l-4 border-primarycol hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-gray-500 text-xs uppercase">Total Waste Value</h3>
+                <span class="bg-primarycol/10 p-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primarycol" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </span>
             </div>
-            
-            <div class="mt-4">
-                <h3 class="text-sm text-gray-600 mb-2">Disposal Methods</h3>
-                <div class="flex flex-wrap gap-2">
-                    <?php foreach ($stats['disposal_methods'] as $method): ?>
-                    <span class="px-2 py-1 bg-gray-100 rounded-full text-xs">
-                        <?= ucfirst(htmlspecialchars($method['disposal_method'])) ?>: <?= $method['count'] ?>
-                    </span>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            
-            <div class="mt-4">
-                <a href="branch<?= $branchId ?>_data.php" class="text-primarycol hover:underline">
-                    View detailed branch data →
-                </a>
+            <p class="text-lg font-bold text-primarycol">₱<?= number_format($totalCurrentValue, 2) ?></p>
+            <div class="flex items-center text-xs">
+                <span class="<?= $valuePercentChange >= 0 ? 'text-red-500' : 'text-green-500' ?>">
+                    <?= $valuePercentChange >= 0 ? '↑' : '↓' ?> <?= abs(round($valuePercentChange, 1)) ?>%
+                </span>
+                <span class="text-gray-500 ml-1">vs previous period</span>
             </div>
         </div>
-        <?php endforeach; ?>
-    </div>
-    
-    <!-- Branch Comparison Chart -->
-    <div class="bg-white rounded-lg shadow-md p-5 mb-8">
-        <h2 class="text-xl font-bold mb-4">Branch Waste Comparison</h2>
-        <div id="branchComparisonChart" class="w-full h-[300px]"></div>
-    </div>
 
-    <!-- Waste Reasons Comparison -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <?php foreach ($reasonsByBranch as $branchId => $reasons): ?>
-            <?php if (count($reasons) > 0): ?>
-            <div class="bg-white rounded-lg shadow-md p-5">
-                <h2 class="text-xl font-bold mb-4"><?= htmlspecialchars($reasons[0]['branch_name']) ?> - Top Waste Reasons</h2>
-                <table class="table table-zebra w-full">
-                    <thead>
-                        <tr class="bg-sec">
-                            <th>Reason</th>
-                            <th>Count</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php 
-                        $displayReasons = array_slice($reasons, 0, 5); // Show top 5 reasons
-                        foreach ($displayReasons as $reason): 
-                        ?>
-                        <tr>
-                            <td><?= ucfirst(htmlspecialchars($reason['waste_reason'])) ?></td>
-                            <td><?= $reason['count'] ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <!-- Total Waste Quantity Card -->
+        <div class="bg-white rounded-lg shadow-sm p-3 border-l-4 border-third hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-gray-500 text-xs uppercase">Total Waste Items</h3>
+                <span class="bg-third/10 p-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-third" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                    </svg>
+                </span>
             </div>
-            <?php endif; ?>
-        <?php endforeach; ?>
+            <p class="text-lg font-bold text-third">
+                <?= number_format($branchTotals[1]['total_quantity'] + $branchTotals[2]['total_quantity']) ?>
+            </p>
+            <p class="text-xs text-gray-500">Combined waste items</p>
+        </div>
+
+        <!-- Records Count Card -->
+        <div class="bg-white rounded-lg shadow-sm p-3 border-l-4 border-fourth hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-gray-500 text-xs uppercase">Total Records</h3>
+                <span class="bg-fourth/10 p-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </span>
+            </div>
+            <p class="text-lg font-bold text-fourth">
+                <?= number_format($branchTotals[1]['total_records'] + $branchTotals[2]['total_records']) ?>
+            </p>
+            <p class="text-xs text-gray-500">Waste entries logged</p>
+        </div>
+
+        <!-- Branch Comparison Card -->
+        <?php
+        $branch1Value = $branchTotals[1]['total_value'];
+        $branch2Value = $branchTotals[2]['total_value'];
+        $totalValue = $branch1Value + $branch2Value;
+        $branch1Percent = $totalValue > 0 ? ($branch1Value / $totalValue) * 100 : 0;
+        $branch2Percent = $totalValue > 0 ? ($branch2Value / $totalValue) * 100 : 0;
+        ?>
+        <div class="bg-white rounded-lg shadow-sm p-3 border-l-4 border-purple-500 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-gray-500 text-xs uppercase">Branch Comparison</h3>
+                <span class="bg-purple-50 p-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                </span>
+            </div>
+            <div class="flex justify-between text-xs mb-1">
+                <span>Branch 1</span>
+                <span>Branch 2</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div class="bg-purple-500 h-2 rounded-full" style="width: <?= $branch1Percent ?>%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500">
+                <span><?= round($branch1Percent) ?>%</span>
+                <span><?= round($branch2Percent) ?>%</span>
+            </div>
+        </div>
     </div>
 
-    <!-- Top Wasted Food Items Table -->
-    <div class="bg-white shadow-md rounded-lg p-5 mb-8">
-        <h3 class="text-xl font-bold mb-3">Top Wasted Food Items</h3>
+    <!-- Two Column Layout -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Waste Reasons Pie Chart -->
+        <div class="bg-white rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-bold text-primarycol mb-4">Waste Reasons Distribution</h2>
+            <div id="wasteReasonsPieChart" class="h-[300px]"></div>
+        </div>
+
+        <!-- Smart Recommendations Panel -->
+        <div class="bg-white rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-bold text-primarycol mb-4">Smart Recommendations</h2>
+            <div class="space-y-4">
+                <?php foreach ($reasonsByBranch as $branchId => $reasons): ?>
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <h3 class="font-semibold text-blue-700 mb-2"><?= $branchStats[$branchId]['name'] ?> Insights:</h3>
+                        <ul class="list-disc pl-5 text-blue-600">
+                            <li class="mb-2">Primary waste reason: <?= ucfirst($branchStats[$branchId]['top_reason']) ?></li>
+                            <li class="mb-2">Estimated loss: ₱<?= number_format($branchStats[$branchId]['top_reason_value'], 2) ?></li>
+                            <li>Suggested action: Review <?= strtolower($branchStats[$branchId]['top_reason']) ?> handling procedures</li>
+                        </ul>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions Table -->
+    <div class="bg-white rounded-xl shadow-md p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-primarycol">Recent Waste Transactions</h2>
+            <a href="waste_transactions.php" class="text-primarycol hover:underline text-sm">View All →</a>
+        </div>
         <div class="overflow-x-auto">
             <table class="table table-zebra w-full">
                 <thead>
-                    <tr class="bg-sec">
+                    <tr class="bg-sec/50">
+                        <th>Date</th>
                         <th>Branch</th>
-                        <th>Item Name</th>
-                        <th>Type</th>
-                        <th>Waste Quantity</th>
-                        <th>Waste Value</th>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Value</th>
+                        <th>Reason</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($topItems as $item): ?>
+                    <?php foreach (array_slice($recentTransactions, 0, 5) as $tx): ?>
                     <tr>
-                        <td><?= htmlspecialchars($item['branch_name']) ?></td>
-                        <td><?= htmlspecialchars($item['item_name']) ?></td>
-                        <td><?= htmlspecialchars($item['category']) ?></td>
-                        <td><?= number_format($item['waste_quantity'], 2) ?></td>
-                        <td>₱<?= number_format($item['waste_value'], 2) ?></td>
+                        <td><?= date('M d, Y', strtotime($tx['waste_date'])) ?></td>
+                        <td><?= htmlspecialchars($tx['branch_name']) ?></td>
+                        <td><?= htmlspecialchars($tx['item_name']) ?></td>
+                        <td><?= number_format($tx['waste_quantity']) ?></td>
+                        <td>₱<?= number_format($tx['waste_value'], 2) ?></td>
+                        <td><?= ucfirst(htmlspecialchars($tx['waste_reason'])) ?></td>
                     </tr>
                     <?php endforeach; ?>
-                    <?php if (count($topItems) === 0): ?>
-                    <tr>
-                        <td colspan="5" class="text-center py-4">No waste data found for selected period</td>
-                    </tr>
-                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
-
-    <!-- Waste Transactions Table -->
-    <div class="overflow-x-auto mb-10">
-        <h2 class="text-xl font-bold mb-4">Recent Waste Transactions</h2>
-        <table class="table table-zebra w-full">
-            <thead>
-                <tr class="bg-sec">
-                    <th>ID</th>
-                    <th>Branch</th>
-                    <th>Waste Date</th>
-                    <th>Item Name</th>
-                    <th>Waste Quantity</th>
-                    <th>Waste Value</th>
-                    <th>Waste Reason</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($recentTransactions as $tx): ?>
-                <tr>
-                    <td><?= $tx['id'] ?></td>
-                    <td><?= htmlspecialchars($tx['branch_name']) ?></td>
-                    <td><?= date('M d, Y H:i', strtotime($tx['waste_date'])) ?></td>
-                    <td><?= htmlspecialchars($tx['item_name']) ?></td>
-                    <td><?= number_format($tx['waste_quantity'], 2) ?></td>
-                    <td>₱<?= number_format($tx['waste_value'], 2) ?></td>
-                    <td><?= ucfirst(htmlspecialchars($tx['waste_reason'])) ?></td>
-                    <td>
-                        <a href="view_waste_transaction.php?id=<?= $tx['id'] ?>" class="btn btn-sm btn-outline">Analyze</a>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                <?php if (count($recentTransactions) === 0): ?>
-                <tr>
-                    <td colspan="8" class="text-center py-4">No transactions found for selected period</td>
-                </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
 </div>
 
+<!-- Add this script for the pie chart -->
 <script>
-// Branch Comparison Chart
-const branchChart = new ApexCharts(document.querySelector("#branchComparisonChart"), {
-    series: [{
-        name: 'Waste Quantity',
-        data: [
-            <?= $branchStats[1]['total_quantity'] ?>, 
-            <?= $branchStats[2]['total_quantity'] ?>
-        ]
-    }, {
-        name: 'Waste Value (₱)',
-        data: [
-            <?= $branchStats[1]['total_value'] ?>, 
-            <?= $branchStats[2]['total_value'] ?>
-        ]
-    }],
-    chart: {
-        type: 'bar',
-        height: 300,
-        stacked: false,
-        toolbar: {
-            show: false
+const pieChart = new ApexCharts(document.querySelector("#wasteReasonsPieChart"), {
+    series: [
+        <?php
+        $reasonCounts = [];
+        foreach ($allReasons as $reason) {
+            if (!isset($reasonCounts[$reason['waste_reason']])) {
+                $reasonCounts[$reason['waste_reason']] = 0;
+            }
+            $reasonCounts[$reason['waste_reason']] += $reason['count'];
         }
+        echo implode(',', array_values($reasonCounts));
+        ?>
+    ],
+    chart: {
+        type: 'pie',
+        height: 300
+    },
+    labels: [<?php echo "'" . implode("','", array_map('ucfirst', array_keys($reasonCounts))) . "'"; ?>],
+    colors: ['#47663B', '#7C9473', '#96B6C5', '#ADC4CE', '#EEE0C9', '#F1F0E8'],
+    legend: {
+        position: 'bottom',
+        fontSize: '14px'
     },
     plotOptions: {
-        bar: {
-            horizontal: false,
-            columnWidth: '55%',
-            borderRadius: 5,
-        },
-    },
-    dataLabels: {
-        enabled: false
-    },
-    stroke: {
-        show: true,
-        width: 2,
-        colors: ['transparent']
-    },
-    xaxis: {
-        categories: [
-            '<?= $branchStats[1]['name'] ?>', 
-            '<?= $branchStats[2]['name'] ?>'
-        ],
-    },
-    yaxis: [{
-        title: {
-            text: 'Waste Quantity'
-        },
-    }, {
-        opposite: true,
-        title: {
-            text: 'Waste Value (₱)'
-        }
-    }],
-    fill: {
-        opacity: 1
-    },
-    tooltip: {
-        y: {
-            formatter: function (val, { seriesIndex }) {
-                return seriesIndex === 0 
-                    ? val + ' units'
-                    : '₱' + val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        pie: {
+            donut: {
+                size: '50%'
             }
         }
     },
-    colors: ['#47663B', '#EED3B1'],
-    legend: {
-        position: 'top'
+    stroke: {
+        width: 0
+    },
+    dataLabels: {
+        enabled: true,
+        style: {
+            fontSize: '12px',
+            fontFamily: 'Arial, sans-serif',
+            fontWeight: 'normal'
+        }
     }
 });
-branchChart.render();
+pieChart.render();
 </script>
 </body>
 </html>

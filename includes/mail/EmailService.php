@@ -130,6 +130,28 @@ class EmailService {
         }
     }
 
+    public function sendOTPEmail($userData, $otp) {
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($userData['email'], $userData['fname'] . ' ' . $userData['lname']);
+            
+            $this->mailer->isHTML(true);
+            $this->mailer->Subject = 'Login Verification Code';
+            
+            $this->mailer->Body = $this->getOTPTemplate($userData, $otp);
+            
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to send OTP email: " . $e->getMessage());
+            throw new Exception("Failed to send OTP email: " . $e->getMessage());
+        }
+    }
+
     private function getNGOApprovalTemplate($data) {
         return "
             <h2>Welcome to Bea Bakes Waste Management!</h2>
@@ -245,5 +267,47 @@ class EmailService {
         </body>
         </html>
         ";
+    }
+
+    private function getOTPTemplate($userData, $otp) {
+        return "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .content { margin-top: 20px; }
+                .otp-code { 
+                    font-size: 32px; 
+                    font-weight: bold; 
+                    text-align: center; 
+                    color: #47663B;
+                    letter-spacing: 5px;
+                    margin: 30px 0;
+                }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>Login Verification Code</h2>
+                </div>
+                <div class='content'>
+                    <p>Dear {$userData['fname']},</p>
+                    <p>Your login verification code is:</p>
+                    <div class='otp-code'>{$otp}</div>
+                    <p>This code will expire in 5 minutes.</p>
+                    <p>If you did not request this code, please ignore this email or contact support if you have concerns.</p>
+                </div>
+                <div class='footer'>
+                    <p>WasteWise &copy; " . date('Y') . "</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    ";
     }
 }

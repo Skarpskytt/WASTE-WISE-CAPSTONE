@@ -2,47 +2,37 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Check for staff access
 checkAuth(['staff']);
 
-// Fetch the user's name from the session
 $userId = $_SESSION['user_id'];
 $userName = $_SESSION['fname'] . ' ' . $_SESSION['lname'];
 $branchId = $_SESSION['branch_id'];
 
-// Initialize message variables
 $successMessage = '';
 $errorMessage = '';
 
-// Update the calculation of current inventory in the existing code
 try {
-    // Fetch products from the products table
-    $prodStmt = $pdo->prepare("SELECT * FROM products WHERE branch_id = ? ORDER BY created_at DESC");
-    $prodStmt->execute([$branchId]);
+    $prodStmt = $pdo->prepare("
+        SELECT 
+            p.*,
+            COALESCE(SUM(w.waste_quantity), 0) as total_waste,
+            p.quantity_produced as original_quantity,
+            (p.quantity_produced - COALESCE(SUM(w.waste_quantity), 0)) as remaining_quantity
+        FROM products p
+        LEFT JOIN product_waste w ON p.id = w.product_id AND w.branch_id = ?
+        WHERE p.branch_id = ? 
+        AND p.status = 'active' 
+        AND p.expiry_date >= CURRENT_DATE()
+        GROUP BY p.id
+        HAVING remaining_quantity > 0
+        ORDER BY p.created_at DESC
+    ");
+    $prodStmt->execute([$branchId, $branchId]);
     $products = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // For each product, fetch the last waste record to show current inventory status
-    foreach ($products as &$product) {
-        $wasteStmt = $pdo->prepare("
-            SELECT SUM(waste_quantity) as total_waste, SUM(quantity_sold) as total_sold
-            FROM product_waste 
-            WHERE product_id = ? AND branch_id = ?
-        ");
-        $wasteStmt->execute([$product['id'], $branchId]);
-        $wasteData = $wasteStmt->fetch(PDO::FETCH_ASSOC);
-        
-        // Calculate current inventory (quantity_produced - waste - sold)
-        $totalWaste = $wasteData['total_waste'] ?? 0;
-        $totalSold = $wasteData['total_sold'] ?? 0;
-        
-        $product['current_inventory'] = $product['quantity_produced'] - $totalWaste - $totalSold;
-        if ($product['current_inventory'] < 0) $product['current_inventory'] = 0;
-    }
 } catch (PDOException $e) {
     die("Error retrieving data: " . $e->getMessage());
 }
 
-// Update the waste submission process to properly handle quantity_produced
 if (isset($_POST['submitwaste'])) {
     // Extract form data
     $userId = $_SESSION['user_id'];
@@ -57,34 +47,29 @@ if (isset($_POST['submitwaste'])) {
     $responsiblePerson = $_POST['responsible_person'] ?? null;
     $notes = $_POST['notes'] ?? null;
     $branchId = $_SESSION['branch_id'];
-    
-    // Get donation expiry date if applicable
     $donationExpiryDate = null;
     if ($disposalMethod === 'donation') {
         $donationExpiryDate = $_POST['donation_expiry_date'] ?? null;
         if (empty($donationExpiryDate)) {
             $errorMessage = 'Please specify an expiration date for donated products.';
-            // Don't proceed with form submission
+           
             goto display_page;
         }
     }
-
-    // Validate form data
     if (!$userId || !$productId || !$wasteDate || !$wasteQuantity || !$wasteReason || 
         !$disposalMethod || !$responsiblePerson || !$quantitySold) {
         $errorMessage = 'Please fill in all required fields.';
     } else {
         try {
-            // Start transaction
             $pdo->beginTransaction();
             
-            // Insert waste entry into the product_waste table
+           
             $stmt = $pdo->prepare("
                 INSERT INTO product_waste (
-                    user_id, product_id, waste_date, waste_quantity, quantity_sold,
+                    user_id, product_id, waste_date, waste_quantity, quantity_produced, quantity_sold,
                     waste_value, waste_reason, disposal_method, responsible_person, notes, created_at, branch_id,
                     donation_expiry_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
@@ -92,6 +77,7 @@ if (isset($_POST['submitwaste'])) {
                 $productId,
                 date('Y-m-d H:i:s', strtotime($wasteDate)),
                 $wasteQuantity,
+                $quantityProduced,
                 $quantitySold,
                 $wasteValue,
                 $wasteReason,
@@ -103,37 +89,223 @@ if (isset($_POST['submitwaste'])) {
                 $donationExpiryDate ? date('Y-m-d', strtotime($donationExpiryDate)) : null
             ]);
 
-            // Update product quantity_produced
-            // Make sure we're using quantity_produced instead of quantity
+            
             $updateStmt = $pdo->prepare("
                 UPDATE products 
-                SET quantity_produced = quantity_produced - ? - ?
+                SET status = CASE 
+                    WHEN (SELECT SUM(waste_quantity + quantity_sold) 
+                          FROM product_waste 
+                          WHERE product_id = products.id) >= quantity_produced 
+                    THEN 'waste_processed'
+                    ELSE status 
+                    END
                 WHERE id = ? AND branch_id = ?
             ");
+            
             $updateStmt->execute([
-                $quantitySold,
-                $wasteQuantity,
                 $productId, 
                 $branchId
             ]);
             
-            // Commit transaction
+           
             $pdo->commit();
 
-            // Redirect to the record page after successful submission
+            
             header('Location: waste_product_input.php?success=1');
             exit;
         } catch (PDOException $e) {
-            // Roll back transaction if there was an error
+           
             $pdo->rollBack();
             $errorMessage = 'An error occurred while submitting the waste entry: ' . $e->getMessage();
         }
     }
 
-    display_page: // Skip point for validation errors
+    display_page: 
 }
 
-// Check if redirected back with success message
+
+if (isset($_POST['custom_waste'])) {
+    $productId = $_POST['product_id'] ?? null;
+    $wasteQuantity = $_POST['waste_quantity'] ?? null;
+    $wasteDate = $_POST['waste_date'] ?? null;
+    $wasteReason = $_POST['waste_reason'] ?? null;
+    $disposalMethod = $_POST['disposal_method'] ?? null;
+    $notes = $_POST['notes'] ?? null;
+    $productValue = $_POST['product_value'] ?? 0;
+    $quantityProduced = $_POST['quantity_produced'] ?? 0;
+    
+    if (!$productId || !$wasteQuantity || !$wasteDate || !$wasteReason || !$disposalMethod) {
+        $errorMessage = 'Please fill in all required fields.';
+    } else {
+        try {
+            $pdo->beginTransaction();
+            
+            
+            $checkStmt = $pdo->prepare("
+                SELECT p.quantity_produced,
+                       COALESCE(SUM(w.waste_quantity), 0) as total_waste
+                FROM products p
+                LEFT JOIN product_waste w ON p.id = w.product_id
+                WHERE p.id = ? AND p.branch_id = ?
+                GROUP BY p.id, p.quantity_produced
+            ");
+            $checkStmt->execute([$productId, $branchId]);
+            $currentData = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            $availableQuantity = $currentData['quantity_produced'] - $currentData['total_waste'];
+            
+            if ($wasteQuantity > $availableQuantity) {
+                throw new Exception("Cannot record waste greater than available quantity ($availableQuantity units)");
+            }
+            
+          
+            $stmt = $pdo->prepare("
+                INSERT INTO product_waste (
+                    user_id, product_id, waste_date, waste_quantity,
+                    waste_value, waste_reason, disposal_method,
+                    notes, created_at, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            $stmt->execute([
+                $userId,
+                $productId,
+                $wasteDate,
+                $wasteQuantity,
+                $wasteQuantity * $productValue,
+                $wasteReason,
+                $disposalMethod,
+                $notes,
+                date('Y-m-d H:i:s'),
+                $branchId
+            ]);
+            
+            
+            $updateStmt = $pdo->prepare("
+                UPDATE products 
+                SET status = CASE 
+                    WHEN (SELECT COALESCE(SUM(waste_quantity), 0) 
+                          FROM product_waste 
+                          WHERE product_id = ?) >= quantity_produced 
+                    THEN 'waste_processed'
+                    ELSE status 
+                    END
+                WHERE id = ? AND branch_id = ?
+            ");
+            $updateStmt->execute([$productId, $productId, $branchId]);
+            
+            $pdo->commit();
+            header('Location: waste_product_record.php?success=1');
+            exit;
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $errorMessage = 'Error recording waste: ' . $e->getMessage();
+        }
+    }
+}
+
+
+if (isset($_POST['custom_waste'])) {
+    
+    
+    try {
+        $pdo->beginTransaction();
+        
+     
+        $checkStmt = $pdo->prepare("
+            SELECT 
+                p.quantity_produced,
+                COALESCE(SUM(w.waste_quantity), 0) as total_waste,
+                (p.quantity_produced - COALESCE(SUM(w.waste_quantity), 0)) as remaining_quantity
+            FROM products p
+            LEFT JOIN product_waste w ON p.id = w.product_id AND w.branch_id = ?
+            WHERE p.id = ? AND p.branch_id = ?
+            GROUP BY p.id
+        ");
+        $checkStmt->execute([$branchId, $productId, $branchId]);
+        $currentData = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$currentData) {
+            throw new Exception("Product not found or not active");
+        }
+        
+        if ($wasteQuantity > $currentData['remaining_quantity']) {
+            throw new Exception("Cannot record waste greater than available quantity ({$currentData['remaining_quantity']} units)");
+        }
+        
+       
+        
+        $pdo->commit();
+        header('Location: waste_product_record.php?success=1');
+        exit;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $errorMessage = 'Error recording waste: ' . $e->getMessage();
+    }
+}
+
+
+if (isset($_POST['custom_waste'])) {
+    $productId = $_POST['product_id'] ?? null;
+    $wasteQuantity = $_POST['waste_quantity'] ?? null;
+    $wasteDate = $_POST['waste_date'] ?? null;
+    $wasteReason = $_POST['waste_reason'] ?? null;
+    $disposalMethod = $_POST['disposal_method'] ?? null;
+    $notes = $_POST['notes'] ?? null;
+    
+    if (!$productId || !$wasteQuantity || !$wasteDate || !$wasteReason || !$disposalMethod) {
+        $errorMessage = 'Please fill in all required fields.';
+    } else {
+        try {
+            $pdo->beginTransaction();
+            
+           
+            $checkStmt = $pdo->prepare("
+                SELECT 
+                    (p.quantity_produced - COALESCE(SUM(w.waste_quantity), 0)) as available_quantity
+                FROM products p
+                LEFT JOIN product_waste w ON p.id = w.product_id
+                WHERE p.id = ? AND p.branch_id = ?
+                GROUP BY p.id, p.quantity_produced
+            ");
+            $checkStmt->execute([$productId, $branchId]);
+            $currentData = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($wasteQuantity > $currentData['available_quantity']) {
+                throw new Exception("Cannot record waste greater than available quantity ({$currentData['available_quantity']} units)");
+            }
+            
+           
+            $stmt = $pdo->prepare("
+                INSERT INTO product_waste (
+                    user_id, product_id, waste_date, waste_quantity,
+                    waste_reason, disposal_method, notes, created_at, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)
+            ");
+            
+            $stmt->execute([
+                $userId,
+                $productId,
+                $wasteDate,
+                $wasteQuantity,
+                $wasteReason,
+                $disposalMethod,
+                $notes,
+                $branchId
+            ]);
+            
+            $pdo->commit();
+            header('Location: waste_product_record.php?success=1');
+            exit;
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $errorMessage = 'Error recording waste: ' . $e->getMessage();
+        }
+    }
+}
+
+
 $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
 ?>
 <!DOCTYPE html>
@@ -161,7 +333,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
         }
 
         $(document).ready(function() {
-            // Sidebar toggling
+           
             $('#toggleSidebar').on('click', function() {
                 $('#sidebar').toggleClass('-translate-x-full');
             });
@@ -170,12 +342,12 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 $('#sidebar').addClass('-translate-x-full');
             });
             
-            // Auto-hide notification after 3 seconds
+            
             setTimeout(function() {
                 $('.notification').fadeOut();
             }, 3000);
 
-            // Handle donation expiration date field visibility
+            
             $('select[name="disposal_method"]').on('change', function() {
                 const forms = $(this).closest('form');
                 const expiryDateField = forms.find('.donation-expiry-container');
@@ -189,7 +361,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 }
             });
             
-            // Validate donation form before submission
+            
             $('form').on('submit', function(e) {
                 const disposalMethod = $(this).find('select[name="disposal_method"]').val();
                 const expiryDate = $(this).find('input[name="donation_expiry_date"]').val();
@@ -201,7 +373,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 }
             });
 
-            // Validate that quantity sold + quantity wasted doesn't exceed inventory
+           
             $('form').on('submit', function(e) {
                 const form = $(this);
                 const quantitySold = parseFloat(form.find('input[name="quantity_sold"]').val()) || 0;
@@ -214,11 +386,177 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                     return false;
                 }
             });
+
+            
+            $('#openCustomWasteModal').on('click', function() {
+                $('#customWasteModal').removeClass('hidden');
+            });
+
+           
+            $('#closeCustomWasteModal').on('click', function() {
+                $('#customWasteModal').addClass('hidden');
+            });
         });
+
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('customWasteModal');
+            const openButton = document.getElementById('openCustomWasteModal');
+            const closeButton = document.getElementById('closeCustomWasteModal');
+
+            openButton.addEventListener('click', () => {
+                modal.classList.remove('hidden');
+            });
+
+            closeButton.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+
+           
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        });
+
+        
+        $(document).ready(function() {
+            
+            $('.product-item').on('click', function() {
+                const productId = $(this).data('product-id');
+                const productName = $(this).data('product-name');
+                const productPrice = $(this).data('product-price');
+                const quantityProduced = $(this).data('quantity-produced');
+                
+                
+                $('#selected_product_id').val(productId);
+                $('#selected_product_price').val(productPrice);
+                $('#selected_quantity_produced').val(quantityProduced);
+                $('#selectedProductName').text(productName);
+                
+               
+                $('#productSelectionView').addClass('hidden');
+                $('#wasteFormView').removeClass('hidden');
+            });
+            
+            
+            $('.back-to-products').on('click', function() {
+                $('#wasteFormView').addClass('hidden');
+                $('#productSelectionView').removeClass('hidden');
+            });
+            
+           
+            $('#closeCustomWasteModal').on('click', function() {
+                $('#customWasteModal').addClass('hidden');
+                $('#wasteFormView').addClass('hidden');
+                $('#productSelectionView').removeClass('hidden');
+            });
+        });
+
+        
+        $(document).ready(function() {
+            
+            $('#customWasteForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const productId = formData.get('product_id');
+                const wasteQuantity = parseFloat(formData.get('waste_quantity'));
+                
+                $.ajax({
+                    url: $(this).attr('action'),
+                    method: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        
+                        const mainFormInput = $(`input[data-product-id="${productId}"]`);
+                        const currentMax = parseFloat(mainFormInput.attr('max'));
+                        const newMax = currentMax - wasteQuantity;
+                        
+                        mainFormInput.attr('max', newMax);
+                        mainFormInput.siblings('p').text(`Available: ${newMax} units`);
+                        
+                        
+                        $('#customWasteModal').addClass('hidden');
+                        location.reload(); 
+                    },
+                    error: function(xhr) {
+                        alert('Error processing waste: ' + xhr.responseText);
+                    }
+                });
+            });
+        });
+
+        
+        $(document).ready(function() {
+            $('input[name="quantity_sold"]').on('change', function() {
+                const form = $(this).closest('form');
+                const quantitySold = parseFloat($(this).val()) || 0;
+                const maxQuantity = parseFloat($(this).attr('max')) || 0;
+                const wasteQuantity = maxQuantity - quantitySold;
+                
+                if (wasteQuantity < 0) {
+                    alert('Quantity sold cannot exceed available quantity');
+                    $(this).val(maxQuantity);
+                    form.find('input[name="waste_quantity"]').val(0);
+                } else {
+                    form.find('input[name="waste_quantity"]').val(wasteQuantity);
+                }
+            });
+
+            
+            $('form').on('submit', function(e) {
+                const quantitySold = parseFloat($(this).find('input[name="quantity_sold"]').val()) || 0;
+                const wasteQuantity = parseFloat($(this).find('input[name="waste_quantity"]').val()) || 0;
+                const maxQuantity = parseFloat($(this).find('input[name="quantity_sold"]').attr('max')) || 0;
+                
+                if (quantitySold + wasteQuantity > maxQuantity) {
+                    e.preventDefault();
+                    alert(`Total quantity (${quantitySold + wasteQuantity}) cannot exceed available quantity (${maxQuantity})`);
+                    return false;
+                }
+            });
+        });
+
+        
+        $(document).ready(function() {
+           
+            $('form').on('submit', function(e) {
+                const quantitySold = parseFloat($(this).find('input[name="quantity_sold"]').val()) || 0;
+                const wasteQuantity = parseFloat($(this).find('input[name="waste_quantity"]').val()) || 0;
+                const originalQuantity = parseFloat($(this).find('#quantity_produced').val()) || 0;
+                
+                
+                if (quantitySold + wasteQuantity > originalQuantity) {
+                    e.preventDefault();
+                    alert(`Total quantity (${quantitySold + wasteQuantity}) cannot exceed original quantity (${originalQuantity})`);
+                    return false;
+                }
+            });
+        });
+
+        function calculateWaste(input) {
+            const form = input.closest('form');
+            const quantityProduced = parseFloat(form.querySelector('#quantity_produced').value) || 0;
+            const quantitySold = parseFloat(input.value) || 0;
+            
+            if (quantitySold > quantityProduced) {
+                alert('Quantity sold cannot exceed production quantity');
+                input.value = quantityProduced;
+                form.querySelector('[name="waste_quantity"]').value = 0;
+                return;
+            }
+            
+            const wasteQuantity = quantityProduced - quantitySold;
+            form.querySelector('[name="waste_quantity"]').value = wasteQuantity;
+        }
     </script>
 
     <style>
-        /* Notification Styles */
+     
         .notification {
             position: fixed;
             top: 20px;
@@ -237,7 +575,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             background-color: #ef4444;
         }
         
-        /* Form section styling */
+      
         .form-section {
             @apply bg-white p-4 rounded-lg shadow mb-4;
         }
@@ -267,7 +605,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             <p class="text-gray-500 mb-6">Track product waste to reduce losses and improve production efficiency</p>
         </div>
 
-        <!-- Notification Messages -->
+        
         <?php if (!empty($errorMessage)): ?>
             <div class="notification notification-error">
                 <?= htmlspecialchars($errorMessage) ?>
@@ -281,7 +619,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
         <?php endif; ?>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left sidebar - Statistics -->
+         
             <div class="lg:col-span-1">
                 <div class="bg-white p-5 rounded-lg shadow mb-6">
                     <h2 class="text-xl font-bold mb-4 text-gray-800">Product Waste Tracking Tips</h2>
@@ -311,7 +649,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                     <h2 class="text-xl font-bold mb-4 text-gray-800">Quick Stats</h2>
                     
                     <?php
-                    // Most commonly wasted product
+                   
                     try {
                         $topWasteStmt = $pdo->prepare("
                             SELECT p.name, SUM(w.waste_quantity) as total_waste,
@@ -326,7 +664,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                         $topWasteStmt->execute([$branchId]);
                         $topWaste = $topWasteStmt->fetch(PDO::FETCH_ASSOC);
                         
-                        // Most common waste reason
+                      
                         $reasonStmt = $pdo->prepare("
                             SELECT waste_reason, COUNT(*) as count
                             FROM product_waste
@@ -338,7 +676,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                         $reasonStmt->execute([$branchId]);
                         $topReason = $reasonStmt->fetch(PDO::FETCH_ASSOC);
                     } catch (PDOException $e) {
-                        // Silently fail, stats are not critical
+                      
                     }
                     ?>
                     
@@ -358,70 +696,59 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                     </div>
                     <?php endif; ?>
                 </div>
+                <div class="mt-4">
+                    <button id="openCustomWasteModal" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition-colors">
+                        Custom Waste Entry
+                    </button>
+                </div>
             </div>
             
-            <!-- Right section - Product cards with waste forms -->
+         
             <div class="lg:col-span-2">
                 <h2 class="text-xl font-bold mb-4 text-gray-800">Record Product Waste</h2>
                 
                 <div class="grid grid-cols-1 gap-6">
-                    <!-- Product cards with waste forms -->
+                  
                     <?php foreach ($products as $product):
                         $productId = $product['id'];
                         $productName = $product['name'] ?? 'N/A';
                         $productCategory = $product['category'] ?? 'N/A';
                         $productPrice = $product['price_per_unit'] ?? 0;
                         $productImage = $product['image'] ?? '';
-                        $currentInventory = $product['current_inventory'];
                         $quantityProduced = $product['quantity_produced'];
                     ?>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
                         <div class="flex flex-col md:flex-row">
-                            <!-- Product info -->
+                       
                             <div class="md:w-1/3 p-4 bg-gray-50">
                                 <div class="flex justify-between items-center mb-3">
                                     <span class="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
                                         <?= htmlspecialchars($productCategory) ?>
                                     </span>
-                                    
-                                    <!-- Add inventory status badge -->
-                                    <?php if ($currentInventory <= 0): ?>
-                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">
-                                        Out of Stock
-                                    </span>
-                                    <?php elseif ($currentInventory <= 5): ?>
-                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-800">
-                                        Low Stock
-                                    </span>
-                                    <?php else: ?>
-                                    <span class="px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
-                                        In Stock
-                                    </span>
-                                    <?php endif; ?>
+                                  
                                 </div>
                                 
-                                <!-- Product image code remains the same -->
+                              
                                 <?php if(!empty($productImage)): ?>
                                     <?php
-                                    // Fix image path to ensure browser can access it correctly
+                                 
                                     $imagePath = $productImage;
                                     
                                     if (strpos($imagePath, 'C:') === 0) {
-                                        // For absolute Windows paths, extract just the filename from the path
+                                      
                                         $filename = basename($imagePath);
-                                        // Point to the correct web-accessible path - use ./uploads instead of ../../uploads
                                         $imagePath = './uploads/products/' . $filename;
                                     } else if (strpos($imagePath, './uploads/') === 0) {
-                                        // Path is already in the correct format
+                                        
                                         $imagePath = $productImage;
                                     } else if (strpos($imagePath, 'uploads/') === 0) {
-                                        // Add ./ prefix
+                                    
                                         $imagePath = './' . $imagePath;
                                     } else if (strpos($imagePath, '../../assets/') === 0) {
-                                        // Default image path
+                                     
                                         $imagePath = $productImage;
                                     } else {
-                                        // For any other format, extract filename and use local path
+                                       
                                         $filename = basename($imagePath);
                                         $imagePath = './uploads/products/' . $filename;
                                     }
@@ -430,7 +757,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                          alt="<?= htmlspecialchars($productName) ?>"
                                          class="h-32 w-full object-cover rounded-md mb-3">
                                 <?php else: ?>
-                                    <!-- Show default image if no product image is available -->
+                               
                                     <img src="../../assets/images/default-product.jpg"
                                          alt="<?= htmlspecialchars($productName) ?>"
                                          class="h-32 w-full object-cover rounded-md mb-3">
@@ -441,32 +768,20 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <p class="text-gray-600 text-sm mt-2">
                                     Price: ₱<?= htmlspecialchars(number_format($productPrice, 2)) ?> per unit
                                 </p>
-                                
-                                <!-- Enhanced product quantity information -->
-                                <div class="mt-3 p-2 bg-gray-100 rounded-md">
-                                    <p class="text-sm font-medium text-gray-700">
-                                        Current Inventory: 
-                                        <span class="font-bold <?= $currentInventory <= 0 ? 'text-red-600' : '' ?>">
-                                            <?= htmlspecialchars($currentInventory) ?> units
-                                        </span>
-                                    </p>
-                                    <p class="text-xs text-gray-500 mt-1">
-                                        Total Quantity Produced: <?= htmlspecialchars($quantityProduced) ?> units
-                                    </p>
-                                </div>
+                            
                             </div>
                             
-                            <!-- Waste form - Only show when there's inventory available -->
-                            <?php if ($currentInventory > 0): ?>
+                       
                             <div class="md:w-2/3 p-4">
                                 <h3 class="font-bold text-primarycol mb-3">Record Waste</h3>
                                 
                                 <form method="POST">
                                     <input type="hidden" name="product_id" value="<?= htmlspecialchars($productId) ?>">
                                     <input type="hidden" name="product_value" value="<?= htmlspecialchars($productPrice) ?>">
+                                    <input type="hidden" id="quantity_produced" value="<?= htmlspecialchars($product['quantity_produced']) ?>">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <!-- Sales tracking field -->
+                                     
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Quantity Sold
@@ -474,30 +789,35 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             <input type="number"
                                                 name="quantity_sold"
                                                 min="0"
-                                                max="<?= htmlspecialchars($currentInventory) ?>"
-                                                step="any"
+                                                max="<?= htmlspecialchars($product['quantity_produced']) ?>"
+                                                data-product-id="<?= htmlspecialchars($product['id']) ?>"
                                                 required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                                onchange="calculateWaste(this)"
+                                                class="w-full border border-gray-300 rounded-md p-2">
                                             <p class="text-xs text-gray-500 mt-1">
-                                                Maximum: <?= htmlspecialchars($currentInventory) ?> units
+                                                Available: <?= htmlspecialchars($product['quantity_produced']) ?> units
+                                                (Used: <?= htmlspecialchars($product['total_waste']) ?> units wasted)
                                             </p>
                                         </div>
                                         
-                                        <!-- Waste info -->
+                                      
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Quantity Wasted
                                             </label>
                                             <input type="number"
+                                                id="waste_quantity"
                                                 name="waste_quantity"
-                                                min="0.01"
-                                                max="<?= htmlspecialchars($currentInventory) ?>"
-                                                step="any"
-                                                required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                                readonly
+                                                class="w-full border border-gray-300 rounded-md p-2 bg-gray-50 focus:outline-none focus:ring-primary focus:border-primary">
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                Automatically calculated
+                                            </p>
                                         </div>
-                                        
-                                        <!-- Remaining form fields remain the same -->
+                                    </div>
+                                    
+                                
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Date of Waste
@@ -578,18 +898,6 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     </div>
                                 </form>
                             </div>
-                            <?php else: ?>
-                            <!-- Message when there's no inventory -->
-                            <div class="md:w-2/3 p-4 flex items-center justify-center">
-                                <div class="text-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <h3 class="font-bold text-gray-700 mb-1">No Inventory Available</h3>
-                                    <p class="text-gray-500 text-sm">This product is out of stock. No waste can be recorded.</p>
-                                </div>
-                            </div>
-                            <?php endif; ?>
                         </div>
                     </div>
                     <?php endforeach; ?>
@@ -601,7 +909,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                             </svg>
                             <p class="text-xl text-gray-500">No products found.</p>
                             <p class="text-gray-400 mt-2">Add products in the Products section first.</p>
-                            <a href="products.php" class="inline-block mt-4 px-4 py-2 bg-primarycol text-white rounded hover:bg-green-700">
+                            <a href="product_data.php" class="inline-block mt-4 px-4 py-2 bg-primarycol text-white rounded hover:bg-green-700">
                                 Add Products
                             </a>
                         </div>
@@ -610,5 +918,179 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             </div>
         </div>
     </div>
+
+
+    <div id="customWasteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+           
+                <div id="productSelectionView" class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-gray-800">Select Product</h3>
+                        <button id="closeCustomWasteModal" class="text-gray-500 hover:text-gray-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-4 max-h-96 overflow-y-auto">
+                        <?php foreach ($products as $product): ?>
+                        <div class="product-item border rounded p-3 hover:bg-gray-50 cursor-pointer"
+                             data-product-id="<?= htmlspecialchars($product['id']) ?>"
+                             data-product-name="<?= htmlspecialchars($product['name']) ?>"
+                             data-product-price="<?= htmlspecialchars($product['price_per_unit']) ?>"
+                             data-quantity-produced="<?= htmlspecialchars($product['quantity_produced']) ?>">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-12 w-12">
+                                    <?php if(!empty($product['image'])): ?>
+                                        <img src="<?= htmlspecialchars($product['image']) ?>" class="h-12 w-12 object-cover rounded">
+                                    <?php else: ?>
+                                        <div class="h-12 w-12 bg-gray-200 rounded"></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="ml-4">
+                                    <h4 class="text-sm font-medium text-gray-900"><?= htmlspecialchars($product['name']) ?></h4>
+                                    <p class="text-sm text-gray-500">
+                                        Quantity Produced: <?= htmlspecialchars($product['quantity_produced']) ?>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+         
+                <div id="wasteFormView" class="p-6 hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-gray-800">Record Waste for <span id="selectedProductName"></span></h3>
+                        <button class="back-to-products text-gray-500 hover:text-gray-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <form method="POST" id="customWasteForm">
+                        <input type="hidden" name="custom_waste" value="1">
+                        <input type="hidden" name="product_id" id="selected_product_id">
+                        <input type="hidden" name="product_value" id="selected_product_price">
+                        <input type="hidden" name="quantity_produced" id="selected_quantity_produced">
+                        
+                        <div class="space-y-4">
+                        
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    Quantity Wasted
+                                </label>
+                                <input type="number"
+                                    name="waste_quantity"
+                                    required
+                                    min="0.01"
+                                    step="any"
+                                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            </div>
+
+                        
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    Date of Waste
+                                </label>
+                                <input type="date"
+                                    name="waste_date"
+                                    required
+                                    value="<?= date('Y-m-d') ?>"
+                                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            </div>
+
+                        
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    Waste Reason
+                                </label>
+                                <select name="waste_reason"
+                                    required
+                                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                    <option value="">Select Reason</option>
+                                    <option value="overproduction">Overproduction</option>
+                                    <option value="expired">Expired</option>
+                                    <option value="burnt">Burnt</option>
+                                    <option value="damaged">Damaged</option>
+                                    <option value="quality_issues">Quality Issues</option>
+                                    <option value="unsold">Unsold/End of Day</option>
+                                    <option value="spoiled">Spoiled</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                       
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    Disposal Method
+                                </label>
+                                <select name="disposal_method"
+                                    required
+                                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                    <option value="">Select Method</option>
+                                    <option value="donation">Donation</option>
+                                    <option value="compost">Compost</option>
+                                    <option value="trash">Trash</option>
+                                    <option value="staff_meals">Staff Meals</option>
+                                    <option value="animal_feed">Animal Feed</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                     
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    Notes (optional)
+                                </label>
+                                <textarea 
+                                    name="notes"
+                                    placeholder="Additional details about this waste"
+                                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary"
+                                    rows="2"
+                                ></textarea>
+                            </div>
+
+                        
+                            <div class="mt-6 flex justify-end space-x-3">
+                                <button type="button" 
+                                    class="back-to-products px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                                    Back
+                                </button>
+                                <button type="submit"
+                                    class="px-4 py-2 bg-primarycol text-white rounded-md hover:bg-green-700">
+                                    Submit Waste
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+   
+    <script>
+    function calculateWaste() {
+        const quantityProduced = parseFloat(document.getElementById('quantity_produced').value) || 0;
+        const quantitySold = parseFloat(document.getElementById('quantity_sold').value) || 0;
+        
+        if (quantitySold > quantityProduced) {
+            alert('Quantity sold cannot be greater than quantity produced');
+            document.getElementById('quantity_sold').value = quantityProduced;
+            document.getElementById('waste_quantity').value = 0;
+            return;
+        }
+        
+        const wasteQuantity = quantityProduced - quantitySold;
+        document.getElementById('waste_quantity').value = wasteQuantity;
+    }
+
+    document.addEventListener('DOMContentLoaded', calculateWaste);
+    </script>
 </body>
 </html>

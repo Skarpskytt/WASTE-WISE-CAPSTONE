@@ -2,6 +2,7 @@
 session_start();
 include('../config/db_connect.php');
 include('../config/session_handler.php');
+require_once '../includes/mail/EmailService.php';
 use CustomSession\SessionHandler;
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -50,29 +51,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             throw new Exception('Your account is inactive. Please contact administrator.');
         }
 
-        // Set session variables
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['fname'] = $user['fname'];
-        $_SESSION['lname'] = $user['lname'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['branch_id'] = $user['branch_id'];
-        $_SESSION['branch_name'] = $user['branch_name'];
+        // Generate OTP
+        $otp = sprintf("%06d", mt_rand(100000, 999999));
+        $expires_at = date('Y-m-d H:i:s', strtotime('+5 minutes'));
 
-        // Redirect based on role
-        switch($user['role']) {
-            case 'admin':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/admin/admindashboard.php');
-                break;
-            case 'branch1_staff': // Individual case for branch1_staff
-            case 'branch2_staff': 
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/staff/staff_dashboard.php');
-                break;
-            case 'ngo':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/ngo/ngo_dashboard.php');
-                break;
-            default:
-                throw new Exception('Invalid role configuration.');
-        }
+        // Save OTP to database
+        $stmt = $pdo->prepare("
+            INSERT INTO otp_codes (user_id, code, expires_at) 
+            VALUES (?, ?, ?)
+        ");
+        $stmt->execute([$user['id'], $otp, $expires_at]);
+
+        // Store temporary session data
+        $_SESSION['temp_user_id'] = $user['id'];
+        
+        // Send OTP via email using existing EmailService
+        $emailService = new \App\Mail\EmailService();
+        $emailService->sendOTPEmail($user, $otp);
+
+        header('Location: verify_otp.php');
         exit();
 
     } catch (Exception $e) {
