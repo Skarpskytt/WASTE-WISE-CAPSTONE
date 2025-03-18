@@ -140,7 +140,7 @@
           </div>
         </form>
         <div class="mt-4 text-sm text-gray-600 text-center">
-          <p>Already have an account? <a href="login.php" class="text-black hover:underline">Login here</a></p>
+          <p>Already have an account? <a href="../index.php" class="text-black hover:underline">Login here</a></p>
         </div>
       </div>
     </div>
