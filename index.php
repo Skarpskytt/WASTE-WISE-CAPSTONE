@@ -1,6 +1,6 @@
 <?php
 
-include('../config/session_handler.php');
+include('config/session_handler.php');
 use CustomSession\SessionHandler;
 ?>
 <!DOCTYPE html>
@@ -41,7 +41,7 @@ function togglePassword() {
 <div class="flex h-screen">
   <div class="hidden lg:flex items-center justify-center flex-1 bg-sec text-black">
     <div class="max-w-md text-center">
-     <img src="../assets/images/login.gif" alt="Login Animation">
+     <img src="assets/images/login.gif" alt="Login Animation">
     </div>
   </div>
   
