@@ -2,133 +2,75 @@
 // filepath: /c:/xampp/htdocs/capstone/WASTE-WISE-CAPSTONE/config/session_handler.php
 namespace CustomSession;
 
-require_once __DIR__ . '/db_config.php';
-
-class SessionHandler implements \SessionHandlerInterface
+class SessionHandler
 {
     private $pdo;
-    private static $instance = null;
 
-    private function __construct()
+    public function __construct($pdo)
     {
-        try {
-            $this->pdo = new \PDO(
-                "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME,
-                DB_USER,
-                DB_PASS
-            );
-            $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            
-            // Create sessions table if it doesn't exist
-            $this->createSessionsTable();
-        } catch (\PDOException $e) {
-            error_log("Database connection failed: " . $e->getMessage());
-            throw $e;
-        }
+        $this->pdo = $pdo;
     }
 
-    private function createSessionsTable()
-    {
-        $sql = "CREATE TABLE IF NOT EXISTS sessions (
-            session_id VARCHAR(128) NOT NULL PRIMARY KEY,
-            session_data TEXT NOT NULL,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )";
-        $this->pdo->exec($sql);
-    }
-
-    public static function getInstance()
-    {
-        if (self::$instance === null) {
-            self::$instance = new self();
-            session_set_save_handler(self::$instance, true);
-        }
-        return self::$instance;
-    }
-
-    public static function init()
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            self::getInstance();
-            session_start();
-        }
-    }
-
-    public static function set($key, $value)
-    {
-        $_SESSION[$key] = $value;
-    }
-
-    public static function get($key)
-    {
-        return isset($_SESSION[$key]) ? $_SESSION[$key] : null;
-    }
-
-    public static function remove($key)
-    {
-        if (isset($_SESSION[$key])) {
-            unset($_SESSION[$key]);
-        }
-    }
-
-    public function open($savePath, $sessionName): bool
+    public function open($savePath, $sessionName)
     {
         return true;
     }
 
-    public function close(): bool
+    public function close()
     {
         return true;
     }
 
-    public function read($id): string|false
+    public function read($id)
     {
-        try {
-            $stmt = $this->pdo->prepare('SELECT session_data FROM sessions WHERE session_id = ?');
-            $stmt->execute([$id]);
-            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-            return $result ? $result['session_data'] : '';
-        } catch (\PDOException $e) {
-            error_log("Session read error: " . $e->getMessage());
-            return '';
-        }
+        $stmt = $this->pdo->prepare('SELECT session_data FROM sessions WHERE session_id = ?');
+        $stmt->execute([$id]);
+        $session = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $session ? $session['session_data'] : '';
     }
 
-    public function write($id, $data): bool
+    public function write($id, $data)
     {
-        try {
-            $stmt = $this->pdo->prepare('REPLACE INTO sessions (session_id, session_data) VALUES (?, ?)');
-            return $stmt->execute([$id, $data]);
-        } catch (\PDOException $e) {
-            error_log("Session write error: " . $e->getMessage());
-            return false;
-        }
+        $stmt = $this->pdo->prepare('REPLACE INTO sessions (session_id, session_data, updated_at) VALUES (?, ?, NOW())');
+        return $stmt->execute([$id, $data]);
     }
 
-    public function destroy($id): bool
+    public function destroy($id)
     {
-        try {
-            $stmt = $this->pdo->prepare('DELETE FROM sessions WHERE session_id = ?');
-            return $stmt->execute([$id]);
-        } catch (\PDOException $e) {
-            error_log("Session destroy error: " . $e->getMessage());
-            return false;
-        }
+        $stmt = $this->pdo->prepare('DELETE FROM sessions WHERE session_id = ?');
+        return $stmt->execute([$id]);
     }
 
-    public function gc($maxlifetime): int|false
+    public function gc($maxlifetime)
     {
-        try {
-            $stmt = $this->pdo->prepare('DELETE FROM sessions WHERE updated_at < DATE_SUB(NOW(), INTERVAL ? SECOND)');
-            $stmt->execute([$maxlifetime]);
-            return $stmt->rowCount();
-        } catch (\PDOException $e) {
-            error_log("Session gc error: " . $e->getMessage());
-            return false;
-        }
+        $stmt = $this->pdo->prepare('DELETE FROM sessions WHERE updated_at < NOW() - INTERVAL ? SECOND');
+        return $stmt->execute([$maxlifetime]);
     }
 }
 
-// Initialize the session handler
-SessionHandler::init();
+// Move session handler setup before any session operations
+if (session_status() == PHP_SESSION_NONE) {
+    try {
+        $pdo = new \PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        
+        $handler = new SessionHandler($pdo);
+        session_set_save_handler(
+            [$handler, 'open'],
+            [$handler, 'close'],
+            [$handler, 'read'],
+            [$handler, 'write'],
+            [$handler, 'destroy'],
+            [$handler, 'gc']
+        );
+        
+        // Register shutdown function to ensure session data is saved
+        register_shutdown_function('session_write_close');
+        
+        // Start the session after setting the handler
+        session_start();
+    } catch (\PDOException $e) {
+        die("Database connection failed: " . $e->getMessage());
+    }
+}
 ?>
