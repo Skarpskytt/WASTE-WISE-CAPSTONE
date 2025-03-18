@@ -1,9 +1,9 @@
 <?php
 // Database connection
 $host = 'localhost'; // Using IP instead of hostname
-$db   = 'wastewise';
-$user = 'root';
-$pass = '';
+$db   = 'u697061521_wastewise';
+$user = 'u697061521_skarpskytt';
+$pass = 'p6VE#dns7YK/';
 $charset = 'utf8mb4';
 
 
