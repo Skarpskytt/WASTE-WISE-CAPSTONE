@@ -45,14 +45,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['temp_user_id'])) {
         // Redirect based on role
         switch($user['role']) {
             case 'admin':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/admin/admindashboard.php');
+                header('Location: ../pages/admin/admindashboard.php');
                 break;
             case 'branch1_staff':
             case 'branch2_staff':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/staff/staff_dashboard.php');
+                header('Location: ../pages/staff/staff_dashboard.php');
                 break;
             case 'ngo':
-                header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/ngo/ngo_dashboard.php');
+                header('Location: ../pages/ngo/ngo_dashboard.php');
                 break;
             default:
                 throw new Exception('Invalid role configuration.');

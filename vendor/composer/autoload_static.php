@@ -53,6 +53,7 @@ class ComposerStaticInit1ba944b1b2880695113851e981334169
         ),
         'A' => 
         array (
+            'App\\Mail\\' => 9,
             'App\\' => 4,
         ),
     );
@@ -123,6 +124,10 @@ class ComposerStaticInit1ba944b1b2880695113851e981334169
         array (
             0 => __DIR__ . '/..' . '/markbaker/complex/classes/src',
         ),
+        'App\\Mail\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/includes/mail',
+        ),
         'App\\' => 
         array (
             0 => __DIR__ . '/../..' . '/includes',
@@ -140,6 +145,7 @@ class ComposerStaticInit1ba944b1b2880695113851e981334169
     );
 
     public static $classMap = array (
+        'App\\Mail\\EmailService' => __DIR__ . '/../..' . '/includes/mail/EmailService.php',
         'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
         'Complex\\Complex' => __DIR__ . '/..' . '/markbaker/complex/classes/src/Complex.php',
         'Complex\\Exception' => __DIR__ . '/..' . '/markbaker/complex/classes/src/Exception.php',

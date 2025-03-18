@@ -2,10 +2,10 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-$host = 'lavender-mantis-462266.hostingersite.com'; // Using IP instead of hostname
-$db   = 'u697061521_wastewise';
-$user = 'u697061521_roots';
-$pass = 'f=L8D7dMqrv';
+$host = 'localhost'; // Using IP instead of hostname
+$db   = 'wastewise';
+$user = 'root';
+$pass = '';
 $charset = 'utf8mb4';
 
 

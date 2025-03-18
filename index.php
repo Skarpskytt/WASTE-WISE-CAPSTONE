@@ -9,7 +9,7 @@ use CustomSession\SessionHandler;
 
 // Test session functionality
 try {
-    SessionHandler::getInstance();
+    $session = SessionHandler::getInstance();
 } catch (Exception $e) {
     error_log("Session Error: " . $e->getMessage());
 }

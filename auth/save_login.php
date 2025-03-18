@@ -82,11 +82,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } else {
             $_SESSION['error'] = $error;
         }
+        // When redirecting back to index
         header('Location: ../index.php');
         exit();
     }
 }
 
+// When redirecting back to index
 header('Location: ../index.php');
 exit();
 ?>
