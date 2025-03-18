@@ -11,3 +11,6 @@
 
 # Logs
 *.log
+
+# Database Configuration
+config/db_config.php
