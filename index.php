@@ -1,4 +1,5 @@
 <?php
+
 include('../config/session_handler.php');
 use CustomSession\SessionHandler;
 ?>
