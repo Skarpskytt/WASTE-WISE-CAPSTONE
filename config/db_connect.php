@@ -1,4 +1,7 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 $host = 'localhost'; // Using IP instead of hostname
 $db   = 'u697061521_wastewise';
 $user = 'u697061521_roots';
