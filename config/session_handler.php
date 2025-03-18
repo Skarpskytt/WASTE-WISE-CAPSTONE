@@ -19,10 +19,7 @@ class SessionHandler
 
     public static function getInstance()
     {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
-        return self::$instance;
+        return self::$instance ??= new self();
     }
 
     public function open($savePath, $sessionName)
@@ -39,8 +36,7 @@ class SessionHandler
     {
         $stmt = $this->pdo->prepare('SELECT session_data FROM sessions WHERE session_id = ?');
         $stmt->execute([$id]);
-        $session = $stmt->fetch(\PDO::FETCH_ASSOC);
-        return $session ? $session['session_data'] : '';
+        return $stmt->fetch(\PDO::FETCH_ASSOC)['session_data'] ?? '';
     }
 
     public function write($id, $data)
@@ -63,17 +59,7 @@ class SessionHandler
 }
 
 if (session_status() == PHP_SESSION_NONE) {
-    $handler = SessionHandler::getInstance();
-    session_set_save_handler(
-        [$handler, 'open'],
-        [$handler, 'close'],
-        [$handler, 'read'],
-        [$handler, 'write'],
-        [$handler, 'destroy'],
-        [$handler, 'gc']
-    );
-    
-    register_shutdown_function('session_write_close');
+    session_set_save_handler(SessionHandler::getInstance());
     session_start();
 }
 ?>
