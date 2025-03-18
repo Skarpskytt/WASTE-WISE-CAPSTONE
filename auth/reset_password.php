@@ -11,7 +11,7 @@ try {
     // Verify token
     if (!isset($_GET['token'])) {
         $_SESSION['error'] = "Invalid reset link.";
-        header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
+        header('Location: ../index.php');
         exit();
     }
 
@@ -36,7 +36,7 @@ try {
 } catch (PDOException $e) {
     error_log("Database error: " . $e->getMessage());
     $_SESSION['error'] = "An error occurred. Please try again later.";
-    header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
+    header('Location: ../index.php');
     exit();
 }
 ?>

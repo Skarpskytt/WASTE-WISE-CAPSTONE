@@ -4,7 +4,7 @@ include('../config/db_connect.php');
 require_once '../includes/mail/EmailService.php';
 
 if (!isset($_SESSION['temp_user_id'])) {
-    header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
+    header('Location: ../index.php');
     exit();
 }
 

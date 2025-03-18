@@ -65,6 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['temp_user_id'])) {
         exit();
     }
 } else {
-    header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
+    header('Location: ../index.php');
     exit();
 }
