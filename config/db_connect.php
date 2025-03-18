@@ -1,8 +1,8 @@
 <?php
-$host = '127.0.0.1'; // Using IP instead of hostname
-$db   = 'wastewise';
-$user = 'root';
-$pass = '';
+$host = 'localhost'; // Using IP instead of hostname
+$db   = 'u697061521_wastewise';
+$user = 'u697061521_roots';
+$pass = '*zdn+?ycj9W';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
