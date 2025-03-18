@@ -2,7 +2,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-$host = 'localhost'; // Using IP instead of hostname
+$host = 'gold-chinchilla-937194.hostingersite.com'; // Using IP instead of hostname
 $db   = 'u697061521_wastewise';
 $user = 'u697061521_rooot';
 $pass = 'y5ra[x+L';
