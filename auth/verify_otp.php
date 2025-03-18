@@ -1,7 +1,7 @@
 <?php
 session_start();
 if (!isset($_SESSION['temp_user_id'])) {
-    header('Location: login.php');
+    header('Location: /index.php');
     exit();
 }
 ?>

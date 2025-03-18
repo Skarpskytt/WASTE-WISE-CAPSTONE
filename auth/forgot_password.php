@@ -64,7 +64,7 @@ use CustomSession\SessionHandler;
                 </div>
             </form>
             <div class="mt-4 text-sm text-gray-600 text-center">
-                <a href="login.php" class="text-black hover:underline">Back to Login</a>
+                <a href="/capstone/WASTE-WISE-CAPSTONE/index.php" class="text-black hover:underline">Back to Login</a>
             </div>
         </div>
     </div>

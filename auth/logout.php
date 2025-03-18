@@ -20,6 +20,6 @@ if (ini_get('session.use_cookies')) {
 session_destroy();
 
 // Redirect to the login page
-header('Location: login.php');
+header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
 exit();
 ?>
