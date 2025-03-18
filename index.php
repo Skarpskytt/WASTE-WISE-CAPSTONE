@@ -1,7 +1,18 @@
 <?php
+// Add error reporting at the top
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-include('config/session_handler.php');
+// Use absolute path for includes
+require_once __DIR__ . '/config/session_handler.php';
 use CustomSession\SessionHandler;
+
+// Test session functionality
+try {
+    SessionHandler::getInstance();
+} catch (Exception $e) {
+    error_log("Session Error: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
