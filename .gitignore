@@ -13,7 +13,6 @@
 *.log
 
 # Database Configuration
-config/db_config.php
 config/db_connect.php
 config/session_handler.php
 

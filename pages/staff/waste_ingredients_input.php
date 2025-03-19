@@ -22,9 +22,16 @@ $successMessage = '';
 $errorMessage = '';
 
 try {
-    // Fetch ingredients from ingredients table
-    $ingStmt = $pdo->prepare("SELECT * FROM ingredients WHERE branch_id = ? ORDER BY stock_datetime DESC");
-    $ingStmt->execute([$branchId]);
+    // Fetch only active ingredients (not expired and with stock > 0)
+    $currentDate = date('Y-m-d');
+    $ingStmt = $pdo->prepare("
+        SELECT * FROM ingredients 
+        WHERE branch_id = ? 
+        AND (expiry_date IS NULL OR expiry_date > ?) 
+        AND stock_quantity > 0 
+        ORDER BY id DESC
+    ");
+    $ingStmt->execute([$branchId, $currentDate]);
     $ingredients = $ingStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error retrieving data: " . $e->getMessage());
@@ -53,11 +60,14 @@ if (isset($_POST['submitwaste'])) {
         !$disposalMethod || !$productionStage || !$responsiblePerson) {
         $errorMessage = 'Please fill in all required fields.';
     } else {
-        // Insert waste entry into the ingredients_waste table
+        // Start transaction for waste recording and stock update
         try {
+            $pdo->beginTransaction();
+            
+            // Insert waste entry into the ingredients_waste table
             $stmt = $pdo->prepare("
                 INSERT INTO ingredients_waste (
-                    user_id, ingredient_id, waste_date, waste_quantity, waste_value, 
+                    staff_id, ingredient_id, waste_date, waste_quantity, waste_value, 
                     waste_reason, responsible_person, batch_number, production_stage, disposal_method,
                     notes, created_at, branch_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -78,11 +88,25 @@ if (isset($_POST['submitwaste'])) {
                 date('Y-m-d H:i:s'),
                 $branchId
             ]);
+            
+            // Update ingredient stock quantity
+            $updateStock = $pdo->prepare("
+                UPDATE ingredients 
+                SET stock_quantity = stock_quantity - ? 
+                WHERE id = ? AND branch_id = ?
+            ");
+            
+            $updateStock->execute([$wasteQuantity, $ingredientId, $branchId]);
+            
+            // Commit transaction
+            $pdo->commit();
 
             // Redirect to the record page after successful submission
             header('Location: waste_ingredients_input.php?success=1');
             exit;
         } catch (PDOException $e) {
+            // Rollback transaction on error
+            $pdo->rollBack();
             $errorMessage = 'An error occurred while submitting the waste entry: ' . $e->getMessage();
         }
     }
@@ -131,6 +155,42 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             setTimeout(function() {
                 $('.notification').fadeOut();
             }, 3000);
+
+            // Validate waste quantity doesn't exceed stock
+            $('.waste-form').on('submit', function(e) {
+                const wasteQty = parseFloat($(this).find('[name="waste_quantity"]').val());
+                const availableStock = parseFloat($(this).find('[name="available_stock"]').val());
+                
+                if (wasteQty > availableStock) {
+                    e.preventDefault();
+                    alert('Error: Waste quantity cannot exceed available stock (' + availableStock + ' units)');
+                }
+            });
+        });
+
+        // Add this inside your existing script tag, after the $(document).ready function
+        function generateBatchNumber() {
+            const now = new Date();
+            const year = now.getFullYear().toString().substring(2); // Get last 2 digits of year
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            
+            // Generate random 4-character string for uniqueness
+            const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase();
+            
+            // Format: B-YYMMDD-XXXX
+            return `B-${year}${month}${day}-${randomChars}`;
+        }
+
+        // Generate a batch number for each form when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get all batch number inputs
+            const batchInputs = document.querySelectorAll('input[name="batch_number"]');
+            
+            // Set a unique batch number for each
+            batchInputs.forEach(input => {
+                input.value = generateBatchNumber();
+            });
         });
     </script>
 
@@ -337,15 +397,19 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <p class="text-gray-600 text-sm mt-2">
                                     Cost: ₱<?= htmlspecialchars(number_format($ingredientCost, 2)) ?> per <?= htmlspecialchars($ingredientUnit) ?>
                                 </p>
+                                <p class="text-gray-600 text-sm mt-1">
+                                    Available Stock: <?= htmlspecialchars(number_format($ingredient['stock_quantity'], 2)) ?> <?= htmlspecialchars($ingredientUnit) ?>
+                                </p>
                             </div>
                             
                             <!-- Waste form -->
                             <div class="md:w-2/3 p-4">
                                 <h3 class="font-bold text-primarycol mb-3">Record Waste</h3>
                                 
-                                <form method="POST">
+                                <form method="POST" class="waste-form">
                                     <input type="hidden" name="ingredient_id" value="<?= htmlspecialchars($ingredientId) ?>">
                                     <input type="hidden" name="ingredient_value" value="<?= htmlspecialchars($ingredientCost) ?>">
+                                    <input type="hidden" name="available_stock" value="<?= htmlspecialchars($ingredient['stock_quantity']) ?>">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <!-- Basic waste info -->
@@ -379,8 +443,9 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             </label>
                                             <input type="text"
                                                 name="batch_number"
-                                                placeholder="e.g. B220301-1"
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                                id="batch_number"
+                                                readonly
+                                                class="w-full border border-gray-300 rounded-md p-2 bg-gray-50 focus:outline-none focus:ring-primary focus:border-primary">
                                         </div>
                                         
                                         <div>
@@ -468,10 +533,10 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                             </svg>
-                            <p class="text-xl text-gray-500">No ingredients found.</p>
-                            <p class="text-gray-400 mt-2">Add ingredients in the Ingredients section first.</p>
+                            <p class="text-xl text-gray-500">No active ingredients found.</p>
+                            <p class="text-gray-400 mt-2">Add ingredients or ensure some have stock available and aren't expired.</p>
                             <a href="ingredients.php" class="inline-block mt-4 px-4 py-2 bg-primarycol text-white rounded hover:bg-green-700">
-                                Add Ingredients
+                                Manage Ingredients
                             </a>
                         </div>
                     <?php endif; ?>

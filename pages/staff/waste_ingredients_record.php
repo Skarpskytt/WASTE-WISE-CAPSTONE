@@ -120,7 +120,7 @@ $sql = "
            CONCAT(u.fname, ' ', u.lname) as staff_name
     FROM ingredients_waste w
     JOIN ingredients i ON w.ingredient_id = i.id
-    JOIN users u ON w.user_id = u.id
+    JOIN users u ON w.staff_id = u.id  
     WHERE w.branch_id = ?
 ";
 

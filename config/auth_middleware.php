@@ -9,7 +9,7 @@ function checkAuth($allowed_roles = []) {
     if (!isset($_SESSION['user_id'])) {
         $_SESSION['error'] = 'Please log in to access this page.';
         // Fix typo in path: capstozne -> capstone
-        header('Location: /capstone/WASTE-WISE-CAPSTONE/index.php');
+        header('Location: ../index.php');
         exit();
     }
 
@@ -34,7 +34,7 @@ function checkAuth($allowed_roles = []) {
         
         if (!$userHasAccess) {
             $_SESSION['error'] = 'You do not have permission to access this page.';
-            header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/unauthorized.php');
+            header('Location: ../pages/unauthorized.php');
             exit();
         }
     }
@@ -44,7 +44,7 @@ function checkAuth($allowed_roles = []) {
         // Only check status if it's set in the session
         if (isset($_SESSION['status']) && $_SESSION['status'] !== 'approved') {
             $_SESSION['error'] = 'Your NGO account is pending approval.';
-            header('Location: /capstone/WASTE-WISE-CAPSTONE/pages/unauthorized.php');
+            header('Location: ../pages/unauthorized.php');
             exit();
         }
     }
