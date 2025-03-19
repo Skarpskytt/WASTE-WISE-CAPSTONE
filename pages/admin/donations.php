@@ -359,7 +359,8 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                                     <td><?= date('M d, Y', strtotime($donation['updated_at'])) ?></td>
                                     <td><?= $donation['received_at'] ? date('M d, Y', strtotime($donation['received_at'])) : 'N/A' ?></td>
                                     <td>
-                                        <a href="donation_details.php?id=<?= $donation['id'] ?>" class="btn btn-xs bg-primarycol text-white">View</a>
+                                        <button onclick="openDonationModal(<?= $donation['id'] ?>)" 
+                                                class="btn btn-xs bg-primarycol text-white">View</button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -448,6 +449,117 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                 }
             });
         });
+
+        function openDonationModal(donationId) {
+            const modal = document.getElementById('donation_modal');
+            const modalContent = document.getElementById('modal_content');
+            
+            // Show loading state
+            modalContent.innerHTML = '<div class="flex justify-center"><span class="loading loading-spinner loading-lg text-primarycol"></span></div>';
+            
+            // Open the modal
+            modal.showModal();
+            
+            // Fetch donation details
+            fetch(`get_donation_details.php?id=${donationId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        modalContent.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                        return;
+                    }
+                    
+                    // Format donation status with appropriate color
+                    let statusBadge = '';
+                    if (data.is_received || data.status === 'completed') {
+                        statusBadge = '<span class="badge badge-success">Completed</span>';
+                    } else if (data.status === 'approved') {
+                        statusBadge = '<span class="badge badge-warning">Approved</span>';
+                    } else if (data.status === 'rejected') {
+                        statusBadge = '<span class="badge badge-error">Rejected</span>';
+                    } else {
+                        statusBadge = '<span class="badge badge-info">Pending</span>';
+                    }
+                    
+                    // Build the content HTML
+                    const html = `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-3">
+                                <div class="bg-sec bg-opacity-30 p-3 rounded-lg">
+                                    <h4 class="font-semibold text-lg">Donation Information</h4>
+                                    <div class="divider my-1"></div>
+                                    <p><span class="font-medium">Request ID:</span> #${data.id}</p>
+                                    <p><span class="font-medium">Status:</span> ${statusBadge}</p>
+                                    <p><span class="font-medium">Created:</span> ${new Date(data.created_at).toLocaleString()}</p>
+                                    <p><span class="font-medium">Updated:</span> ${new Date(data.updated_at).toLocaleString()}</p>
+                                    <p><span class="font-medium">Received:</span> ${data.received_at ? new Date(data.received_at).toLocaleString() : 'Not received yet'}</p>
+                                </div>
+                                
+                                <div class="bg-sec bg-opacity-30 p-3 rounded-lg">
+                                    <h4 class="font-semibold text-lg">NGO Information</h4>
+                                    <div class="divider my-1"></div>
+                                    <p><span class="font-medium">Organization:</span> ${data.organization_name || 'N/A'}</p>
+                                    <p><span class="font-medium">Contact Person:</span> ${data.ngo_name}</p>
+                                    <p><span class="font-medium">Email:</span> ${data.ngo_email}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="bg-sec bg-opacity-30 p-3 rounded-lg">
+                                    <h4 class="font-semibold text-lg">Product Information</h4>
+                                    <div class="divider my-1"></div>
+                                    <p><span class="font-medium">Product:</span> ${data.product_name}</p>
+                                    <p><span class="font-medium">Category:</span> ${data.category}</p>
+                                    <p><span class="font-medium">Quantity Requested:</span> ${data.quantity_requested}</p>
+                                    <p><span class="font-medium">Available Quantity:</span> ${data.available_quantity}</p>
+                                    <p><span class="font-medium">Expiry Date:</span> ${new Date(data.donation_expiry_date).toLocaleDateString()}</p>
+                                </div>
+                                
+                                <div class="bg-sec bg-opacity-30 p-3 rounded-lg">
+                                    <h4 class="font-semibold text-lg">Pickup Details</h4>
+                                    <div class="divider my-1"></div>
+                                    <p><span class="font-medium">Branch:</span> ${data.branch_name}</p>
+                                    <p><span class="font-medium">Address:</span> ${data.branch_address}</p>
+                                    <p><span class="font-medium">Pickup Date:</span> ${new Date(data.pickup_date).toLocaleDateString()}</p>
+                                    <p><span class="font-medium">Pickup Time:</span> ${data.pickup_time}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-sec bg-opacity-30 p-3 rounded-lg mt-4">
+                            <h4 class="font-semibold text-lg">Notes</h4>
+                            <div class="divider my-1"></div>
+                            <p><span class="font-medium">NGO Notes:</span> ${data.ngo_notes || 'No notes provided'}</p>
+                            <p><span class="font-medium">Staff Notes:</span> ${data.staff_notes || 'No staff notes'}</p>
+                        </div>
+                    `;
+                    
+                    modalContent.innerHTML = html;
+                })
+                .catch(error => {
+                    modalContent.innerHTML = `<div class="alert alert-error">Error loading donation details: ${error.message}</div>`;
+                });
+        }
     </script>
+
+    <!-- Donation Details Modal -->
+    <dialog id="donation_modal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            </form>
+            <h3 class="font-bold text-xl text-primarycol mb-4">Donation Details</h3>
+            
+            <div id="modal_content" class="space-y-4">
+                <!-- Content will be loaded dynamically -->
+                <div class="flex justify-center">
+                    <span class="loading loading-spinner loading-lg text-primarycol"></span>
+                </div>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 </body>
 </html>

@@ -149,6 +149,11 @@ function getPaginationUrl($page) {
         $('#closeSidebar').on('click', function() {
             $('#sidebar').addClass('-translate-x-full');
         });
+
+        // Print functionality
+        window.printPage = function() {
+            window.print();
+        };
      });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -185,6 +190,41 @@ $(document).ready(function() {
   });
 });
 </script>
+<style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #sidebar, nav, .hidden-print, button, .filter-section {
+                display: none !important;
+            }
+            .print-section, .print-section * {
+                visibility: visible;
+            }
+            .print-section {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            table, th, td {
+                border: 1px solid #ddd;
+            }
+            th {
+                background-color: #f2f2f2 !important;
+                color: black !important;
+                -webkit-print-color-adjust: exact;
+            }
+            .print-header {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
 </head>
 
 <body class="flex h-screen">
@@ -238,6 +278,32 @@ $(document).ready(function() {
                  class="py-2 px-4 bg-primarycol border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-fourth focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primarycol">
             Search
           </button>
+        </div>
+        
+        <!-- Export Options -->
+        <div class="flex items-center space-x-2 ml-auto">
+          <div class="text-sm font-medium text-gray-700">Export as:</div>
+          <a href="javascript:void(0)" onclick="printPage()" 
+             class="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm inline-flex items-center text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z" />
+            </svg>
+            Print
+          </a>
+          <a href="generate_pdf.php?branch_id=<?= $branchId ?>&search=<?= urlencode($search) ?>&start_date=<?= urlencode($start_date) ?>&end_date=<?= urlencode($end_date) ?>" 
+             class="py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-md shadow-sm inline-flex items-center text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414a1 1 0 01-.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            PDF
+          </a>
+          <a href="generate_excel.php?branch_id=<?= $branchId ?>&search=<?= urlencode($search) ?>&start_date=<?= urlencode($start_date) ?>&end_date=<?= urlencode($end_date) ?>" 
+             class="py-2 px-3 bg-green-600 hover:bg-green-700 text-white rounded-md shadow-sm inline-flex items-center text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Excel
+          </a>
         </div>
         
         <!-- Keep any existing hidden fields -->
