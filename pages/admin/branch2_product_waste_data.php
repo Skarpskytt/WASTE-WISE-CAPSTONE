@@ -24,7 +24,7 @@ $countQuery = "SELECT COUNT(*) FROM product_waste pw
                JOIN products p ON pw.product_id = p.id
                JOIN users u ON pw.user_id = u.id
                WHERE pw.branch_id = ?";
-$dataQuery = "SELECT pw.*, p.name as product_name, p.category, 
+$dataQuery = "SELECT pw.*, p.name as product_name, p.category, p.quantity_produced as product_quantity_produced,
               CONCAT(u.fname, ' ', u.lname) as staff_name
               FROM product_waste pw
               JOIN products p ON pw.product_id = p.id
@@ -293,7 +293,7 @@ function getPaginationUrl($page) {
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['category']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(date('M d, Y', strtotime($item['waste_date']))) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['waste_quantity']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['quantity_produced']) ?></td>
+                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['product_quantity_produced']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['quantity_sold']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm font-medium text-gray-700">₱<?= htmlspecialchars(number_format($item['waste_value'], 2)) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['waste_reason'])) ?></td>

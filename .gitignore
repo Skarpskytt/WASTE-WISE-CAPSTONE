@@ -14,3 +14,11 @@
 
 # Database Configuration
 config/db_config.php
+config/db_connect.php
+config/session_handler.php
+
+# Sensitive or environment-specific files
+.env.local
+.env.development
+.env.test
+.env.production

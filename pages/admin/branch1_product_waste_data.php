@@ -24,7 +24,7 @@ $countQuery = "SELECT COUNT(*) FROM product_waste pw
                JOIN products p ON pw.product_id = p.id
                JOIN users u ON pw.user_id = u.id
                WHERE pw.branch_id = ?";
-$dataQuery = "SELECT pw.*, p.name as product_name, p.category, 
+$dataQuery = "SELECT pw.*, p.name as product_name, p.category, p.quantity_produced as product_quantity_produced,
               CONCAT(u.fname, ' ', u.lname) as staff_name
               FROM product_waste pw
               JOIN products p ON pw.product_id = p.id
@@ -258,6 +258,10 @@ $(document).ready(function() {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
             <span class="font-semibold">Active filters:</span>
+            <?php if (!empty($search)): ?><span class="ml-2 mr-2">Search: "<?= htmlspecialchars($search) ?>"</span><?php endif; ?>
+            <?php if (!empty($start_date)): ?><span class="mr-2">From: <?= htmlspecialchars($start_date) ?></span><?php endif; ?>
+            <?php if (!empty($end_date)): ?><span>To: <?= htmlspecialchars($end_date) ?></span><?php endif; ?>
+          </div>
         </div>
       <?php endif; ?>
       
@@ -287,7 +291,7 @@ $(document).ready(function() {
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['category']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(date('M d, Y', strtotime($item['waste_date']))) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['waste_quantity']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['quantity_produced']) ?></td>
+                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['product_quantity_produced']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['quantity_sold']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm font-medium text-gray-700">₱<?= htmlspecialchars(number_format($item['waste_value'], 2)) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['waste_reason'])) ?></td>
