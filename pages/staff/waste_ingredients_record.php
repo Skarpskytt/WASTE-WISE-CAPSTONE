@@ -184,6 +184,7 @@ try {
             $('#toggleSidebar').on('click', function() {
                 $('#sidebar').toggleClass('-translate-x-full');
             });
+            
             $('#closeSidebar').on('click', function() {
                 $('#sidebar').addClass('-translate-x-full');
             });
@@ -209,46 +210,22 @@ try {
                 $('#edit_notes').val(notes);
                 $('#edit_ingredient_value').val(ingredientValue);
                 
-                // Open the modal
-                $('#edit_modal').show();
+                // Open the modal using DaisyUI's modal API
+                document.getElementById('edit_modal').showModal();
             });
             
-            $('.close-modal').on('click', function() {
-                $('.modal').hide();
-            });
-            
-            // Close modal when clicking outside
-            $(window).on('click', function(event) {
-                if ($(event.target).hasClass('modal')) {
-                    $('.modal').hide();
-                }
+            // Open delete confirmation modal
+            $('.delete-waste-btn').on('click', function() {
+                const wasteId = $(this).data('id');
+                
+                // Set the waste ID in the delete form
+                $('#delete_waste_id').val(wasteId);
+                
+                // Open the modal using DaisyUI's modal API
+                document.getElementById('delete_modal').showModal();
             });
         });
     </script>
-    <style>
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            z-index: 1000;
-            padding: 50px;
-            overflow-y: auto;
-        }
-        
-        .modal-content {
-            background-color: white;
-            margin: auto;
-            width: 100%;
-            max-width: 600px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-    </style>
 </head>
 
 <body class="flex min-h-screen bg-gray-50">
@@ -373,36 +350,33 @@ try {
                                     echo "<td>" . htmlspecialchars(ucfirst($record['disposal_method'])) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['staff_name']) . "</td>";
                                     echo "<td class='p-2'>
-                                            <div class='flex justify-center space-x-2'>
-                                                <button 
-                                                    class='edit-waste-btn rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'
-                                                    data-id='" . $record['id'] . "'
-                                                    data-waste-quantity='" . $record['waste_quantity'] . "'
-                                                    data-waste-date='" . $record['waste_date'] . "'
-                                                    data-waste-reason='" . $record['waste_reason'] . "'
-                                                    data-production-stage='" . $record['production_stage'] . "'
-                                                    data-disposal-method='" . $record['disposal_method'] . "'
-                                                    data-notes='" . htmlspecialchars($record['notes']) . "'
-                                                    data-ingredient-value='" . ($record['waste_value'] / $record['waste_quantity']) . "'>
-                                                    <!-- Edit Icon -->
-                                                    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                                                        <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
-                                                    </svg>
-                                                    Edit
-                                                </button>
-                                                
-                                                <form method='POST' onsubmit='return confirm(\"Are you sure you want to delete this waste record?\");' class='inline'>
-                                                    <input type='hidden' name='waste_id' value='" . $record['id'] . "'>
-                                                    <button type='submit' name='delete_waste' class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
-                                                        <!-- Delete Icon -->
-                                                        <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                                                            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
-                                                        </svg>
-                                                        Delete
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </td>";
+    <div class='flex justify-center space-x-2'>
+        <button 
+            class='edit-waste-btn btn btn-sm btn-outline btn-success'
+            data-id='" . $record['id'] . "'
+            data-waste-quantity='" . $record['waste_quantity'] . "'
+            data-waste-date='" . $record['waste_date'] . "'
+            data-waste-reason='" . $record['waste_reason'] . "'
+            data-production-stage='" . $record['production_stage'] . "'
+            data-disposal-method='" . $record['disposal_method'] . "'
+            data-notes='" . htmlspecialchars($record['notes']) . "'
+            data-ingredient-value='" . ($record['waste_value'] / $record['waste_quantity']) . "'>
+            <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
+            </svg>
+            Edit
+        </button>
+        
+        <button 
+            class='delete-waste-btn btn btn-sm btn-outline btn-error'
+            data-id='" . $record['id'] . "'>
+            <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+            </svg>
+            Delete
+        </button>
+    </div>
+</td>";
                                     echo "</tr>";
                                 }
                             } else {
@@ -437,131 +411,145 @@ try {
     </div>
     
     <!-- Edit Modal -->
-    <div id="edit_modal" class="modal">
-        <div class="modal-content p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">Edit Ingredient Waste Record</h3>
-                <button class="close-modal text-gray-600 hover:text-gray-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            
-            <form method="POST">
-                <input type="hidden" id="edit_waste_id" name="waste_id">
-                <input type="hidden" id="edit_ingredient_value" name="ingredient_value">
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Quantity Wasted
-                        </label>
-                        <input type="number"
-                            id="edit_waste_quantity"
-                            name="waste_quantity"
-                            min="0.01"
-                            step="any"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Date of Waste
-                        </label>
-                        <input type="date"
-                            id="edit_waste_date"
-                            name="waste_date"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Production Stage
-                        </label>
-                        <select 
-                            id="edit_production_stage"
-                            name="production_stage"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                            <option value="">Select Stage</option>
-                            <option value="preparation">Ingredient Preparation</option>
-                            <option value="mixing">Mixing/Dough Making</option>
-                            <option value="proofing">Proofing</option>
-                            <option value="baking">Baking</option>
-                            <option value="finishing">Finishing/Decorating</option>
-                            <option value="storage">Storage</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Waste Reason
-                        </label>
-                        <select 
-                            id="edit_waste_reason"
-                            name="waste_reason"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                            <option value="">Select Reason</option>
-                            <option value="expired">Expired</option>
-                            <option value="spoiled">Spoiled</option>
-                            <option value="over-measured">Over-measured</option>
-                            <option value="failed_batch">Failed Batch</option>
-                            <option value="spilled">Spilled During Production</option>
-                            <option value="quality_control">Quality Control Rejection</option>
-                            <option value="contaminated">Contaminated</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Disposal Method
-                        </label>
-                        <select 
-                            id="edit_disposal_method"
-                            name="disposal_method"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                            <option value="">Select Method</option>
-                            <option value="compost">Compost</option>
-                            <option value="trash">Trash</option>
-                            <option value="donation">Food Donation</option>
-                            <option value="animal_feed">Animal Feed</option>
-                            <option value="repurposed">Repurposed</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                    
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Notes (optional)
-                        </label>
-                        <textarea 
-                            id="edit_notes"
-                            name="notes"
-                            placeholder="Additional details about this waste incident"
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary"
-                            rows="2"
-                        ></textarea>
-                    </div>
-                </div>
-                
-                <div class="flex justify-end gap-3 mt-4">
-                    <button type="button" class="close-modal px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100">
-                        Cancel
-                    </button>
-                    <button type="submit" name="update_waste" class="px-4 py-2 bg-primarycol text-white rounded-md hover:bg-fourth">
-                        Update Record
-                    </button>
-                </div>
+    <dialog id="edit_modal" class="modal">
+    <div class="modal-box w-11/12 max-w-3xl">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg text-primarycol">Edit Ingredient Waste Record</h3>
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
             </form>
         </div>
+        <form method="POST">
+            <input type="hidden" id="edit_waste_id" name="waste_id">
+            <input type="hidden" id="edit_ingredient_value" name="ingredient_value">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Quantity Wasted
+                    </label>
+                    <input type="number"
+                        id="edit_waste_quantity"
+                        name="waste_quantity"
+                        min="0.01"
+                        step="any"
+                        required
+                        class="input input-bordered w-full">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Date of Waste
+                    </label>
+                    <input type="date"
+                        id="edit_waste_date"
+                        name="waste_date"
+                        required
+                        class="input input-bordered w-full">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Production Stage
+                    </label>
+                    <select 
+                        id="edit_production_stage"
+                        name="production_stage"
+                        required
+                        class="select select-bordered w-full">
+                        <option value="">Select Stage</option>
+                        <option value="preparation">Ingredient Preparation</option>
+                        <option value="mixing">Mixing/Dough Making</option>
+                        <option value="proofing">Proofing</option>
+                        <option value="baking">Baking</option>
+                        <option value="finishing">Finishing/Decorating</option>
+                        <option value="storage">Storage</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Waste Reason
+                    </label>
+                    <select 
+                        id="edit_waste_reason"
+                        name="waste_reason"
+                        required
+                        class="select select-bordered w-full">
+                        <option value="">Select Reason</option>
+                        <option value="expired">Expired</option>
+                        <option value="spoiled">Spoiled</option>
+                        <option value="over-measured">Over-measured</option>
+                        <option value="failed_batch">Failed Batch</option>
+                        <option value="spilled">Spilled During Production</option>
+                        <option value="quality_control">Quality Control Rejection</option>
+                        <option value="contaminated">Contaminated</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Disposal Method
+                    </label>
+                    <select 
+                        id="edit_disposal_method"
+                        name="disposal_method"
+                        required
+                        class="select select-bordered w-full">
+                        <option value="">Select Method</option>
+                        <option value="compost">Compost</option>
+                        <option value="trash">Trash</option>
+                        <option value="donation">Food Donation</option>
+                        <option value="animal_feed">Animal Feed</option>
+                        <option value="repurposed">Repurposed</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Notes (optional)
+                    </label>
+                    <textarea 
+                        id="edit_notes"
+                        name="notes"
+                        placeholder="Additional details about this waste incident"
+                        class="textarea textarea-bordered w-full"
+                        rows="2"
+                    ></textarea>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+  <button type="button" onclick="document.getElementById('edit_modal').close();" class="btn">Cancel</button>
+  <button type="submit" name="update_waste" class="btn bg-primarycol text-white hover:bg-fourth">
+    Update Record
+  </button>
+</div>
+
+        </form>
     </div>
+</dialog>
+
+<!-- Delete Confirmation Modal -->
+<dialog id="delete_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-red-600">Delete Waste Record</h3>
+        <p class="py-4">Are you sure you want to delete this waste record? This action cannot be undone.</p>
+        <form method="POST">
+            <input type="hidden" id="delete_waste_id" name="waste_id">
+            <div class="modal-action">
+  <button type="button" onclick="document.getElementById('delete_modal').close();" class="btn">Cancel</button>
+  <button type="submit" name="delete_waste" class="btn btn-error text-white">
+    Delete Record
+  </button>
+</div>
+
+        </form>
+    </div>
+</dialog>
 </body>
 </html>
 

@@ -26,11 +26,10 @@ if (isset($_POST['delete_waste'])) {
 if (isset($_POST['update_waste'])) {
     $wasteId = $_POST['waste_id'] ?? 0;
     $wasteQuantity = $_POST['waste_quantity'] ?? null;
-    $quantityProduced = $_POST['quantity_produced'] ?? null;
-    $quantitySold = $_POST['quantity_sold'] ?? null;
     $wasteDate = $_POST['waste_date'] ?? null;
     $wasteReason = $_POST['waste_reason'] ?? null;
     $disposalMethod = $_POST['disposal_method'] ?? null;
+    $productionStage = $_POST['production_stage'] ?? null;
     $notes = $_POST['notes'] ?? null;
     $costPerUnit = $_POST['product_value'] ?? 0;
     $wasteValue = $wasteQuantity * $costPerUnit;
@@ -39,10 +38,9 @@ if (isset($_POST['update_waste'])) {
         $updateStmt = $pdo->prepare("
             UPDATE product_waste 
             SET waste_quantity = ?, 
-                quantity_produced = ?,
-                quantity_sold = ?,
                 waste_date = ?,
                 waste_reason = ?,
+                production_stage = ?,
                 disposal_method = ?,
                 notes = ?,
                 waste_value = ?
@@ -51,10 +49,9 @@ if (isset($_POST['update_waste'])) {
         
         $updateStmt->execute([
             $wasteQuantity,
-            $quantityProduced,
-            $quantitySold,
             date('Y-m-d H:i:s', strtotime($wasteDate)),
             $wasteReason,
+            $productionStage,
             $disposalMethod,
             $notes,
             $wasteValue,
@@ -90,7 +87,8 @@ $countParams = [$branchId];
 
 // Apply search filter to count query
 if (!empty($search)) {
-    $countSql .= " AND (p.name LIKE ? OR w.waste_reason LIKE ? OR w.disposal_method LIKE ?)";
+    $countSql .= " AND (p.name LIKE ? OR w.waste_reason LIKE ? OR w.disposal_method LIKE ? OR w.production_stage LIKE ?)";
+    $countParams[] = "%$search%";
     $countParams[] = "%$search%";
     $countParams[] = "%$search%";
     $countParams[] = "%$search%";
@@ -115,14 +113,14 @@ try {
     $error = "Error calculating pagination: " . $e->getMessage();
 }
 
-// Build the SQL query to get waste records
+// Build the SQL query to get waste records - updated to use staff_id instead of user_id
 $sql = "
     SELECT w.*, p.name as product_name, p.category as product_category, 
            p.price_per_unit, p.image as product_image, p.quantity_produced as original_quantity_produced,
            CONCAT(u.fname, ' ', u.lname) as staff_name
     FROM product_waste w
     JOIN products p ON w.product_id = p.id
-    JOIN users u ON w.user_id = u.id
+    JOIN users u ON w.staff_id = u.id
     WHERE w.branch_id = ?
 ";
 
@@ -130,7 +128,8 @@ $params = [$branchId];
 
 // Apply search filter
 if (!empty($search)) {
-    $sql .= " AND (p.name LIKE ? OR w.waste_reason LIKE ? OR w.disposal_method LIKE ?)";
+    $sql .= " AND (p.name LIKE ? OR w.waste_reason LIKE ? OR w.disposal_method LIKE ? OR w.production_stage LIKE ?)";
+    $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
@@ -193,10 +192,9 @@ try {
             $('.edit-waste-btn').on('click', function() {
                 const wasteId = $(this).data('id');
                 const wasteQuantity = $(this).data('waste-quantity');
-                const quantityProduced = $(this).data('quantity-produced');
-                const quantitySold = $(this).data('quantity-sold');
                 const wasteDate = $(this).data('waste-date');
                 const wasteReason = $(this).data('waste-reason');
+                const productionStage = $(this).data('production-stage');
                 const disposalMethod = $(this).data('disposal-method');
                 const notes = $(this).data('notes');
                 const productValue = $(this).data('product-value');
@@ -204,27 +202,26 @@ try {
                 // Set the values in the edit form
                 $('#edit_waste_id').val(wasteId);
                 $('#edit_waste_quantity').val(wasteQuantity);
-                $('#edit_quantity_produced').val(quantityProduced);
-                $('#edit_quantity_sold').val(quantitySold);
                 $('#edit_waste_date').val(wasteDate.split(' ')[0]); // Get only the date part
                 $('#edit_waste_reason').val(wasteReason);
+                $('#edit_production_stage').val(productionStage);
                 $('#edit_disposal_method').val(disposalMethod);
                 $('#edit_notes').val(notes);
                 $('#edit_product_value').val(productValue);
                 
-                // Open the modal
-                $('#edit_modal').show();
+                // Open the modal using DaisyUI's modal API
+                document.getElementById('edit_modal').showModal();
             });
             
-            $('.close-modal').on('click', function() {
-                $('.modal').hide();
-            });
-            
-            // Close modal when clicking outside
-            $(window).on('click', function(event) {
-                if ($(event.target).hasClass('modal')) {
-                    $('.modal').hide();
-                }
+            // Open delete confirmation modal
+            $('.delete-waste-btn').on('click', function() {
+                const wasteId = $(this).data('id');
+                
+                // Set the waste ID in the delete form
+                $('#delete_waste_id').val(wasteId);
+                
+                // Open the modal using DaisyUI's modal API
+                document.getElementById('delete_modal').showModal();
             });
         });
     </script>
@@ -260,14 +257,19 @@ try {
     <div class="p-6 w-full">
         <div class="mb-6">
         <nav class="mb-4">
-      <ol class="flex items-center gap-2 text-gray-600">
-        <li><a href="product_data.php" class="hover:text-primarycol">Product</a></li>
-        <li class="text-gray-400">/</li>
-        <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
-        <li class="text-gray-400">/</li>
-        <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
-      </ol>
-    </nav>
+                <ol class="flex items-center gap-2 text-gray-600">
+                    <li><a href="product_data.php" class="hover:text-primarycol">Product</a></li>
+                    <li class="text-gray-400">/</li>
+                    <li><a href="record_sales.php" class="hover:text-primarycol">Record Sales</a></li>
+                    <li class="text-gray-400">/</li>
+                    <li><a href="product_stocks.php" class="hover:text-primarycol">Product Stocks</a></li>
+                    <li class="text-gray-400">/</li>
+                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+                    <li class="text-gray-400">/</li>
+                    
+                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+                </ol>
+            </nav>
             <h1 class="text-3xl font-bold mb-2 text-primarycol">Product Waste Records</h1>
             <p class="text-gray-500">View and manage all waste records for bakery products</p>
         </div>
@@ -347,9 +349,9 @@ try {
                                 <th>Product</th>
                                 <th>Category</th>
                                 <th>Waste Date</th>
-                                <th>Produced</th>
-                                <th>Sold</th>
+                                <th>Original Stock</th>
                                 <th>Wasted</th>
+                                <th>Production Stage</th>
                                 <th>Reason</th>
                                 <th>Disposal Method</th>
                                 <th>Staff</th>
@@ -370,85 +372,79 @@ try {
                                     echo "<td>" . htmlspecialchars($record['product_category']) . "</td>";
                                     echo "<td>" . htmlspecialchars($formattedDate) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['original_quantity_produced']) . "</td>";
-                                    echo "<td>" . htmlspecialchars($record['quantity_sold']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['waste_quantity']) . "</td>";
+                                    echo "<td>" . htmlspecialchars(ucfirst($record['production_stage'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['waste_reason'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['disposal_method'])) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['staff_name']) . "</td>";
                                     echo "<td class='p-2'>
                                             <div class='flex justify-center space-x-2'>
                                                 <button 
-                                                    class='edit-waste-btn rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center'
+                                                    class='edit-waste-btn btn btn-sm btn-outline btn-success'
                                                     data-id='" . $record['id'] . "'
                                                     data-waste-quantity='" . $record['waste_quantity'] . "'
-                                                    data-quantity-produced='" . $record['quantity_produced'] . "'
-                                                    data-quantity-sold='" . $record['quantity_sold'] . "'
                                                     data-waste-date='" . $record['waste_date'] . "'
                                                     data-waste-reason='" . $record['waste_reason'] . "'
+                                                    data-production-stage='" . $record['production_stage'] . "'
                                                     data-disposal-method='" . $record['disposal_method'] . "'
                                                     data-notes='" . htmlspecialchars($record['notes']) . "'
                                                     data-product-value='" . ($record['waste_value'] / $record['waste_quantity']) . "'>
-                                                    <!-- Edit Icon -->
                                                     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
                                                         <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
                                                     </svg>
                                                     Edit
                                                 </button>
                                                 
-                                                <form method='POST' onsubmit='return confirm(\"Are you sure you want to delete this waste record?\");' class='inline'>
-                                                    <input type='hidden' name='waste_id' value='" . $record['id'] . "'>
-                                                    <button type='submit' name='delete_waste' class='rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center'>
-                                                        <!-- Delete Icon -->
-                                                        <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                                                            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
-                                                        </svg>
-                                                        Delete
-                                                    </button>
-                                                </form>
+                                                <button 
+                                                    class='delete-waste-btn btn btn-sm btn-outline btn-error'
+                                                    data-id='" . $record['id'] . "'>
+                                                    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                                        <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+                                                    </svg>
+                                                    Delete
+                                                </button>
                                             </div>
                                         </td>";
                                     echo "</tr>";
                                 }
                             } else {
-                                echo "<tr><td colspan='12' class='text-center py-4'>No waste records found.</td></tr>";
+                                echo "<tr><td colspan='11' class='text-center py-4'>No waste records found.</td></tr>";
                             }
                             ?>
                         </tbody>
                     </table>
                 </div>
                 <?php if (isset($totalPages) && $totalPages > 1): ?>
-<div class="flex justify-center mt-4">
-  <div class="join">
-    <?php if ($page > 1): ?>
-      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
-    <?php endif; ?>
-    
-    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
-        <?= $i ?>
-      </a>
-    <?php endfor; ?>
-    
-    <?php if ($page < $totalPages): ?>
-      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
-    <?php endif; ?>
-  </div>
-</div>
-<?php endif; ?>
+                <div class="flex justify-center mt-4">
+                  <div class="join">
+                    <?php if ($page > 1): ?>
+                      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+                    <?php endif; ?>
+                    
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                        <?= $i ?>
+                      </a>
+                    <?php endfor; ?>
+                    
+                    <?php if ($page < $totalPages): ?>
+                      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+                    <?php endif; ?>
+                  </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
     
     <!-- Edit Modal -->
-    <div id="edit_modal" class="modal">
-        <div class="modal-content p-6">
+    <dialog id="edit_modal" class="modal">
+        <div class="modal-box w-11/12 max-w-3xl">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">Edit Waste Record</h3>
-                <button class="close-modal text-gray-600 hover:text-gray-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                <h3 class="font-bold text-lg text-primarycol">Edit Product Waste Record</h3>
+                <form method="dialog">
+                    <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+                </form>
             </div>
             
             <form method="POST">
@@ -456,32 +452,6 @@ try {
                 <input type="hidden" id="edit_product_value" name="product_value">
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Quantity Produced
-                        </label>
-                        <input type="number"
-                            id="edit_quantity_produced"
-                            name="quantity_produced"
-                            min="0.01"
-                            step="any"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Quantity Sold
-                        </label>
-                        <input type="number"
-                            id="edit_quantity_sold"
-                            name="quantity_sold"
-                            min="0"
-                            step="any"
-                            required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-                    
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">
                             Quantity Wasted
@@ -492,7 +462,7 @@ try {
                             min="0.01"
                             step="any"
                             required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            class="input input-bordered w-full">
                     </div>
                     
                     <div>
@@ -503,7 +473,25 @@ try {
                             id="edit_waste_date"
                             name="waste_date"
                             required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            class="input input-bordered w-full">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Production Stage
+                        </label>
+                        <select 
+                            id="edit_production_stage"
+                            name="production_stage"
+                            required
+                            class="select select-bordered w-full">
+                            <option value="">Select Stage</option>
+                            <option value="Mixing">Mixing</option>
+                            <option value="Baking">Baking</option>
+                            <option value="Packaging">Packaging</option>
+                            <option value="Storage">Storage</option>
+                            <option value="Sales">Sales</option>
+                        </select>
                     </div>
                     
                     <div>
@@ -514,7 +502,7 @@ try {
                             id="edit_waste_reason"
                             name="waste_reason"
                             required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            class="select select-bordered w-full">
                             <option value="">Select Reason</option>
                             <option value="overproduction">Overproduction</option>
                             <option value="expired">Expired</option>
@@ -535,7 +523,7 @@ try {
                             id="edit_disposal_method"
                             name="disposal_method"
                             required
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            class="select select-bordered w-full">
                             <option value="">Select Method</option>
                             <option value="donation">Donation</option>
                             <option value="compost">Compost</option>
@@ -554,23 +542,38 @@ try {
                             id="edit_notes"
                             name="notes"
                             placeholder="Additional details about this waste incident"
-                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary"
+                            class="textarea textarea-bordered w-full"
                             rows="2"
                         ></textarea>
                     </div>
                 </div>
                 
-                <div class="flex justify-end gap-3 mt-4">
-                    <button type="button" class="close-modal px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100">
-                        Cancel
-                    </button>
-                    <button type="submit" name="update_waste" class="px-4 py-2 bg-primarycol text-white rounded-md hover:bg-fourth">
+                <div class="modal-action">
+                    <button type="button" onclick="document.getElementById('edit_modal').close();" class="btn">Cancel</button>
+                    <button type="submit" name="update_waste" class="btn bg-primarycol text-white hover:bg-fourth">
                         Update Record
                     </button>
                 </div>
             </form>
         </div>
-    </div>
+    </dialog>
+
+    <!-- Delete Confirmation Modal -->
+    <dialog id="delete_modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-red-600">Delete Waste Record</h3>
+            <p class="py-4">Are you sure you want to delete this waste record? This action cannot be undone.</p>
+            <form method="POST">
+                <input type="hidden" id="delete_waste_id" name="waste_id">
+                <div class="modal-action">
+                    <button type="button" onclick="document.getElementById('delete_modal').close();" class="btn">Cancel</button>
+                    <button type="submit" name="delete_waste" class="btn btn-error text-white">
+                        Delete Record
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
 </body>
 </html>
 

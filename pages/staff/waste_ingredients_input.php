@@ -37,16 +37,16 @@ try {
     die("Error retrieving data: " . $e->getMessage());
 }
 
+// Remove responsible_person from the form processing
 if (isset($_POST['submitwaste'])) {
     // Extract form data
-    $userId = $_SESSION['user_id'];
+    $userId = $_SESSION['user_id'];  // This is the staff_id of the logged-in user
     $ingredientId = $_POST['ingredient_id'] ?? null;
     $wasteDate = $_POST['waste_date'] ?? null;
     $wasteQuantity = $_POST['waste_quantity'] ?? null;
     $costPerUnit = $_POST['ingredient_value'] ?? 0;
     $wasteValue = $wasteQuantity * $costPerUnit;
     $wasteReason = $_POST['waste_reason'] ?? null;
-    $responsiblePerson = $_POST['responsible_person'] ?? null;
     $branchId = $_SESSION['branch_id'];
     
     // Tracking fields
@@ -55,32 +55,30 @@ if (isset($_POST['submitwaste'])) {
     $disposalMethod = $_POST['disposal_method'] ?? null;
     $notes = $_POST['notes'] ?? null;
     
-    // Validate form data
+    // Validate form data - remove responsible_person from validation
     if (!$userId || !$ingredientId || !$wasteDate || !$wasteQuantity || !$wasteReason || 
-        !$disposalMethod || !$productionStage || !$responsiblePerson) {
+        !$disposalMethod || !$productionStage) {
         $errorMessage = 'Please fill in all required fields.';
     } else {
-        // Start transaction for waste recording and stock update
         try {
             $pdo->beginTransaction();
             
-            // Insert waste entry into the ingredients_waste table
+            // Modify the INSERT query to use staff_id instead of responsible_person
             $stmt = $pdo->prepare("
                 INSERT INTO ingredients_waste (
                     staff_id, ingredient_id, waste_date, waste_quantity, waste_value, 
-                    waste_reason, responsible_person, batch_number, production_stage, disposal_method,
+                    waste_reason, batch_number, production_stage, disposal_method,
                     notes, created_at, branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
-                $userId, 
+                $userId,  // Use staff_id directly
                 $ingredientId,  
                 date('Y-m-d H:i:s', strtotime($wasteDate)), 
                 $wasteQuantity, 
                 $wasteValue, 
                 $wasteReason, 
-                $responsiblePerson, 
                 $batchNumber,
                 $productionStage, 
                 $disposalMethod, 
@@ -514,8 +512,6 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             ></textarea>
                                         </div>
                                     </div>
-                                    
-                                    <input type="hidden" name="responsible_person" value="<?= htmlspecialchars($userName) ?>">
                                     
                                     <div class="mt-4">
                                         <button type="submit" name="submitwaste" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition-colors">

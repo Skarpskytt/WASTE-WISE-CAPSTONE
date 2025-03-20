@@ -97,6 +97,14 @@ if (isset($_GET['mark_all_read'])) {
               <span class="flex-1 ms-3 whitespace-nowrap">Add Products</span>
             </a>
             </li>
+            <li>
+            <a href="/capstone/WASTE-WISE-CAPSTONE/pages/staff/record_sales.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <span class="flex-1 ms-3 whitespace-nowrap">Record Sales</span>
+            </a>
+            </li>
 
             <li>
             <a href="/capstone/WASTE-WISE-CAPSTONE/pages/staff/product_stocks.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
@@ -152,7 +160,6 @@ if (isset($_GET['mark_all_read'])) {
               <span class="flex-1 ms-3 whitespace-nowrap">Record Waste</span>
             </a>
             </li>
-
             <li>
             <a href="/capstone/WASTE-WISE-CAPSTONE/pages/staff/waste_ingredients_record.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">

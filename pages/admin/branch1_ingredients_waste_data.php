@@ -23,11 +23,12 @@ $ing_offset = ($ing_page - 1) * $ing_per_page;
 
 // Fetch Ingredient Waste Data with LIMIT/OFFSET FOR THIS BRANCH
 $ingStmt = $pdo->prepare("
-    SELECT iw.*, i.ingredient_name, i.category, i.unit,
-           CONCAT(u.fname, ' ', u.lname) as staff_name
+    SELECT iw.id, i.ingredient_name, i.category, i.unit,
+           iw.waste_date, iw.waste_quantity, iw.waste_value, 
+           iw.waste_reason, iw.production_stage, iw.disposal_method,
+           iw.batch_number, iw.responsible_person, iw.notes
     FROM ingredients_waste iw
     JOIN ingredients i ON iw.ingredient_id = i.id
-    JOIN users u ON iw.user_id = u.id
     WHERE iw.branch_id = :branch_id
     ORDER BY iw.waste_date DESC
     LIMIT :limit OFFSET :offset
@@ -126,7 +127,7 @@ $branchName = $branchStmt->fetchColumn() ?: "Branch 1";
         <a href="export_waste_report_pdf.php?branch_id=<?= $branchId ?>&type=ingredient" 
            class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md inline-flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 00-12.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
           Export to PDF
         </a>
@@ -157,7 +158,8 @@ $branchName = $branchStmt->fetchColumn() ?: "Branch 1";
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Reason</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Stage</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Disposal</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Staff</th>
+              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Batch Number</th>
+              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Responsible Person</th>
             </tr>
           </thead>
           <tbody>
@@ -173,12 +175,13 @@ $branchName = $branchStmt->fetchColumn() ?: "Branch 1";
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($ing['waste_reason'])) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($ing['production_stage'])) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($ing['disposal_method'])) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($ing['staff_name']) ?></td>
+                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($ing['batch_number']) ?></td>
+                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($ing['responsible_person']) ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php else: ?>
               <tr>
-                <td colspan="10" class="py-4 px-6 text-center text-gray-500">No ingredient waste records found.</td>
+                <td colspan="11" class="py-4 px-6 text-center text-gray-500">No ingredient waste records found.</td>
               </tr>
             <?php endif; ?>
           </tbody>

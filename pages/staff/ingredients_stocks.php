@@ -5,6 +5,49 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+// Handle edit/update action
+if (isset($_POST['update_stock'])) {
+    $ingredientId = $_POST['ingredient_id'] ?? 0;
+    $stockQuantity = $_POST['stock_quantity'] ?? 0;
+    $costPerUnit = $_POST['cost_per_unit'] ?? 0;
+    $expiryDate = $_POST['expiry_date'] ?? null;
+    
+    try {
+        $updateStmt = $pdo->prepare("
+            UPDATE ingredients 
+            SET stock_quantity = ?, 
+                cost_per_unit = ?,
+                expiry_date = ?
+            WHERE id = ? AND branch_id = ?
+        ");
+        
+        // Handle null expiry date
+        if (empty($expiryDate)) {
+            $expiryDate = null;
+        }
+        
+        $updateStmt->execute([
+            $stockQuantity,
+            $costPerUnit,
+            $expiryDate,
+            $ingredientId,
+            $_SESSION['branch_id']
+        ]);
+        
+        $updateSuccess = "Ingredient stock updated successfully!";
+        
+        // Redirect with success message
+        header("Location: ingredients_stocks.php?success=1&message=" . urlencode($updateSuccess));
+        exit;
+    } catch (PDOException $e) {
+        $updateError = "Error updating stock: " . $e->getMessage();
+        
+        // Redirect with error message
+        header("Location: ingredients_stocks.php?error=1&message=" . urlencode($updateError));
+        exit;
+    }
+}
+
 // Pagination setup
 $itemsPerPage = 10;
 $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
@@ -68,6 +111,29 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
       $('#closeSidebar').on('click', function() {
         $('#sidebar').addClass('-translate-x-full'); 
+      });
+      
+      // Edit Stock Modal
+      $('.edit-stock-btn').on('click', function() {
+        const ingredientId = $(this).data('id');
+        const stockQuantity = $(this).data('stock-quantity');
+        const costPerUnit = $(this).data('cost-per-unit');
+        const expiryDate = $(this).data('expiry-date');
+        
+        // Set values in the edit form
+        $('#edit_ingredient_id').val(ingredientId);
+        $('#edit_stock_quantity').val(stockQuantity);
+        $('#edit_cost_per_unit').val(costPerUnit);
+        
+        // Check if expiry date exists before setting
+        if (expiryDate) {
+          $('#edit_expiry_date').val(expiryDate.split(' ')[0]); // Get only the date part
+        } else {
+          $('#edit_expiry_date').val('');
+        }
+        
+        // Open the modal using DaisyUI's modal API
+        document.getElementById('edit_modal').showModal();
       });
     });
   </script>
@@ -163,6 +229,11 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
               // Default image
               $imgPath = '../../assets/images/default-ingredient.jpg';
             }
+            
+            // Format the expiry date for display
+            $expiryDateFormatted = !empty($ingredient['expiry_date']) 
+                ? date('Y-m-d', strtotime($ingredient['expiry_date'])) 
+                : 'N/A';
           ?>
             <tr>
               <td><?= $index + 1 ?></td>
@@ -175,12 +246,25 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <td><?= htmlspecialchars($ingredient['stock_quantity'] ?? 0) ?></td>
               <td><?= htmlspecialchars($ingredient['unit'] ?? '') ?></td>
               <td>₱<?= number_format($ingredient['cost_per_unit'] ?? 0, 2) ?></td>
-              <td><?= !empty($ingredient['expiry_date']) ? htmlspecialchars(date('Y-m-d', strtotime($ingredient['expiry_date']))) : 'N/A' ?></td>
+              <td><?= htmlspecialchars($expiryDateFormatted) ?></td>
               <td>
-                <a href="use_stock.php?id=<?= $ingredient['id'] ?>" 
-                  class="btn btn-sm bg-primarycol text-white hover:bg-green-700">
-                  Use Stock
-                </a>
+                <div class="flex gap-2">
+                  <button 
+                    class="edit-stock-btn btn btn-sm btn-outline btn-success"
+                    data-id="<?= $ingredient['id'] ?>"
+                    data-stock-quantity="<?= $ingredient['stock_quantity'] ?>"
+                    data-cost-per-unit="<?= $ingredient['cost_per_unit'] ?>"
+                    data-expiry-date="<?= $ingredient['expiry_date'] ?>">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13" />
+                    </svg>
+                    Edit
+                  </button>
+                  <a href="use_stock.php?id=<?= $ingredient['id'] ?>" 
+                    class="btn btn-sm bg-primarycol text-white hover:bg-green-700">
+                    Use Stock
+                  </a>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -227,9 +311,67 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
   </div>
 </div>
 
-<
-
-<!-- No content needed since all modal-related code was removed -->
+<!-- Edit Ingredient Stock Modal -->
+<dialog id="edit_modal" class="modal">
+  <div class="modal-box w-11/12 max-w-2xl">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-bold text-lg text-primarycol">Edit Ingredient Stock</h3>
+      <form method="dialog">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+      </form>
+    </div>
+    <form method="POST">
+      <input type="hidden" id="edit_ingredient_id" name="ingredient_id">
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Stock Quantity
+          </label>
+          <input type="number"
+            id="edit_stock_quantity"
+            name="stock_quantity"
+            min="0"
+            step="any"
+            required
+            class="input input-bordered w-full">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Cost Per Unit (₱)
+          </label>
+          <input type="number"
+            id="edit_cost_per_unit"
+            name="cost_per_unit"
+            min="0"
+            step="0.01"
+            required
+            class="input input-bordered w-full">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Expiry Date (optional)
+          </label>
+          <input type="date"
+            id="edit_expiry_date"
+            name="expiry_date"
+            class="input input-bordered w-full">
+        </div>
+      </div>
+      
+      <div class="modal-action">
+        <form method="dialog" class="flex gap-2">
+        <button type="button" onclick="document.getElementById('edit_modal').close();" class="btn">Cancel</button>
+          <button type="submit" name="update_stock" class="btn bg-primarycol text-white hover:bg-fourth">
+            Update Stock
+          </button>
+        </form>
+      </div>
+    </form>
+  </div>
+</dialog>
 
 </body>
 </html>
