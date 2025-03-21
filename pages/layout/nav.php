@@ -376,6 +376,7 @@ if (isset($_GET['mark_all_read'])) {
         </ul>
     </div>
 </div>
+
          </div>
      </div>
    </div>
