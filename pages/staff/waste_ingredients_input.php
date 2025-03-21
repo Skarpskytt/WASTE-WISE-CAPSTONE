@@ -21,17 +21,23 @@ if (!is_dir($uploadPath)) {
 $successMessage = '';
 $errorMessage = '';
 
+// Update the query to use the correct column names
 try {
     // Fetch only active ingredients (not expired and with stock > 0)
     $currentDate = date('Y-m-d');
     $ingStmt = $pdo->prepare("
-        SELECT * FROM ingredients 
-        WHERE branch_id = ? 
-        AND (expiry_date IS NULL OR expiry_date > ?) 
-        AND stock_quantity > 0 
-        ORDER BY id DESC
+        SELECT 
+            i.*,
+            COALESCE(SUM(w.waste_quantity), 0) as total_waste
+        FROM ingredients i
+        LEFT JOIN ingredients_waste w ON i.id = w.ingredient_id AND w.branch_id = ?
+        WHERE i.branch_id = ? 
+        AND (i.expiry_date IS NULL OR i.expiry_date > ?) 
+        AND i.stock_quantity > 0 
+        GROUP BY i.id
+        ORDER BY i.id DESC
     ");
-    $ingStmt->execute([$branchId, $currentDate]);
+    $ingStmt->execute([$branchId, $branchId, $currentDate]);
     $ingredients = $ingStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error retrieving data: " . $e->getMessage());
@@ -395,9 +401,26 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <p class="text-gray-600 text-sm mt-2">
                                     Cost: ₱<?= htmlspecialchars(number_format($ingredientCost, 2)) ?> per <?= htmlspecialchars($ingredientUnit) ?>
                                 </p>
-                                <p class="text-gray-600 text-sm mt-1">
-                                    Available Stock: <?= htmlspecialchars(number_format($ingredient['stock_quantity'], 2)) ?> <?= htmlspecialchars($ingredientUnit) ?>
-                                </p>
+                                
+                                <!-- Updated stock information box -->
+<div class="mt-3 p-2 bg-blue-50 rounded-md">
+    <h3 class="font-medium text-blue-800 text-sm">Stock Information</h3>
+    <div class="grid grid-cols-2 gap-1 mt-1 text-xs text-gray-600">
+        <?php if (isset($ingredient['quantity_purchased'])): ?>
+        <div>Original Stock:</div>
+        <div class="text-right font-medium"><?= htmlspecialchars($ingredient['quantity_purchased']) ?> <?= htmlspecialchars($ingredientUnit) ?></div>
+        <?php endif; ?>
+        
+        <?php if (isset($ingredient['total_waste'])): ?>
+        <div>Wasted So Far:</div>
+        <div class="text-right font-medium"><?= htmlspecialchars($ingredient['total_waste']) ?> <?= htmlspecialchars($ingredientUnit) ?></div>
+        <?php endif; ?>
+        
+        <div class="font-medium text-blue-700">Current Stock:</div>
+        <div class="text-right font-medium text-blue-700"><?= htmlspecialchars($ingredient['stock_quantity']) ?> <?= htmlspecialchars($ingredientUnit) ?></div>
+    </div>
+</div>
+
                             </div>
                             
                             <!-- Waste form -->

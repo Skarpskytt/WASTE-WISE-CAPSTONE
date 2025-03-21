@@ -225,30 +225,6 @@ try {
             });
         });
     </script>
-    <style>
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            z-index: 1000;
-            padding: 50px;
-            overflow-y: auto;
-        }
-        
-        .modal-content {
-            background-color: white;
-            margin: auto;
-            width: 100%;
-            max-width: 600px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-    </style>
 </head>
 
 <body class="flex min-h-screen bg-gray-50">
