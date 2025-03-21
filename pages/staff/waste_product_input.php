@@ -78,6 +78,14 @@ if (isset($_POST['submitwaste'])) {
                 date('Y-m-d H:i:s')
             ]);
             
+            // UPDATE THE STOCK QUANTITY - This is the missing part
+            $updateStockStmt = $pdo->prepare("
+                UPDATE products 
+                SET stock_quantity = stock_quantity - ? 
+                WHERE id = ? AND branch_id = ?
+            ");
+            $updateStockStmt->execute([$wasteQuantity, $productId, $branchId]);
+            
             // Check for status column in products table
             $checkProductTable = $pdo->prepare("SHOW COLUMNS FROM products LIKE 'status'");
             $checkProductTable->execute();
