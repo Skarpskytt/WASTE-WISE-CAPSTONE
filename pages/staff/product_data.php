@@ -62,7 +62,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
         } else {
             $targetPath = $uploadDir . $filename;
             if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
-                $itemImage = './uploads/products/' . $filename;
+                // Use a full server path for database storage
+                $itemImage = 'uploads/products/' . $filename;  // Remove the leading './'
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
             }
