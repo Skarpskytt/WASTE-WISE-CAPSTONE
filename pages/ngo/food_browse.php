@@ -187,6 +187,7 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 <head>
     <meta charset="UTF-8">
     <title>NGO Dashboard - Food Browse</title>
+    <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

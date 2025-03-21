@@ -4,7 +4,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // Use absolute path for includes
-require_once __DIR__ . '/config/session_handler.php';
+require_once 'config/session_handler.php';
 use CustomSession\SessionHandler;
 
 // Test session functionality
@@ -22,6 +22,7 @@ try {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login</title>
+  <link rel="icon" type="image/x-icon" href="assets/images/Company Logo.jpg">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
    tailwind.config = {

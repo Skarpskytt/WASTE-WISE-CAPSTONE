@@ -76,7 +76,7 @@ if (isset($_GET['mark_all_read'])) {
        <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
        <div class="mb-3">
         <a href="staff_dashboard.php" class="flex ms-2 md:me-24">
-           <img src="/capstone/WASTE-WISE-CAPSTONE/assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
+           <img src="../../assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
            <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Bea Bakes</span>
          </a>
         </div>

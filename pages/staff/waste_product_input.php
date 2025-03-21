@@ -124,6 +124,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Product Waste Tracking - WasteWise</title>
+    <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -215,7 +216,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
 
 <body class="flex min-h-screen bg-gray-50">
 
-    <?php include(__DIR__ . '/../layout/staff_nav.php'); ?>
+<?php include ('../layout/staff_nav.php'); ?>
 
     <div class="p-5 w-full">
         <div>

@@ -218,6 +218,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Donation History | WasteWise</title>
+    <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
     <script>

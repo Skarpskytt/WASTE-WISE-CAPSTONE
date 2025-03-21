@@ -151,6 +151,7 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Record Sales - WasteWise</title>
+    <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -204,7 +205,7 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 
 <body class="flex h-screen">
-    <?php include (__DIR__ . '/../layout/staff_nav.php'); ?>
+    <?php include ('../layout/staff_nav.php'); ?>
 
     <div class="p-7 w-full overflow-y-auto">
         <div>

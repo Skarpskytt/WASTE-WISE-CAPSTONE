@@ -11,6 +11,7 @@ if (!isset($_SESSION['temp_user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify OTP</title>
+    <link rel="icon" type="image/x-icon" href="../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50">
