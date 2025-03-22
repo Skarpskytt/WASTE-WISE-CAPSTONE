@@ -465,6 +465,16 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                 document.getElementById('receipt_modal').showModal();
             });
         });
+
+        // Make sure this code is present in the page
+        $('.confirm-receipt-btn').on('click', function() {
+            const requestId = $(this).data('id');
+            const productName = $(this).data('product');
+            
+            $('#modal_request_id').val(requestId);
+            $('#modal_product_name').textContent = productName;
+            document.getElementById('receipt_modal').showModal();
+        });
     </script>
 </body>
 </html>

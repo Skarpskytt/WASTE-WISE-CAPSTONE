@@ -26,7 +26,6 @@ if (isset($_POST['update_product'])) {
     $stockDate = $_POST['stock_date'] ?? '';
     $expiryDate = $_POST['expiry_date'] ?? '';
     $pricePerUnit = $_POST['price_per_unit'] ?? 0;
-    $quantityProduced = $_POST['quantity_produced'] ?? 0;
     $stockQuantity = $_POST['stock_quantity'] ?? 0;
     
     try {
@@ -37,7 +36,6 @@ if (isset($_POST['update_product'])) {
                 stock_date = ?,
                 expiry_date = ?,
                 price_per_unit = ?,
-                quantity_produced = ?,
                 stock_quantity = ?
             WHERE id = ? AND branch_id = ?
         ");
@@ -48,7 +46,6 @@ if (isset($_POST['update_product'])) {
             $stockDate,
             $expiryDate,
             $pricePerUnit,
-            $quantityProduced,
             $stockQuantity,
             $productId,
             $_SESSION['branch_id']
@@ -71,6 +68,7 @@ $countStmt = $pdo->prepare("
     FROM products 
     WHERE branch_id = ? 
     AND expiry_date > CURRENT_DATE
+    AND stock_quantity > 0
 ");
 $countStmt->execute([$_SESSION['branch_id']]);
 $totalProducts = $countStmt->fetchColumn();
@@ -82,6 +80,7 @@ $stmt = $pdo->prepare("
     FROM products 
     WHERE branch_id = ? 
     AND expiry_date > CURRENT_DATE
+    AND stock_quantity > 0
     ORDER BY id DESC 
     LIMIT ? OFFSET ?
 ");
@@ -224,8 +223,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <th>Stock Date</th>
                             <th>Expiry Date</th>
                             <th>Price/Unit</th>
-                            <th>Qty Produced</th>
-                            <th>Stock Qty</th>
+                            <th>Available Qty</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -243,7 +241,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <td><?= htmlspecialchars($product['stock_date']) ?></td>
                                 <td><?= htmlspecialchars($product['expiry_date']) ?></td>
                                 <td>₱<?= number_format($product['price_per_unit'], 2) ?></td>
-                                <td><?= htmlspecialchars($product['quantity_produced']) ?></td>
                                 <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
                                 <td class="p-2">
                                     <div class="flex justify-center space-x-2">

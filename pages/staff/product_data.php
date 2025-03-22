@@ -32,14 +32,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
     $stockDate = $_POST['stockdate'];
     $expiryDate = $_POST['expirydate'];
     $pricePerUnit = floatval($_POST['price_per_unit']);
-    $quantityProduced = intval($_POST['quantity_produced']);
     $stockQuantity = intval($_POST['stock_quantity']);
     $branchId = $_SESSION['branch_id'];
-
-    // Initially, set stock_quantity to be the same as quantity_produced
-    if (empty($_POST['stock_quantity'])) {
-        $stockQuantity = $quantityProduced;
-    }
 
     if (!$branchId) {
         $errors[] = "Error: Branch ID not found in session.";
@@ -89,10 +83,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
             $stmt = $pdo->prepare("
                 INSERT INTO products (
                     name, category, stock_date, expiry_date, price_per_unit, 
-                    quantity_produced, stock_quantity, image, branch_id
+                    stock_quantity, image, branch_id
                 ) VALUES (
                     :name, :category, :stock_date, :expiry_date, :price_per_unit, 
-                    :quantity_produced, :stock_quantity, :image, :branch_id
+                    :stock_quantity, :image, :branch_id
                 )
             ");
             
@@ -102,7 +96,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
                 ':stock_date' => $stockDate,
                 ':expiry_date' => $expiryDate,
                 ':price_per_unit' => $pricePerUnit,
-                ':quantity_produced' => $quantityProduced,
                 ':stock_quantity' => $stockQuantity,
                 ':image' => $itemImage,
                 ':branch_id' => $branchId
@@ -260,15 +253,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
                     </div>
 
                     <div class="mb-4">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="quantity_produced">Quantity Produced</label>
-                        <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="quantity_produced" name="quantity_produced" placeholder="Quantity Produced" required />
-                    </div>
-
-                    <div class="mb-4">
                         <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stock_quantity">Stock Quantity</label>
                         <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="stock_quantity" name="stock_quantity" placeholder="Stock Quantity (defaults to quantity produced if left empty)" />
+                        id="stock_quantity" name="stock_quantity" placeholder="Available Quantity" required />
                     </div>
                 </div>
 

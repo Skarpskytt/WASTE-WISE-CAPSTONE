@@ -17,7 +17,7 @@ $ngoInfoQuery = $pdo->prepare("
         organization_name,
         COALESCE(profile_image, 'default.jpg') as profile_image,
         created_at,
-        (SELECT COUNT(*) FROM donation_requests WHERE ngo_id = users.id) as total_requests
+        (SELECT COUNT(*) FROM donated_products WHERE ngo_id = users.id) as total_requests
     FROM users 
     WHERE id = ? AND role = 'ngo'
 ");
@@ -37,18 +37,18 @@ if ($hour < 12) {
 
 // Get total donations received (count)
 $totalDonationsQuery = $pdo->prepare("
-    SELECT COUNT(*) as count, SUM(quantity_requested) as total_quantity
-    FROM donation_requests
-    WHERE ngo_id = ? AND status = 'approved'
+    SELECT COUNT(*) as count, SUM(received_quantity) as total_quantity
+    FROM donated_products
+    WHERE ngo_id = ?
 ");
 $totalDonationsQuery->execute([$ngoId]);
 $totalDonations = $totalDonationsQuery->fetch(PDO::FETCH_ASSOC);
 
 // Get received donations
 $receivedDonationsQuery = $pdo->prepare("
-    SELECT COUNT(*) as count, SUM(quantity_requested) as quantity
-    FROM donation_requests
-    WHERE ngo_id = ? AND is_received = 1
+    SELECT COUNT(*) as count, SUM(received_quantity) as quantity
+    FROM donated_products
+    WHERE ngo_id = ?
 ");
 $receivedDonationsQuery->execute([$ngoId]);
 $receivedDonations = $receivedDonationsQuery->fetch(PDO::FETCH_ASSOC);
@@ -56,17 +56,19 @@ $receivedDonations = $receivedDonationsQuery->fetch(PDO::FETCH_ASSOC);
 // Get pending requests
 $pendingRequestsQuery = $pdo->prepare("
     SELECT COUNT(*) as count
-    FROM donation_requests
-    WHERE ngo_id = ? AND status = 'pending'
+    FROM donation_requests dr
+    JOIN donated_products dp ON dr.id = dp.donation_request_id
+    WHERE dp.ngo_id = ? AND dr.status = 'pending'
 ");
 $pendingRequestsQuery->execute([$ngoId]);
 $pendingRequests = $pendingRequestsQuery->fetch(PDO::FETCH_ASSOC);
 
-// Get ready for pickup (approved but not yet received)
+// Get ready for pickup (prepared but not yet received)
 $readyForPickupQuery = $pdo->prepare("
-    SELECT COUNT(*) as count, SUM(quantity_requested) as quantity
-    FROM donation_requests
-    WHERE ngo_id = ? AND status = 'approved' AND is_received = 0
+    SELECT COUNT(*) as count, SUM(dr.quantity) as quantity
+    FROM donation_requests dr
+    LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id AND dp.ngo_id = ?
+    WHERE dr.status = 'prepared' AND dp.id IS NULL
 ");
 $readyForPickupQuery->execute([$ngoId]);
 $readyForPickup = $readyForPickupQuery->fetch(PDO::FETCH_ASSOC);
@@ -74,11 +76,11 @@ $readyForPickup = $readyForPickupQuery->fetch(PDO::FETCH_ASSOC);
 // Get donation history for charts (last 6 months)
 $donationHistoryQuery = $pdo->prepare("
     SELECT 
-        DATE_FORMAT(created_at, '%Y-%m') as month,
-        SUM(quantity_requested) as quantity
-    FROM donation_requests
-    WHERE ngo_id = ? AND status = 'approved'
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        DATE_FORMAT(received_date, '%Y-%m') as month,
+        SUM(received_quantity) as quantity
+    FROM donated_products
+    WHERE ngo_id = ?
+    GROUP BY DATE_FORMAT(received_date, '%Y-%m')
     ORDER BY month DESC
     LIMIT 6
 ");
@@ -91,11 +93,11 @@ $donationHistory = array_reverse($donationHistory);
 $topCategoriesQuery = $pdo->prepare("
     SELECT 
         p.category,
-        SUM(dr.quantity_requested) as total_quantity
-    FROM donation_requests dr
-    JOIN product_waste pw ON dr.product_waste_id = pw.id
-    JOIN products p ON pw.product_id = p.id
-    WHERE dr.ngo_id = ? AND dr.status = 'approved'
+        SUM(dp.received_quantity) as total_quantity
+    FROM donated_products dp
+    JOIN donation_requests dr ON dp.donation_request_id = dr.id
+    JOIN products p ON dr.product_id = p.id
+    WHERE dp.ngo_id = ?
     GROUP BY p.category
     ORDER BY total_quantity DESC
     LIMIT 3
@@ -108,10 +110,10 @@ $topBranchesQuery = $pdo->prepare("
     SELECT 
         b.name as branch_name,
         COUNT(*) as donation_count
-    FROM donation_requests dr
-    JOIN product_waste pw ON dr.product_waste_id = pw.id
-    JOIN branches b ON pw.branch_id = b.id
-    WHERE dr.ngo_id = ? AND dr.status = 'approved'
+    FROM donated_products dp
+    JOIN donation_requests dr ON dp.donation_request_id = dr.id
+    JOIN branches b ON dr.branch_id = b.id
+    WHERE dp.ngo_id = ?
     GROUP BY b.name
     ORDER BY donation_count DESC
     LIMIT 3
@@ -123,19 +125,19 @@ $topBranches = $topBranchesQuery->fetchAll(PDO::FETCH_ASSOC);
 $recentDonationsQuery = $pdo->prepare("
     SELECT 
         dr.id,
-        dr.quantity_requested,
-        dr.pickup_date,
-        dr.created_at,
+        dr.quantity,
+        dp.received_date as pickup_date,
+        dr.request_date as created_at,
         dr.status,
-        dr.is_received,
+        CASE WHEN dp.id IS NOT NULL THEN 1 ELSE 0 END as is_received,
         p.name as product_name,
         b.name as branch_name
     FROM donation_requests dr
-    JOIN product_waste pw ON dr.product_waste_id = pw.id
-    JOIN products p ON pw.product_id = p.id
-    JOIN branches b ON pw.branch_id = b.id
-    WHERE dr.ngo_id = ?
-    ORDER BY dr.created_at DESC
+    LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id AND dp.ngo_id = ?
+    JOIN products p ON dr.product_id = p.id
+    JOIN branches b ON dr.branch_id = b.id
+    WHERE dr.status IN ('pending', 'approved', 'prepared', 'completed')
+    ORDER BY dr.request_date DESC
     LIMIT 5
 ");
 $recentDonationsQuery->execute([$ngoId]);
@@ -300,7 +302,7 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
                                     <span class="font-semibold"><?= htmlspecialchars($donation['product_name']) ?></span>
                                     <span class="text-sm"><?= getStatusBadge($donation['status'], $donation['is_received']) ?></span>
                                 </div>
-                                <p class="text-sm">Qty: <?= $donation['quantity_requested'] ?> from <?= htmlspecialchars($donation['branch_name']) ?></p>
+                                <p class="text-sm">Qty: <?= $donation['quantity'] ?> from <?= htmlspecialchars($donation['branch_name']) ?></p>
                                 <p class="text-xs text-gray-500 mt-1">
                                     <?= date('M d, Y', strtotime($donation['created_at'])) ?>
                                 </p>

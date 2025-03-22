@@ -116,7 +116,7 @@ try {
 // Build the SQL query to get waste records - updated to use staff_id instead of user_id
 $sql = "
     SELECT w.*, p.name as product_name, p.category as product_category, 
-           p.price_per_unit, p.image as product_image, p.quantity_produced as original_quantity_produced,
+           p.price_per_unit, p.image as product_image,
            CONCAT(u.fname, ' ', u.lname) as staff_name
     FROM product_waste w
     JOIN products p ON w.product_id = p.id
@@ -326,7 +326,6 @@ try {
                                 <th>Product</th>
                                 <th>Category</th>
                                 <th>Waste Date</th>
-                                <th>Original Stock</th>
                                 <th>Wasted</th>
                                 <th>Production Stage</th>
                                 <th>Reason</th>
@@ -348,7 +347,6 @@ try {
                                     echo "<td>" . htmlspecialchars($record['product_name']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['product_category']) . "</td>";
                                     echo "<td>" . htmlspecialchars($formattedDate) . "</td>";
-                                    echo "<td>" . htmlspecialchars($record['original_quantity_produced']) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['waste_quantity']) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['production_stage'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['waste_reason'])) . "</td>";

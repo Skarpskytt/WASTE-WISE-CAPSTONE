@@ -19,17 +19,19 @@ $countStmt = $pdo->prepare("
     FROM products 
     WHERE branch_id = ? 
     AND expiry_date > CURRENT_DATE
+    AND stock_quantity > 0
 ");
 $countStmt->execute([$branchId]);
 $totalProducts = $countStmt->fetchColumn();
 $totalPages = ceil($totalProducts / $itemsPerPage);
 
-// Fetch active products with pagination
+// Fetch active products with pagination (only with stock > 0)
 $stmt = $pdo->prepare("
     SELECT * 
     FROM products 
     WHERE branch_id = ? 
     AND expiry_date > CURRENT_DATE
+    AND stock_quantity > 0
     ORDER BY id DESC 
     LIMIT ? OFFSET ?
 ");
@@ -76,6 +78,20 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
      $('#closeSidebar').on('click', function() {
         $('#sidebar').addClass('-translate-x-full');
     });
+
+    $('.request-donation-btn').on('click', function() {
+        const productId = $(this).data('id');
+        const productName = $(this).data('name');
+        const stockQuantity = $(this).data('stock');
+        const expiryDate = $(this).data('expiry');
+        
+        $('#product_id').val(productId);
+        $('#product_name_display').text(productName);
+        $('#stock_quantity_display').text(stockQuantity);
+        $('#donation_quantity').attr('max', stockQuantity);
+        
+        document.getElementById('donation_modal').showModal();
+    });
    });
   </script>
 </head>
@@ -95,20 +111,6 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
                 <li><a href="product_stocks_branch1.php" class="hover:text-primarycol">Branch 1 Stock</a></li>
             </ol>
         </nav>
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-3xl font-bold text-primarycol">Product Stocks - <?= htmlspecialchars($branchName) ?></h1>
-                <p class="text-gray-500 mt-2">Active products in branch inventory</p>
-            </div>
-            <div class="flex space-x-2">
-                <a href="product_stocks_branch2.php" class="btn btn-outline bg-sec hover:bg-third">
-                    View Branch 2
-                </a>
-                <a href="product_stocks_branch3.php" class="btn btn-outline bg-sec hover:bg-third">
-                    View Branch 3
-                </a>
-            </div>
-        </div>
     </div>
     
     <!-- Product Stock Table -->
@@ -126,6 +128,7 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
                         <th>Price/Unit</th>
                         <th>Qty Produced</th>
                         <th>Stock Qty</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -147,11 +150,21 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
                             <td>₱<?= number_format($product['price_per_unit'], 2) ?></td>
                             <td><?= htmlspecialchars($product['quantity_produced']) ?></td>
                             <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
+                            <td>
+                                <button 
+                                    class="request-donation-btn btn btn-sm bg-green-600 text-white hover:bg-green-700"
+                                    data-id="<?= $product['id'] ?>"
+                                    data-name="<?= htmlspecialchars($product['name']) ?>"
+                                    data-stock="<?= htmlspecialchars($product['stock_quantity']) ?>"
+                                    data-expiry="<?= htmlspecialchars($product['expiry_date']) ?>">
+                                    Request Donation
+                                </button>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if (empty($products)): ?>
                         <tr>
-                            <td colspan="9" class="text-center py-8">
+                            <td colspan="10" class="text-center py-8">
                                 <div class="flex flex-col items-center justify-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -258,6 +271,39 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
         </div>
     </div>
 </div>
+
+<!-- Donation Request Modal -->
+<dialog id="donation_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-primarycol">Request Product Donation</h3>
+        <p class="py-2">Request donation for <span id="product_name_display" class="font-semibold"></span></p>
+        
+        <form method="POST" action="process_donation_request.php">
+            <input type="hidden" id="product_id" name="product_id">
+            <input type="hidden" name="branch_id" value="<?= $branchId ?>">
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Quantity to Donate</span>
+                </label>
+                <input type="number" name="quantity" id="donation_quantity" class="input input-bordered" min="1" required>
+                <span class="text-xs text-gray-500">Available: <span id="stock_quantity_display"></span></span>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Notes (Optional)</span>
+                </label>
+                <textarea name="notes" class="textarea textarea-bordered h-24"></textarea>
+            </div>
+            
+            <div class="modal-action">
+                <button type="button" onclick="document.getElementById('donation_modal').close();" class="btn">Cancel</button>
+                <button type="submit" class="btn bg-primarycol text-white">Request Donation</button>
+            </div>
+        </form>
+    </div>
+</dialog>
 
 </body>
 </html>

@@ -15,10 +15,8 @@ $errorMessage = null;
 // Process donation request form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
     // Get form data
-    $donationId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
-    $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 0;
-    $pickupDate = isset($_POST['pickup_date']) ? $_POST['pickup_date'] : '';
-    $pickupTime = isset($_POST['pickup_time']) ? $_POST['pickup_time'] : '';
+    $requestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
+    $quantity = isset($_POST['quantity']) ? (float)$_POST['quantity'] : 0;
     $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
     
     // Get NGO information
@@ -26,31 +24,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
     
     // Validate input
     $errors = [];
-    if ($donationId <= 0) {
+    if ($requestId <= 0) {
         $errors[] = "Invalid donation selection.";
     }
     if ($quantity <= 0) {
         $errors[] = "Please enter a valid quantity.";
     }
-    if (empty($pickupDate) || empty($pickupTime)) {
-        $errors[] = "Please specify pickup date and time.";
-    }
     
     // Check if the donation exists and has enough quantity
     try {
         $checkStmt = $pdo->prepare("
-            SELECT pw.*, p.name as product_name, b.name as branch_name
-            FROM product_waste pw
-            JOIN products p ON pw.product_id = p.id
-            JOIN branches b ON pw.branch_id = b.id
-            WHERE pw.id = ? AND pw.disposal_method = 'donation'
+            SELECT dr.*, p.name as product_name, b.name as branch_name
+            FROM donation_requests dr
+            JOIN products p ON dr.product_id = p.id
+            JOIN branches b ON dr.branch_id = b.id
+            WHERE dr.id = ? AND dr.status = 'prepared'
         ");
-        $checkStmt->execute([$donationId]);
+        $checkStmt->execute([$requestId]);
         $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$donation) {
             $errors[] = "The requested donation is no longer available.";
-        } else if ($donation['waste_quantity'] < $quantity) {
+        } else if ($donation['quantity'] < $quantity) {
             $errors[] = "Requested quantity exceeds available amount.";
         }
     } catch (PDOException $e) {
@@ -63,38 +58,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
             // Start a transaction
             $pdo->beginTransaction();
             
-            // Create donation request record
-            $requestStmt = $pdo->prepare("
-                INSERT INTO donation_requests (
-                    product_waste_id, ngo_id, quantity_requested, 
-                    pickup_date, pickup_time, notes, status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
+            // Create record in donated_products
+            $insertStmt = $pdo->prepare("
+                INSERT INTO donated_products (
+                    donation_request_id, 
+                    ngo_id, 
+                    received_by, 
+                    received_quantity, 
+                    remarks
+                ) VALUES (?, ?, ?, ?, ?)
             ");
             
-            $requestStmt->execute([
-                $donationId,
+            $insertStmt->execute([
+                $requestId,
                 $ngoId,
+                $_SESSION['user_name'] ?? 'NGO Representative',
                 $quantity,
-                $pickupDate,
-                $pickupTime,
                 $notes
             ]);
             
-            // Update product_waste if entire quantity is requested
-            if ($quantity == $donation['waste_quantity']) {
-                $updateStmt = $pdo->prepare("
-                    UPDATE product_waste
-                    SET is_claimed = 1
-                    WHERE id = ?
-                ");
-                $updateStmt->execute([$donationId]);
-            }
+            // Update donation request status
+            $updateStmt = $pdo->prepare("
+                UPDATE donation_requests
+                SET status = 'completed'
+                WHERE id = ?
+            ");
+            $updateStmt->execute([$requestId]);
             
             // Commit transaction
             $pdo->commit();
             
             // Set success message
-            $successMessage = "Your donation request has been submitted successfully! The donor will contact you soon.";
+            $successMessage = "Donation receipt has been confirmed successfully!";
             
         } catch (PDOException $e) {
             // Rollback on error
@@ -112,15 +107,26 @@ $quantityFilter = isset($_GET['min_quantity']) && is_numeric($_GET['min_quantity
 $dateFilter = isset($_GET['expiry_date']) ? $_GET['expiry_date'] : '';
 $donorFilter = isset($_GET['donor_name']) ? $_GET['donor_name'] : '';
 
-// Build query to get donations - FIXED: Changed p.expiry_date to pw.donation_expiry_date
-$sql = "SELECT pw.*, p.name as product_name, p.category, pw.donation_expiry_date as expiry_date,
-        CONCAT(u.fname, ' ', u.lname) as donor_name, b.name as branch_name
-        FROM product_waste pw
-        JOIN products p ON pw.product_id = p.id
-        JOIN users u ON pw.user_id = u.id
-        JOIN branches b ON pw.branch_id = b.id
-        WHERE pw.disposal_method = 'donation' 
-        AND pw.is_claimed = 0"; /* Make sure we only show unclaimed items */
+// Build query to get available donations
+$sql = "SELECT 
+            dr.id,
+            dr.product_id, 
+            dr.branch_id,
+            dr.quantity,
+            dr.request_date,
+            dr.status,
+            dr.notes,
+            p.name as product_name, 
+            p.category,
+            p.expiry_date,
+            CONCAT(u.fname, ' ', u.lname) as donor_name, 
+            b.name as branch_name
+        FROM donation_requests dr
+        JOIN products p ON dr.product_id = p.id
+        JOIN users u ON dr.requested_by = u.id
+        JOIN branches b ON dr.branch_id = b.id
+        LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id
+        WHERE dr.status = 'prepared' AND dp.id IS NULL";
 
 $params = [];
 
@@ -131,13 +137,12 @@ if (!empty($typeFilter) && $typeFilter !== 'All') {
 }
 
 if ($quantityFilter > 0) {
-    $sql .= " AND pw.waste_quantity >= ?";
+    $sql .= " AND dr.quantity >= ?";
     $params[] = $quantityFilter;
 }
 
-// FIXED: Changed p.expiry_date to pw.donation_expiry_date
 if (!empty($dateFilter)) {
-    $sql .= " AND pw.donation_expiry_date >= ?";
+    $sql .= " AND p.expiry_date >= ?";
     $params[] = $dateFilter;
 }
 
@@ -147,8 +152,7 @@ if (!empty($donorFilter)) {
     $params[] = "%$donorFilter%";
 }
 
-// FIXED: Changed p.expiry_date to pw.donation_expiry_date in ORDER BY
-$sql .= " ORDER BY pw.donation_expiry_date ASC, pw.created_at DESC";
+$sql .= " ORDER BY p.expiry_date ASC, dr.request_date DESC";
 
 // Execute query
 try {
@@ -170,12 +174,10 @@ $ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organi
 $ngoQuery->execute([$ngoId]);
 $ngoInfo = $ngoQuery->fetch(PDO::FETCH_ASSOC);
 
-// After loading donations, add this code to check which ones the NGO has already requested
-
-// Get IDs of donations this NGO has already requested
+// Get IDs of donations this NGO has already received
 $requestedQuery = $pdo->prepare("
-    SELECT product_waste_id 
-    FROM donation_requests 
+    SELECT donation_request_id 
+    FROM donated_products 
     WHERE ngo_id = ?
 ");
 $requestedQuery->execute([$ngoId]);
@@ -350,10 +352,10 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
                                 <?php endif; ?>
                                 
                                 <div class="mt-auto pt-4 flex justify-between items-center">
-                                    <div class="font-bold"><?= htmlspecialchars($item['waste_quantity']) ?> items</div>
+                                    <div class="font-bold"><?= htmlspecialchars($item['quantity']) ?> items</div>
                                     <a href="javascript:void(0)" 
                                        class="bg-primarycol hover:bg-fourth text-white py-1 px-3 rounded-md text-sm"
-                                       onclick="showModal('<?= $item['id'] ?>', '<?= htmlspecialchars($item['product_name']) ?>', '<?= htmlspecialchars($item['waste_quantity']) ?>', '<?= htmlspecialchars($item['expiry_date']) ?>', '<?= htmlspecialchars($item['branch_name']) ?>')">
+                                       onclick="showModal('<?= $item['id'] ?>', '<?= htmlspecialchars($item['product_name']) ?>', '<?= htmlspecialchars($item['quantity']) ?>', '<?= htmlspecialchars($item['expiry_date']) ?>', '<?= htmlspecialchars($item['branch_name']) ?>')">
                                         Request Item
                                     </a>
                                 </div>

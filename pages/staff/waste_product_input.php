@@ -18,109 +18,84 @@ try {
     $prodStmt = $pdo->prepare("
         SELECT 
             p.*,
-            COALESCE(SUM(w.waste_quantity), 0) as total_waste,
-            p.quantity_produced as original_quantity,
-            (p.quantity_produced - COALESCE(SUM(w.waste_quantity), 0)) as remaining_quantity
+            p.stock_quantity as available_quantity
         FROM products p
-        LEFT JOIN product_waste w ON p.id = w.product_id AND w.branch_id = ?
         WHERE p.branch_id = ? 
         AND p.expiry_date >= CURRENT_DATE()
-        GROUP BY p.id
-        HAVING remaining_quantity > 0
-        ORDER BY p.created_at DESC
+        AND p.stock_quantity > 0
+        ORDER BY p.expiry_date ASC, p.name ASC
     ");
-    $prodStmt->execute([$branchId, $branchId]);
+    $prodStmt->execute([$branchId]);
     $products = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Error retrieving data: " . $e->getMessage());
 }
 
 if (isset($_POST['submitwaste'])) {
-    // Extract form data
-    $userId = $_SESSION['user_id'];
-    $productId = $_POST['product_id'] ?? null;
-    $wasteDate = $_POST['waste_date'] ?? null;
-    $wasteQuantity = $_POST['waste_quantity'] ?? null;
-    $costPerUnit = $_POST['product_value'] ?? 0;
-    $wasteValue = $wasteQuantity * $costPerUnit;
-    $wasteReason = $_POST['waste_reason'] ?? null;
-    $disposalMethod = $_POST['disposal_method'] ?? null;
-    $notes = $_POST['notes'] ?? null;
+    // Extract form data with better validation
+    $productId = isset($_POST['product_id']) && !empty($_POST['product_id']) ? $_POST['product_id'] : null;
+    $wasteDate = isset($_POST['waste_date']) && !empty($_POST['waste_date']) ? $_POST['waste_date'] : null;
+    $wasteQuantity = isset($_POST['waste_quantity']) && is_numeric($_POST['waste_quantity']) ? (float)$_POST['waste_quantity'] : null;
+    $wasteReason = isset($_POST['waste_reason']) && !empty($_POST['waste_reason']) ? $_POST['waste_reason'] : null;
+    $disposalMethod = isset($_POST['disposal_method']) && !empty($_POST['disposal_method']) ? $_POST['disposal_method'] : null;
+    $productionStage = isset($_POST['production_stage']) && !empty($_POST['production_stage']) ? $_POST['production_stage'] : null;
+    $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
     $branchId = $_SESSION['branch_id'];
-    $productionStage = $_POST['production_stage'] ?? null;
     
-    if (!$userId || !$productId || !$wasteDate || !$wasteQuantity || !$wasteReason || 
-        !$disposalMethod || !$productionStage) {
-        $errorMessage = 'Please fill in all required fields.';
+    // Product value calculation
+    $costPerUnit = isset($_POST['product_value']) && is_numeric($_POST['product_value']) ? (float)$_POST['product_value'] : 0;
+    $wasteValue = $wasteQuantity * $costPerUnit;
+    
+    // Validate required fields
+    $errors = [];
+    if (!$productId) $errors[] = "Product must be selected";
+    if (!$wasteDate) $errors[] = "Waste date is required";
+    if (!$wasteQuantity) $errors[] = "Waste quantity is required";
+    if (!$wasteReason) $errors[] = "Waste reason is required";
+    if (!$disposalMethod) $errors[] = "Disposal method is required";
+    if (!$productionStage) $errors[] = "Production stage is required";
+    
+    if (!empty($errors)) {
+        $errorMessage = "Please fill in all required fields: " . implode(", ", $errors);
     } else {
         try {
             $pdo->beginTransaction();
             
-            // Insert the waste record including production_stage
+            // 1. Insert waste record
             $stmt = $pdo->prepare("
                 INSERT INTO product_waste (
-                    product_id, branch_id, staff_id, waste_date, waste_quantity,
-                    waste_value, waste_reason, production_stage, disposal_method, notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    product_id, staff_id, waste_date, waste_quantity, 
+                    waste_value, waste_reason, disposal_method, notes, 
+                    branch_id, production_stage
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
-                $productId, 
-                $branchId,
-                $userId,
-                date('Y-m-d H:i:s', strtotime($wasteDate)),
-                $wasteQuantity,
-                $wasteValue,
-                $wasteReason,
-                $productionStage,
-                $disposalMethod,
-                $notes,
-                date('Y-m-d H:i:s')
+                $productId, $userId, $wasteDate, $wasteQuantity, 
+                $wasteValue, $wasteReason, $disposalMethod, $notes, 
+                $branchId, $productionStage
             ]);
             
-            // UPDATE THE STOCK QUANTITY - This is the missing part
-            $updateStockStmt = $pdo->prepare("
+            // 2. Update product stock quantity
+            $updateStmt = $pdo->prepare("
                 UPDATE products 
                 SET stock_quantity = stock_quantity - ? 
                 WHERE id = ? AND branch_id = ?
             ");
-            $updateStockStmt->execute([$wasteQuantity, $productId, $branchId]);
             
-            // Check for status column in products table
-            $checkProductTable = $pdo->prepare("SHOW COLUMNS FROM products LIKE 'status'");
-            $checkProductTable->execute();
-            
-            if($checkProductTable->rowCount() > 0) {
-                // The status column exists in products table, so we can update it
-                $updateStmt = $pdo->prepare("
-                    UPDATE products 
-                    SET status = CASE 
-                        WHEN (SELECT SUM(waste_quantity) 
-                              FROM product_waste 
-                              WHERE product_id = products.id) >= quantity_produced 
-                        THEN 'waste_processed'
-                        ELSE status 
-                        END
-                    WHERE id = ? AND branch_id = ?
-                ");
-                
-                $updateStmt->execute([
-                    $productId, 
-                    $branchId
-                ]);
-            }
+            $updateStmt->execute([$wasteQuantity, $productId, $branchId]);
             
             $pdo->commit();
             
-            header('Location: waste_product_input.php?success=1');
+            // Redirect with success message
+            header("Location: waste_product_input.php?success=1");
             exit;
+            
         } catch (PDOException $e) {
             $pdo->rollBack();
-            $errorMessage = 'An error occurred while submitting the waste entry: ' . $e->getMessage();
+            $errorMessage = "Error recording waste: " . $e->getMessage();
         }
     }
-
-    display_page: 
 }
 
 $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
@@ -371,7 +346,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                         $productImage = $product['image'] ?? '';
                         $quantityProduced = $product['quantity_produced'] ?? 0;
                         $totalWaste = $product['total_waste'] ?? 0;
-                        $remainingQuantity = $product['remaining_quantity'] ?? 0;
+                        $remainingQuantity = $product['available_quantity'] ?? 0;
                     ?>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
                         <div class="flex flex-col md:flex-row">
@@ -419,14 +394,8 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <div class="mt-3 p-2 bg-blue-50 rounded-md">
                                     <h3 class="font-medium text-blue-800 text-sm">Stock Information</h3>
                                     <div class="grid grid-cols-2 gap-1 mt-1 text-xs text-gray-600">
-                                        <div>Original Stock:</div>
-                                        <div class="text-right font-medium"><?= htmlspecialchars($quantityProduced) ?> units</div>
-                                        
-                                        <div>Wasted So Far:</div>
-                                        <div class="text-right font-medium"><?= htmlspecialchars($totalWaste) ?> units</div>
-                                        
-                                        <div class="font-medium text-blue-700">Current Stock:</div>
-                                        <div class="text-right font-medium text-blue-700"><?= htmlspecialchars($remainingQuantity) ?> units</div>
+                                        <div class="font-medium text-blue-700">Available Quantity:</div>
+                                        <div class="text-right font-medium text-blue-700"><?= htmlspecialchars($product['stock_quantity']) ?> units</div>
                                     </div>
                                 </div>
                             </div>
@@ -438,7 +407,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <form method="POST" class="waste-form">
                                     <input type="hidden" name="product_id" value="<?= htmlspecialchars($productId) ?>">
                                     <input type="hidden" name="product_value" value="<?= htmlspecialchars($productPrice) ?>">
-                                    <input type="hidden" name="available_stock" value="<?= htmlspecialchars($remainingQuantity) ?>">
+                                    <input type="hidden" name="available_stock" value="<?= htmlspecialchars($product['stock_quantity']) ?>">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <!-- Basic waste info -->
@@ -449,12 +418,12 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             <input type="number"
                                                 name="waste_quantity"
                                                 min="0.01"
-                                                max="<?= htmlspecialchars($remainingQuantity) ?>"
+                                                max="<?= htmlspecialchars($product['stock_quantity']) ?>"
                                                 step="any"
                                                 required
                                                 class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                             <p class="text-xs text-gray-500 mt-1">
-                                                Available: <?= htmlspecialchars($remainingQuantity) ?> units
+                                                Available: <?= htmlspecialchars($product['stock_quantity']) ?> units
                                             </p>
                                         </div>
                                         

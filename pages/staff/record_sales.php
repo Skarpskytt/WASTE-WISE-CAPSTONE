@@ -20,7 +20,7 @@ $stmt = $pdo->prepare("
     FROM products 
     WHERE branch_id = ? 
     AND expiry_date > CURRENT_DATE
-    AND quantity_produced > 0
+    AND stock_quantity > 0
     ORDER BY name ASC
 ");
 $stmt->execute([$_SESSION['branch_id']]);
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Check if product exists, belongs to the branch, and has enough quantity
             $productStmt = $pdo->prepare("
-                SELECT id, quantity_produced 
+                SELECT id, stock_quantity 
                 FROM products 
                 WHERE id = ? AND branch_id = ?
             ");
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Invalid product selected.");
             }
             
-            if ($product['quantity_produced'] < $quantity) {
+            if ($product['stock_quantity'] < $quantity) {
                 throw new Exception("Not enough stock for one or more products. Please check quantities.");
             }
             
@@ -77,10 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Update product quantity in stock
             $updateStmt = $pdo->prepare("
                 UPDATE products 
-                SET quantity_produced = quantity_produced - ? 
-                WHERE id = ?
+                SET stock_quantity = stock_quantity - ? 
+                WHERE id = ? AND branch_id = ?
             ");
-            $updateStmt->execute([$quantity, $productId]);
+            $updateStmt->execute([$quantity, $productId, $_SESSION['branch_id']]);
             
             $salesRecorded = true;
         }
@@ -291,13 +291,13 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <span><?= htmlspecialchars($product['name']) ?></span>
                                                     </div>
                                                 </td>
-                                                <td><?= htmlspecialchars($product['quantity_produced']) ?></td>
+                                                <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
                                                 <td>₱<?= number_format($product['price_per_unit'], 2) ?></td>
                                                 <td>
                                                     <input type="number" name="sales[<?= $product['id'] ?>]" 
                                                            class="input input-bordered w-24 quantity-input" 
                                                            data-price="<?= $product['price_per_unit'] ?>"
-                                                           min="0" max="<?= $product['quantity_produced'] ?>" 
+                                                           min="0" max="<?= $product['stock_quantity'] ?>" 
                                                            placeholder="0">
                                                 </td>
                                                 <td><span class="row-total">₱0.00</span></td>
