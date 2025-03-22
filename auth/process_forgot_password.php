@@ -3,7 +3,7 @@ ob_start(); // Start output buffering
 
 require_once '../config/db_connect.php';
 require_once '../config/session_handler.php';
-require_once '../vendor/autoload.php';
+require_once '../includes/mail/EmailService.php';
 
 use App\Mail\EmailService;
 
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$user['id'], $token, $expiry]);
             
             // Generate reset link with correct path
-            $resetLink = "http://{$_SERVER['HTTP_HOST']}/auth/reset_password.php?token=" . $token;
+            $resetLink = "https://beabakes.site/auth/reset_password.php?token=" . $token;
             
             // Send email
             $emailService = new EmailService();

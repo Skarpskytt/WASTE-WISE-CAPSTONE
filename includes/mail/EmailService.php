@@ -86,10 +86,14 @@ class EmailService {
             
             $this->mailer->Body = $this->getPasswordResetTemplate($user, $resetLink);
 
-            return $this->mailer->send();
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
         } catch (Exception $e) {
             error_log("Failed to send password reset email: " . $e->getMessage());
-            throw new \Exception('Failed to send password reset email');
+            throw new \Exception('Failed to send password reset email: ' . $e->getMessage());
         }
     }
 
@@ -131,16 +135,8 @@ class EmailService {
             $this->mailer->isHTML(true);
             $this->mailer->Subject = 'Your OTP Verification Code';
             
-            // Use otp instead of code
-            $this->mailer->Body = "
-                <h2>Login Verification Code</h2>
-                <p>Dear {$userData['fname']},</p>
-                <p>Your login verification code is: <strong>{$userData['otp']}</strong></p>
-                <p>This code will expire in 5 minutes.</p>
-                <p>If you did not request this code, please ignore this email or contact support if you have concerns.</p>
-                <br>
-                <p>WasteWise © 2025</p>
-            ";
+            // Use the proper template method
+            $this->mailer->Body = $this->getOTPTemplate($userData, $userData['otp']);
 
             $sent = $this->mailer->send();
             if (!$sent) {
@@ -155,46 +151,70 @@ class EmailService {
 
     private function getNGOApprovalTemplate($data) {
         return "
-            <h2>Welcome to Bea Bakes Waste Management!</h2>
-            <p>Dear {$data['name']},</p>
-            <p>We are pleased to inform you that your NGO partnership account for {$data['organization_name']} has been approved.</p>
-            <p>You can now log in to your account using your registered email and password.</p>
-            <p>Visit our login page: <a href='http://localhost/capstone/WASTE-WISE-CAPSTONE/auth/login.php'>Login Here</a></p>
-            <p>Best regards,<br>Bea Bakes Team</p>
-        ";
+        <h2>Welcome to WasteWise Management!</h2>
+        <p>Dear {$data['name']},</p>
+        <p>We are pleased to inform you that your NGO partnership account for {$data['organization_name']} has been approved.</p>
+        <p>You can now log in to your account using your registered email and password.</p>
+        <p>Visit our login page: <a href='http://localhost/capstone/WASTE-WISE-CAPSTONE/auth/login.php'>Login Here</a></p>
+        <p>Best regards,<br>WasteWise Team</p>
+    ";
     }
 
     private function getNGORejectionTemplate($data) {
         return "
-            <h2>NGO Partnership Application Status</h2>
-            <p>Dear {$data['name']},</p>
-            <p>We regret to inform you that your NGO partnership application for {$data['organization_name']} has not been approved at this time.</p>
-            <p>If you have any questions or would like to submit a new application in the future, please feel free to contact us.</p>
-            <p>Best regards,<br>Bea Bakes Team</p>
-        ";
+        <h2>NGO Partnership Application Status</h2>
+        <p>Dear {$data['name']},</p>
+        <p>We regret to inform you that your NGO partnership application for {$data['organization_name']} has not been approved at this time.</p>
+        <p>If you have any questions or would like to submit a new application in the future, please feel free to contact us.</p>
+        <p>Best regards,<br>WasteWise Team</p>
+    ";
     }
 
     private function getPasswordResetTemplate($userData, $resetLink) {
         return "
-        <h2>Password Reset Request</h2>
-        <p>Dear {$userData['fname']},</p>
-        <p>You recently requested to reset your password for your Bea Bakes account.</p>
-        <p>Click the button below to reset your password:</p>
-        <p style='margin: 20px 0;'>
-            <a href='{$resetLink}' 
-               style='background-color: #47663B; 
-                      color: white; 
-                      padding: 10px 20px; 
-                      text-decoration: none; 
-                      border-radius: 5px;
-                      display: inline-block;'>
-                Reset Password
-            </a>
-        </p>
-        <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
-        <p>This password reset link is only valid for the next hour.</p>
-        <p>Best regards,<br>Bea Bakes Team</p>
-    ";
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .content { margin-top: 20px; }
+                .button {
+                    background-color: #47663B;
+                    color: white;
+                    padding: 12px 25px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    display: inline-block;
+                    margin: 20px 0;
+                }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>Password Reset Request</h2>
+                </div>
+                <div class='content'>
+                    <p>Dear {$userData['fname']},</p>
+                    <p>You recently requested to reset your password for your WasteWise account.</p>
+                    <p>Click the button below to reset your password:</p>
+                    <div style='text-align: center;'>
+                        <a href='{$resetLink}' class='button'>Reset Password</a>
+                    </div>
+                    <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
+                    <p>This password reset link is only valid for the next hour.</p>
+                    <p>Best regards,<br>WasteWise Team</p>
+                </div>
+                <div class='footer'>
+                    <p>WasteWise &copy; " . date('Y') . "</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
     }
 
     private function getDonationReceiptTemplate($data) {
