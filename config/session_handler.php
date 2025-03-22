@@ -60,7 +60,7 @@ class SessionHandler
 // Move session handler setup before any session operations
 if (session_status() == PHP_SESSION_NONE) {
     try {
-        $pdo = new \PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
+        $pdo = new \PDO('mysql:host=localhost;dbname=u697061521_wastewise', 'u697061521_skarpskytt', '0jOC?V~NM;|?');
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         
         $handler = SessionHandler::getInstance($pdo);

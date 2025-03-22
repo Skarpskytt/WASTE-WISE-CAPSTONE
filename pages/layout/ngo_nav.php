@@ -203,7 +203,7 @@ if (isset($_GET['mark_all_read'])) {
         </div>
         
         <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-t border-gray-200 text-center">
-            <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
+            <a href="../ngo/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
                 View all notifications
             </a>
         </div>
@@ -225,13 +225,13 @@ if (isset($_GET['mark_all_read'])) {
                  tabindex="0"
                  class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
                  <li>
-                   <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/profile.php" class="justify-between">
+                   <a href="../ngo/profile.php" class="justify-between">
                      Profile
                      <span class="badge">New</span>
                    </a>
                  </li>
                  <li><a>Settings</a></li>
-                 <li><a href="/capstone/WASTE-WISE-CAPSTONE/auth/logout.php">Logout</a></li>
+                 <li><a href="../../auth/logout.php">Logout</a></li>
                </ul>
              </div>
              

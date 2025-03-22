@@ -4,7 +4,7 @@ if (!isset($_SESSION['role']) || (
     $_SESSION['role'] !== 'branch1_staff' && 
     $_SESSION['role'] !== 'branch2_staff'
 )) {
-    header("Location: /capstone/WASTE-WISE-CAPSTONE/auth/login.php");
+    header("Location: ../../index.php");
     exit;
 }
 
@@ -288,7 +288,7 @@ if (isset($_GET['mark_all_read'])) {
         </div>
         
         <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-t border-gray-200 text-center">
-            <a href="/capstone/WASTE-WISE-CAPSTONE/pages/staff/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
+            <a href="../staff/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
                 View all notifications
             </a>
         </div>
@@ -308,7 +308,7 @@ if (isset($_GET['mark_all_read'])) {
                  tabindex="0"
                  class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
                  <li>
-                   <a href= "/capstone/WASTE-WISE-CAPSTONE/pages/staff/edit_profile_staff.php" class="justify-between">
+                   <a href= "../staff/edit_profile_staff.php" class="justify-between">
                      Profile
                      <span class="badge">New</span>
                    </a>
