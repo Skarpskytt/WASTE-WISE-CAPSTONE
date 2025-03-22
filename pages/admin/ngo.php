@@ -1,6 +1,8 @@
 <?php
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
+require_once '../../includes/mail/EmailService.php';
+use App\Mail\EmailService;
 
 // Check for admin access only
 checkAuth(['admin', 'staff']);
@@ -9,25 +11,23 @@ checkAuth(['admin', 'staff']);
 if (isset($_POST['action']) && isset($_POST['request_id'])) {
     $requestId = (int)$_POST['request_id'];
     $action = $_POST['action'];
-    $staffNotes = isset($_POST['staff_notes']) ? $_POST['staff_notes'] : '';
+    $adminNotes = isset($_POST['admin_notes']) ? $_POST['admin_notes'] : '';
     
     try {
         // Start transaction
         $pdo->beginTransaction();
         
-        // Get request details for notification
+        // Get request details
         $requestInfoStmt = $pdo->prepare("
             SELECT 
-                dr.ngo_id, 
+                ndr.ngo_id, 
                 p.name as product_name
             FROM 
-                donation_requests dr
+                ngo_donation_requests ndr
             JOIN 
-                product_waste pw ON dr.product_waste_id = pw.id
-            JOIN 
-                products p ON pw.product_id = p.id
+                products p ON ndr.product_id = p.id
             WHERE 
-                dr.id = ?
+                ndr.id = ?
         ");
         $requestInfoStmt->execute([$requestId]);
         $requestInfo = $requestInfoStmt->fetch(PDO::FETCH_ASSOC);
@@ -41,98 +41,149 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
         
         if ($action === 'approve') {
             // Update request status
-            $stmt = $pdo->prepare("
-                UPDATE donation_requests 
+            $updateStmt = $pdo->prepare("
+                UPDATE ngo_donation_requests 
                 SET status = 'approved', 
-                    updated_at = NOW(),
-                    staff_notes = ?
+                    admin_notes = ?
                 WHERE id = ?
             ");
-            $stmt->execute([$staffNotes, $requestId]);
+            $updateStmt->execute([$adminNotes, $requestId]);
             
-            // Create notification
-            $message = "Your donation request for {$productName} has been approved! " . 
-                      (!empty($staffNotes) ? "Note: $staffNotes" : "");
-            
-            // Before creating a notification, verify the user is an NGO
-            $checkRoleStmt = $pdo->prepare("
-                SELECT role FROM users WHERE id = ?
+            // Get email data
+            $detailsStmt = $pdo->prepare("
+                SELECT 
+                    ndr.pickup_date,
+                    ndr.pickup_time,
+                    p.name as product_name,
+                    b.name as branch_name,
+                    u.fname,
+                    u.lname,
+                    u.email,
+                    u.organization_name
+                FROM 
+                    ngo_donation_requests ndr
+                JOIN 
+                    products p ON ndr.product_id = p.id
+                JOIN 
+                    branches b ON ndr.branch_id = b.id
+                JOIN
+                    users u ON ndr.ngo_id = u.id
+                WHERE 
+                    ndr.id = ?
             ");
-            $checkRoleStmt->execute([$ngoId]);
-            $userRole = $checkRoleStmt->fetchColumn();
-
-            // Only create notification if the recipient is an NGO
-            if ($userRole === 'ngo') {
-                // Insert notification code
-                $notifyStmt = $pdo->prepare("
-                    INSERT INTO notifications (
-                        user_id, 
-                        target_role,
-                        message, 
-                        notification_type,
-                        link, 
-                        is_read
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, 0
-                    )
-                ");
-                $notifyStmt->execute([
-                    $ngoId,
+            $detailsStmt->execute([$requestId]);
+            $requestDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Create notification for NGO
+            $notifyStmt = $pdo->prepare("
+                INSERT INTO notifications (
+                    user_id,
+                    target_role,
+                    message,
+                    notification_type,
+                    link,
+                    is_read
+                ) VALUES (
+                    ?,
                     'ngo',
-                    $message,
+                    ?,
                     'donation_request_approved',
-                    "/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php"
-                ]);
+                    '/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php',
+                    0
+                )
+            ");
+            
+            $message = "Your donation request for {$productName} has been approved.";
+            $notifyStmt->execute([$ngoId, $message]);
+            
+            // Send email if we have details
+            if ($requestDetails) {
+                $emailService = new EmailService();
+                $emailData = [
+                    'status' => 'approved',
+                    'name' => !empty($requestDetails['organization_name']) ? 
+                            $requestDetails['organization_name'] : 
+                            $requestDetails['fname'] . ' ' . $requestDetails['lname'],
+                    'email' => $requestDetails['email'],
+                    'product_name' => $requestDetails['product_name'],
+                    'branch_name' => $requestDetails['branch_name'],
+                    'pickup_date' => date('M d, Y', strtotime($requestDetails['pickup_date'])),
+                    'pickup_time' => date('h:i A', strtotime($requestDetails['pickup_time'])),
+                    'notes' => $adminNotes
+                ];
+                
+                // Send email notification
+                $emailService->sendDonationRequestStatusEmail($emailData);
             }
             
-            $successMessage = "Request #$requestId has been approved and the NGO has been notified.";
-        } 
-        else if ($action === 'reject') {
+        } elseif ($action === 'reject') {
             // Update request status
-            $stmt = $pdo->prepare("
-                UPDATE donation_requests 
+            $updateStmt = $pdo->prepare("
+                UPDATE ngo_donation_requests 
                 SET status = 'rejected', 
-                    updated_at = NOW(),
-                    staff_notes = ?
+                    admin_notes = ?
                 WHERE id = ?
             ");
-            $stmt->execute([$staffNotes, $requestId]);
+            $updateStmt->execute([$adminNotes, $requestId]);
             
-            // If rejecting, make the food available again
-            $updateWasteStmt = $pdo->prepare("
-                UPDATE product_waste pw
-                JOIN donation_requests dr ON pw.id = dr.product_waste_id
-                SET pw.is_claimed = 0
-                WHERE dr.id = ?
+            // Create notification for NGO
+            $notifyStmt = $pdo->prepare("
+                INSERT INTO notifications (
+                    user_id,
+                    target_role,
+                    message,
+                    notification_type,
+                    link,
+                    is_read
+                ) VALUES (
+                    ?,
+                    'ngo',
+                    ?,
+                    'donation_request_rejected',
+                    '/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php',
+                    0
+                )
             ");
-            $updateWasteStmt->execute([$requestId]);
             
-            // Create notification
-            $message = "Your donation request for {$productName} has been rejected. " . 
-                      (!empty($staffNotes) ? "Reason: $staffNotes" : "");
+            $message = "Your donation request for {$productName} has been rejected.";
+            $notifyStmt->execute([$ngoId, $message]);
             
-            // Before creating a notification, verify the user is an NGO
-            $checkRoleStmt = $pdo->prepare("
-                SELECT role FROM users WHERE id = ?
+            // Get email data for rejection
+            $detailsStmt = $pdo->prepare("
+                SELECT 
+                    u.fname,
+                    u.lname,
+                    u.email,
+                    u.organization_name,
+                    p.name as product_name
+                FROM 
+                    ngo_donation_requests ndr
+                JOIN 
+                    products p ON ndr.product_id = p.id
+                JOIN
+                    users u ON ndr.ngo_id = u.id
+                WHERE 
+                    ndr.id = ?
             ");
-            $checkRoleStmt->execute([$ngoId]);
-            $userRole = $checkRoleStmt->fetchColumn();
-
-            // Only create notification if the recipient is an NGO
-            if ($userRole === 'ngo') {
-                // Insert notification code
-                $notifyStmt = $pdo->prepare("
-                    INSERT INTO notifications (user_id, message, link, is_read)
-                    VALUES (?, ?, ?, 0)
-                ");
-                $notifyStmt->execute([
-                    $ngoId, 
-                    $message,
-                    "/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php"
-                ]);
+            $detailsStmt->execute([$requestId]);
+            $requestDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Send rejection email
+            if ($requestDetails) {
+                $emailService = new EmailService();
+                $emailData = [
+                    'status' => 'rejected',
+                    'name' => !empty($requestDetails['organization_name']) ? 
+                            $requestDetails['organization_name'] : 
+                            $requestDetails['fname'] . ' ' . $requestDetails['lname'],
+                    'email' => $requestDetails['email'],
+                    'product_name' => $requestDetails['product_name'],
+                    'notes' => $adminNotes
+                ];
+                
+                // Send email notification
+                $emailService->sendDonationRequestStatusEmail($emailData);
             }
-            
-            $successMessage = "Request #$requestId has been rejected and the NGO has been notified.";
         }
         
         $pdo->commit();
@@ -142,39 +193,39 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
     }
 }
 
-// Get all donation requests with related information
+// Get all NGO donation requests
 $stmt = $pdo->query("
     SELECT 
-        dr.id,
-        dr.product_waste_id,
-        dr.quantity_requested,
-        dr.pickup_date,
-        dr.pickup_time,
-        dr.notes as ngo_notes,
-        dr.status,
-        dr.is_received, /* Make sure to include this field */
-        dr.staff_notes,
-        dr.created_at,
-        dr.updated_at,
-        pw.waste_quantity as available_quantity,
+        ndr.id,
+        ndr.product_id,
+        ndr.ngo_id,
+        ndr.branch_id,
+        ndr.request_date,
+        ndr.pickup_date,
+        ndr.pickup_time,
+        ndr.status,
+        ndr.quantity_requested,
+        ndr.ngo_notes,
+        ndr.admin_notes,
+        ndr.is_received,
+        ndr.received_at,
         p.name as product_name,
         p.category,
-        pw.donation_expiry_date,
+        p.expiry_date as donation_expiry_date,  /* Add this line */
         CONCAT(u.fname, ' ', u.lname) as ngo_name,
+        u.organization_name,
         u.email as ngo_email,
         b.name as branch_name
     FROM 
-        donation_requests dr
+        ngo_donation_requests ndr
     JOIN 
-        product_waste pw ON dr.product_waste_id = pw.id
+        products p ON ndr.product_id = p.id
     JOIN 
-        products p ON pw.product_id = p.id
+        users u ON ndr.ngo_id = u.id
     JOIN 
-        users u ON dr.ngo_id = u.id
-    JOIN 
-        branches b ON pw.branch_id = b.id
+        branches b ON ndr.branch_id = b.id
     ORDER BY 
-        dr.created_at DESC
+        ndr.request_date DESC
 ");
 
 $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -324,29 +375,33 @@ $processedRequests = array_filter($requests, function($req) {
                 <table class="table table-zebra w-full">
                     <thead>
                         <tr class="bg-primarycol text-white">
-                            <th class="px-4 py-3 text-left">Request ID</th>
-                            <th class="px-4 py-3">NGO</th>
-                            <th class="px-4 py-3">Food Item</th>
-                            <th class="px-4 py-3">Quantity</th>
-                            <th class="px-4 py-3">Pickup Date</th>
-                            <th class="px-4 py-3">Requested On</th>
-                            <th class="px-4 py-3">Actions</th>
+                            <th>ID</th>
+                            <th>NGO</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Branch</th>
+                            <th>Requested</th>
+                            <th>Pickup Date</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         <?php foreach ($pendingRequests as $request): ?>
                             <tr class="hover:bg-gray-50 transition-colors">
                                 <td class="px-4 py-3 font-medium">#<?= $request['id'] ?></td>
-                                <td class="px-4 py-3"><?= htmlspecialchars($request['ngo_name']) ?></td>
+                                <td class="px-4 py-3"><?= !empty($request['organization_name']) ? 
+                                    htmlspecialchars($request['organization_name']) : 
+                                    htmlspecialchars($request['ngo_name']) ?></td>
                                 <td class="px-4 py-3"><?= htmlspecialchars($request['product_name']) ?></td>
-                                <td class="px-4 py-3"><?= htmlspecialchars($request['quantity_requested']) ?></td>
+                                <td class="px-4 py-3"><?= $request['quantity_requested'] ?></td>
+                                <td class="px-4 py-3"><?= htmlspecialchars($request['branch_name']) ?></td>
+                                <td class="px-4 py-3"><?= date('M d, Y', strtotime($request['request_date'])) ?></td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-col">
                                         <span class="font-medium"><?= date('M d, Y', strtotime($request['pickup_date'])) ?></span>
                                         <span class="text-xs text-gray-500"><?= date('h:i A', strtotime($request['pickup_time'])) ?></span>
                                     </div>
                                 </td>
-                                <td class="px-4 py-3"><?= date('M d, Y', strtotime($request['created_at'])) ?></td>
                                 <td class="px-4 py-3">
                                     <div class="flex space-x-2">
                                         <button class="btn btn-sm bg-primarycol hover:bg-primarycol/90 text-white transition-colors view-details-btn" 
@@ -411,7 +466,9 @@ $processedRequests = array_filter($requests, function($req) {
                             <?php foreach ($processedRequests as $request): ?>
                                 <tr>
                                     <td><?= $request['id'] ?></td>
-                                    <td><?= htmlspecialchars($request['ngo_name']) ?></td>
+                                    <td><?= !empty($request['organization_name']) ? 
+                                        htmlspecialchars($request['organization_name']) : 
+                                        htmlspecialchars($request['ngo_name']) ?></td>
                                     <td><?= htmlspecialchars($request['product_name']) ?></td>
                                     <td><?= htmlspecialchars($request['quantity_requested']) ?></td>
                                     <td>
@@ -425,7 +482,7 @@ $processedRequests = array_filter($requests, function($req) {
                                             <span class="badge bg-yellow-100 text-yellow-800 px-2 py-1">Pending</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= date('M d, Y', strtotime($request['updated_at'] ?? $request['created_at'])) ?></td>
+                                    <td><?= date('M d, Y', strtotime($request['request_date'])) ?></td>
                                     <td>
                                         <button class="btn btn-sm bg-primarycol text-white view-details-btn" 
                                                 data-id="<?= $request['id'] ?>">
@@ -463,9 +520,11 @@ $processedRequests = array_filter($requests, function($req) {
                             <p><span class="font-medium">Product:</span> <?= htmlspecialchars($request['product_name']) ?></p>
                             <p><span class="font-medium">Category:</span> <?= htmlspecialchars($request['category']) ?></p>
                             <p><span class="font-medium">Branch:</span> <?= htmlspecialchars($request['branch_name']) ?></p>
+                            <?php if (isset($request['donation_expiry_date']) && !empty($request['donation_expiry_date'])): ?>
                             <p><span class="font-medium">Expiry Date:</span> 
                                <?= date('M d, Y', strtotime($request['donation_expiry_date'])) ?>
                             </p>
+                            <?php endif; ?>
                         </div>
                     </div>
                     
@@ -473,7 +532,6 @@ $processedRequests = array_filter($requests, function($req) {
                         <h4 class="font-semibold text-primarycol mb-2">Request Details</h4>
                         <div class="grid grid-cols-2 gap-4">
                             <p><span class="font-medium">Quantity Requested:</span> <?= htmlspecialchars($request['quantity_requested']) ?></p>
-                            <p><span class="font-medium">Available Quantity:</span> <?= htmlspecialchars($request['available_quantity']) ?></p>
                             <p><span class="font-medium">Pickup Date:</span> <?= date('M d, Y', strtotime($request['pickup_date'])) ?></p>
                             <p><span class="font-medium">Pickup Time:</span> <?= date('h:i A', strtotime($request['pickup_time'])) ?></p>
                         </div>
@@ -485,10 +543,10 @@ $processedRequests = array_filter($requests, function($req) {
                         </div>
                         <?php endif; ?>
                         
-                        <?php if (!empty($request['staff_notes'])): ?>
+                        <?php if (!empty($request['admin_notes'])): ?>
                         <div class="mt-3">
-                            <h5 class="font-medium">Staff Notes:</h5>
-                            <p class="bg-white p-2 rounded mt-1"><?= nl2br(htmlspecialchars($request['staff_notes'])) ?></p>
+                            <h5 class="font-medium">Admin Notes:</h5>
+                            <p class="bg-white p-2 rounded mt-1"><?= nl2br(htmlspecialchars($request['admin_notes'])) ?></p>
                         </div>
                         <?php endif; ?>
                     </div>
@@ -529,7 +587,7 @@ $processedRequests = array_filter($requests, function($req) {
                             <span class="label-text">Notes (Optional)</span>
                         </label>
                         <textarea class="textarea textarea-bordered h-24" 
-                                  name="staff_notes"
+                                  name="admin_notes"
                                   placeholder="Add any notes for the NGO regarding this request..."></textarea>
                     </div>
                     

@@ -142,7 +142,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $('#edit_stock_date').val(stockDate);
                 $('#edit_expiry_date').val(expiryDate);
                 $('#edit_price_per_unit').val(pricePerUnit);
-                $('#edit_quantity_produced').val(quantityProduced);
                 $('#edit_stock_quantity').val(stockQuantity);
                 
                 // Open the modal using DaisyUI's modal API
@@ -252,7 +251,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             data-stock-date="<?= htmlspecialchars($product['stock_date']) ?>"
                                             data-expiry-date="<?= htmlspecialchars($product['expiry_date']) ?>"
                                             data-price="<?= htmlspecialchars($product['price_per_unit']) ?>"
-                                            data-quantity-produced="<?= htmlspecialchars($product['quantity_produced']) ?>"
                                             data-stock-quantity="<?= htmlspecialchars($product['stock_quantity']) ?>">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13" />
@@ -386,18 +384,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             class="input input-bordered w-full">
                     </div>
                     
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Quantity Produced
-                        </label>
-                        <input type="number"
-                            id="edit_quantity_produced"
-                            name="quantity_produced"
-                            min="1"
-                            step="1"
-                            required
-                            class="input input-bordered w-full">
-                    </div>
+                   
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">

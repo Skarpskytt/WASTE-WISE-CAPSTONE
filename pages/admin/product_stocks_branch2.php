@@ -140,7 +140,6 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 2';
                         <th>Stock Date</th>
                         <th>Expiry Date</th>
                         <th>Price/Unit</th>
-                        <th>Qty Produced</th>
                         <th>Stock Qty</th>
                         <th>Action</th>
                     </tr>
@@ -159,7 +158,6 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 2';
                             <td><?= htmlspecialchars($product['stock_date']) ?></td>
                             <td><?= htmlspecialchars($product['expiry_date']) ?></td>
                             <td>₱<?= number_format($product['price_per_unit'], 2) ?></td>
-                            <td><?= htmlspecialchars($product['quantity_produced']) ?></td>
                             <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
                             <td>
                                 <button 

@@ -149,6 +149,32 @@ class EmailService {
         }
     }
 
+    public function sendDonationRequestStatusEmail($data) {
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($data['email'], $data['name']);
+            
+            if ($data['status'] === 'approved') {
+                $this->mailer->Subject = 'Your Donation Request Has Been Approved';
+                $this->mailer->Body = $this->getDonationApprovalTemplate($data);
+            } else {
+                $this->mailer->Subject = 'Update on Your Donation Request';
+                $this->mailer->Body = $this->getDonationRejectionTemplate($data);
+            }
+            
+            $this->mailer->isHTML(true);
+            $sent = $this->mailer->send();
+            
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+        } catch (Exception $e) {
+            error_log("Failed to send donation status email: " . $e->getMessage());
+            return false;
+        }
+    }
+
     private function getNGOApprovalTemplate($data) {
         return "
         <h2>Welcome to WasteWise Management!</h2>
@@ -330,5 +356,36 @@ class EmailService {
         </body>
         </html>
     ";
+    }
+
+    private function getDonationApprovalTemplate($data) {
+        return "
+        <h2>Donation Request Approved</h2>
+        <p>Dear {$data['name']},</p>
+        <p>Your request for <strong>{$data['product_name']}</strong> has been approved!</p>
+        <p><strong>Pickup Details:</strong></p>
+        <ul>
+            <li>Branch: {$data['branch_name']}</li>
+            <li>Pickup Date: {$data['pickup_date']}</li>
+            <li>Pickup Time: {$data['pickup_time']}</li>
+        </ul>
+        <p>Please bring your ID when you come to pick up the donation.</p>
+        <p>If you have any questions, please contact us.</p>
+        <p>Thank you for your partnership in reducing food waste!</p>
+        <p>Regards,<br>WasteWise Team</p>
+        ";
+    }
+
+    private function getDonationRejectionTemplate($data) {
+        return "
+        <h2>Update on Your Donation Request</h2>
+        <p>Dear {$data['name']},</p>
+        <p>We regret to inform you that your request for <strong>{$data['product_name']}</strong> could not be approved at this time.</p>
+        <p><strong>Reason:</strong> {$data['notes']}</p>
+        <p>We encourage you to check our available donations regularly, as new items become available frequently.</p>
+        <p>If you have any questions, please contact us.</p>
+        <p>Thank you for your understanding and continued partnership in reducing food waste!</p>
+        <p>Regards,<br>WasteWise Team</p>
+        ";
     }
 }

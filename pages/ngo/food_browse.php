@@ -8,6 +8,11 @@ checkAuth(['ngo']);
 // Add this near the top of your file, right after checkAuth(['ngo']);
 $ngoId = $_SESSION['user_id']; // Make sure $ngoId is defined
 
+// Get NGO name for greeting - MOVE THIS TO THE TOP
+$ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organization_name FROM users WHERE id = ?");
+$ngoQuery->execute([$ngoId]);
+$ngoInfo = $ngoQuery->fetch(PDO::FETCH_ASSOC);
+
 // Initialize messages
 $successMessage = null;
 $errorMessage = null;
@@ -15,38 +20,51 @@ $errorMessage = null;
 // Process donation request form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
     // Get form data
-    $requestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
+    $donationRequestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
     $quantity = isset($_POST['quantity']) ? (float)$_POST['quantity'] : 0;
     $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
-    
-    // Get NGO information
-    $ngoId = $_SESSION['user_id'];
+    $pickupDate = isset($_POST['pickup_date']) ? $_POST['pickup_date'] : '';
+    $pickupTime = isset($_POST['pickup_time']) ? $_POST['pickup_time'] : '';
     
     // Validate input
     $errors = [];
-    if ($requestId <= 0) {
+    if ($donationRequestId <= 0) {
         $errors[] = "Invalid donation selection.";
     }
     if ($quantity <= 0) {
         $errors[] = "Please enter a valid quantity.";
     }
+    if (empty($pickupDate)) {
+        $errors[] = "Please select a pickup date.";
+    }
+    if (empty($pickupTime)) {
+        $errors[] = "Please select a pickup time.";
+    }
     
     // Check if the donation exists and has enough quantity
     try {
         $checkStmt = $pdo->prepare("
-            SELECT dr.*, p.name as product_name, b.name as branch_name
-            FROM donation_requests dr
-            JOIN products p ON dr.product_id = p.id
-            JOIN branches b ON dr.branch_id = b.id
-            WHERE dr.id = ? AND dr.status = 'prepared'
+            SELECT 
+                dr.id,
+                dr.product_id,
+                dr.branch_id,
+                dr.quantity,
+                p.name as product_name,
+                b.name as branch_name
+            FROM 
+                donation_requests dr
+            JOIN 
+                products p ON dr.product_id = p.id
+            JOIN 
+                branches b ON dr.branch_id = b.id
+            WHERE 
+                dr.id = ? AND dr.status = 'prepared' AND dr.quantity >= ?
         ");
-        $checkStmt->execute([$requestId]);
+        $checkStmt->execute([$donationRequestId, $quantity]);
         $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$donation) {
-            $errors[] = "The requested donation is no longer available.";
-        } else if ($donation['quantity'] < $quantity) {
-            $errors[] = "Requested quantity exceeds available amount.";
+            $errors[] = "The requested donation is not available or has insufficient quantity.";
         }
     } catch (PDOException $e) {
         $errors[] = "Database error: " . $e->getMessage();
@@ -58,38 +76,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
             // Start a transaction
             $pdo->beginTransaction();
             
-            // Create record in donated_products
+            // Create a pending request in the NGO donation requests table
             $insertStmt = $pdo->prepare("
-                INSERT INTO donated_products (
-                    donation_request_id, 
-                    ngo_id, 
-                    received_by, 
-                    received_quantity, 
-                    remarks
-                ) VALUES (?, ?, ?, ?, ?)
+                INSERT INTO ngo_donation_requests (
+                    product_id,
+                    ngo_id,
+                    branch_id,
+                    donation_request_id,
+                    request_date,
+                    pickup_date,
+                    pickup_time,
+                    status,
+                    quantity_requested,
+                    ngo_notes
+                ) VALUES (?, ?, ?, ?, NOW(), ?, ?, 'pending', ?, ?)
             ");
             
             $insertStmt->execute([
-                $requestId,
+                $donation['product_id'],
                 $ngoId,
-                $_SESSION['user_name'] ?? 'NGO Representative',
+                $donation['branch_id'],
+                $donationRequestId,
+                $pickupDate,
+                $pickupTime,
                 $quantity,
                 $notes
             ]);
             
-            // Update donation request status
-            $updateStmt = $pdo->prepare("
-                UPDATE donation_requests
-                SET status = 'completed'
-                WHERE id = ?
+            // Create notification for admin
+            $notifyAdminStmt = $pdo->prepare("
+                INSERT INTO notifications (
+                    target_role,
+                    message,
+                    notification_type,
+                    link,
+                    is_read
+                ) VALUES (
+                    'admin',
+                    ?,
+                    'ngo_donation_request',
+                    '/capstone/WASTE-WISE-CAPSTONE/pages/admin/ngo.php',
+                    0
+                )
             ");
-            $updateStmt->execute([$requestId]);
+            
+            $orgName = $ngoInfo['organization_name'] ?: $ngoInfo['full_name'];
+            $notifyMessage = "New donation request from {$orgName} for {$donation['product_name']}";
+            $notifyAdminStmt->execute([$notifyMessage]);
             
             // Commit transaction
             $pdo->commit();
             
             // Set success message
-            $successMessage = "Donation receipt has been confirmed successfully!";
+            $successMessage = "Your donation request has been submitted and is awaiting approval.";
             
         } catch (PDOException $e) {
             // Rollback on error
@@ -107,30 +146,37 @@ $quantityFilter = isset($_GET['min_quantity']) && is_numeric($_GET['min_quantity
 $dateFilter = isset($_GET['expiry_date']) ? $_GET['expiry_date'] : '';
 $donorFilter = isset($_GET['donor_name']) ? $_GET['donor_name'] : '';
 
-// Build query to get available donations
+// Add this line BEFORE you start building your SQL query (around line 159)
+
+$params = []; // Initialize the params array
+
+// Replace your current SQL query with this one:
+
 $sql = "SELECT 
-            dr.id,
-            dr.product_id, 
-            dr.branch_id,
-            dr.quantity,
-            dr.request_date,
-            dr.status,
-            dr.notes,
-            p.name as product_name, 
-            p.category,
-            p.expiry_date,
-            CONCAT(u.fname, ' ', u.lname) as donor_name, 
-            b.name as branch_name
-        FROM donation_requests dr
-        JOIN products p ON dr.product_id = p.id
-        JOIN users u ON dr.requested_by = u.id
-        JOIN branches b ON dr.branch_id = b.id
-        LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id
-        WHERE dr.status = 'prepared' AND dp.id IS NULL";
+    dr.id, 
+    p.id as product_id,
+    p.name as product_name,
+    p.category,
+    dr.quantity as available_quantity,
+    p.expiry_date,
+    b.id as branch_id,
+    b.name as branch_name,
+    dr.notes,
+    CONCAT(u.fname, ' ', u.lname) as donor_name
+FROM 
+    donation_requests dr
+JOIN 
+    products p ON dr.product_id = p.id
+JOIN 
+    branches b ON dr.branch_id = b.id
+JOIN 
+    users u ON dr.staff_id = u.id
+WHERE 
+    dr.status = 'prepared'
+    AND p.expiry_date > NOW()
+";
 
-$params = [];
-
-// Apply filters
+// Apply filters (needs adjusting for the new query structure)
 if (!empty($typeFilter) && $typeFilter !== 'All') {
     $sql .= " AND p.category = ?";
     $params[] = $typeFilter;
@@ -142,7 +188,7 @@ if ($quantityFilter > 0) {
 }
 
 if (!empty($dateFilter)) {
-    $sql .= " AND p.expiry_date >= ?";
+    $sql .= " AND DATE(p.expiry_date) >= ?";
     $params[] = $dateFilter;
 }
 
@@ -152,7 +198,7 @@ if (!empty($donorFilter)) {
     $params[] = "%$donorFilter%";
 }
 
-$sql .= " ORDER BY p.expiry_date ASC, dr.request_date DESC";
+$sql .= " ORDER BY p.expiry_date ASC";
 
 // Execute query
 try {
@@ -169,16 +215,12 @@ $catSql = "SELECT DISTINCT category FROM products ORDER BY category";
 $catStmt = $pdo->query($catSql);
 $categories = $catStmt->fetchAll(PDO::FETCH_COLUMN);
 
-// Get NGO name for greeting
-$ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organization_name FROM users WHERE id = ?");
-$ngoQuery->execute([$ngoId]);
-$ngoInfo = $ngoQuery->fetch(PDO::FETCH_ASSOC);
-
-// Get IDs of donations this NGO has already received
+// Get IDs of donations this NGO has already requested
 $requestedQuery = $pdo->prepare("
-    SELECT donation_request_id 
-    FROM donated_products 
-    WHERE ngo_id = ?
+    SELECT dr.product_id
+    FROM ngo_donation_requests ndr
+    JOIN donation_requests dr ON ndr.donation_request_id = dr.id
+    WHERE ndr.ngo_id = ? AND (ndr.status = 'pending' OR ndr.status = 'approved')
 ");
 $requestedQuery->execute([$ngoId]);
 $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
@@ -352,12 +394,13 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
                                 <?php endif; ?>
                                 
                                 <div class="mt-auto pt-4 flex justify-between items-center">
-                                    <div class="font-bold"><?= htmlspecialchars($item['quantity']) ?> items</div>
-                                    <a href="javascript:void(0)" 
-                                       class="bg-primarycol hover:bg-fourth text-white py-1 px-3 rounded-md text-sm"
-                                       onclick="showModal('<?= $item['id'] ?>', '<?= htmlspecialchars($item['product_name']) ?>', '<?= htmlspecialchars($item['quantity']) ?>', '<?= htmlspecialchars($item['expiry_date']) ?>', '<?= htmlspecialchars($item['branch_name']) ?>')">
-                                        Request Item
-                                    </a>
+                                    <div class="font-bold"><?= htmlspecialchars($item['available_quantity']) ?> items</div>
+                                    <button class="btn btn-primary btn-sm request-btn" 
+                                            data-id="<?= $item['id'] ?>"
+                                            data-name="<?= htmlspecialchars($item['product_name']) ?>"
+                                            data-branch="<?= $item['branch_id'] ?>">
+                                        Request
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -379,49 +422,40 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
     <!-- Donation Request Modal -->
     <div id="requestModal" class="modal">
       <div class="modal-box max-w-lg">
-        <h3 class="font-bold text-lg text-primarycol mb-4">Request Donation</h3>
+        <h3 class="font-bold text-lg mb-4">Request Donation</h3>
+        <div id="itemDetails" class="p-4 bg-gray-100 rounded-md mb-4">
+          <!-- Item details filled by JavaScript -->
+        </div>
         
-        <form id="requestForm" method="POST" action="food_browse.php">
+        <form id="requestForm" method="POST" action="">
           <input type="hidden" id="donationId" name="donation_id" value="">
           <input type="hidden" id="productName" name="product_name" value="">
+          <input type="hidden" id="branchId" name="branch_id" value="">
           
           <div class="mb-4">
-            <div class="flex items-center gap-2 mb-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primarycol" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              <span class="font-semibold text-primarycol">Item Details</span>
-            </div>
-            <div id="itemDetails" class="px-4 py-3 bg-sec rounded-md mb-4">
-              <!-- Item details will be filled by JavaScript -->
-            </div>
+            <label class="block text-gray-700 font-medium mb-1">Quantity <span id="maxQuantity" class="text-sm text-gray-500"></span></label>
+            <input type="number" name="quantity" required min="0.1" step="0.1"
+                   class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
           </div>
           
           <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Quantity Needed <span class="text-red-500">*</span></label>
-            <div class="flex items-center">
-              <input type="number" name="quantity" required min="1" 
-                     class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-              <span id="maxQuantity" class="ml-2 text-sm text-gray-500"></span>
-            </div>
+            <label class="block text-gray-700 font-medium mb-1">Pickup Date</label>
+            <input type="date" name="pickup_date" required min="<?= date('Y-m-d') ?>"
+                   class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
           </div>
           
           <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Preferred Pickup Date & Time <span class="text-red-500">*</span></label>
-            <div class="grid grid-cols-2 gap-2">
-              <input type="date" name="pickup_date" required min="<?= date('Y-m-d') ?>"
-                     class="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-              <input type="time" name="pickup_time" required
-                     class="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-            </div>
-            <p class="text-xs text-gray-500 mt-1">Please choose a date and time during operating hours (8 AM - 5 PM)</p>
+            <label class="block text-gray-700 font-medium mb-1">Pickup Time</label>
+            <input type="time" name="pickup_time" required
+                   class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
+            <p class="text-xs text-gray-500 mt-1">Please choose a time during operating hours (8 AM - 5 PM)</p>
           </div>
           
           <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Remarks/Additional Notes</label>
+            <label class="block text-gray-700 font-medium mb-1">Notes</label>
             <textarea name="notes" rows="3" 
                       class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol"
-                      placeholder="Any dietary restrictions, specific handling instructions, or other requirements..."></textarea>
+                      placeholder="Any additional requirements..."></textarea>
           </div>
           
           <div class="flex justify-end gap-2 mt-6">
@@ -439,11 +473,15 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
       document.getElementById('donationId').value = id;
       document.getElementById('productName').value = productName;
       
+      // Get branch id from the button that was clicked
+      const branchId = document.querySelector(`.request-btn[data-id="${id}"]`).getAttribute('data-branch');
+      document.getElementById('branchId').value = branchId;
+      
       // Display item details
       document.getElementById('itemDetails').innerHTML = `
         <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
         <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
-        <div class="mb-1"><span class="font-semibold">Expires on:</span> ${expiryDate}</div>
+        <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
         <div><span class="font-semibold">Branch:</span> ${branchName}</div>
       `;
       
@@ -467,6 +505,38 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
       if (event.target === modal) {
         closeModal();
       }
+    });
+    </script>
+
+    <script>
+    // Attach event listeners to all request buttons
+    document.addEventListener('DOMContentLoaded', function() {
+        const requestButtons = document.querySelectorAll('.request-btn');
+        
+        requestButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                const name = this.getAttribute('data-name');
+                
+                // Find the parent card to extract additional information
+                const card = this.closest('.bg-white.border');
+                
+                // Extract quantity, expiry date and branch name from the card
+                const quantityElement = card.querySelector('.font-bold');
+                const quantity = quantityElement ? quantityElement.textContent.split(' ')[0] : 'N/A';
+                
+                // Extract expiry information (if available)
+                const expiryElement = card.querySelector('[class*="bg-"][class*="-500"]');
+                const expiryDate = expiryElement ? expiryElement.textContent.replace('Expires in ', '').replace(' days', '') : 'N/A';
+                
+                // Extract branch name
+                const branchElement = card.querySelector('p.text-sm.text-gray-600');
+                const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
+                
+                // Now show the modal with this information
+                showModal(id, name, quantity, expiryDate, branchName);
+            });
+        });
     });
     </script>
 </body>

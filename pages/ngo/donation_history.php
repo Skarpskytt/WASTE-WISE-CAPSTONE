@@ -32,7 +32,7 @@ $statsStmt = $pdo->prepare("
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN is_received = 1 THEN 1 ELSE 0 END) as received
-    FROM donation_requests
+    FROM ngo_donation_requests
     WHERE ngo_id = ?
 ");
 $statsStmt->execute([$ngoId]);
@@ -41,38 +41,35 @@ $donationStats = $statsStmt->fetch(PDO::FETCH_ASSOC);
 // Get NGO's donation history
 $stmt = $pdo->prepare("
     SELECT 
-        dr.id,
-        dr.product_waste_id,
-        dr.quantity_requested,
-        dr.pickup_date,
-        dr.pickup_time,
-        dr.status,
-        dr.notes as ngo_notes,
-        dr.staff_notes,
-        dr.created_at,
-        dr.updated_at,
-        dr.is_received,
-        dr.received_at,
-        pw.waste_quantity as available_quantity,
+        ndr.id,
+        ndr.product_id,
+        ndr.branch_id,
+        ndr.donation_request_id,
+        ndr.request_date,
+        ndr.pickup_date,
+        ndr.pickup_time,
+        ndr.status,
+        ndr.quantity_requested,
+        ndr.ngo_notes,
+        ndr.admin_notes,
+        ndr.is_received,
+        ndr.received_at,
         p.name as product_name,
         p.category,
-        pw.donation_expiry_date,
         b.name as branch_name,
         b.address as branch_address
     FROM 
-        donation_requests dr
+        ngo_donation_requests ndr
     JOIN 
-        product_waste pw ON dr.product_waste_id = pw.id
+        products p ON ndr.product_id = p.id
     JOIN 
-        products p ON pw.product_id = p.id
-    JOIN 
-        branches b ON pw.branch_id = b.id
+        branches b ON ndr.branch_id = b.id
     WHERE 
-        dr.ngo_id = ?
+        ndr.ngo_id = ?
     ORDER BY 
-        dr.updated_at DESC
+        ndr.request_date DESC
 ");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt->execute([$ngoId]);
 $donations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Confirm receipt
@@ -86,96 +83,151 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
         
         // Update the donation request status
         $updateStmt = $pdo->prepare("
-            UPDATE donation_requests
+            UPDATE ngo_donation_requests
             SET is_received = 1, 
                 received_at = NOW(),
                 status = 'completed',
-                notes = CONCAT(notes, '\n\nReceipt Notes: ', ?)
+                ngo_notes = CONCAT(IFNULL(ngo_notes, ''), '\n\nReceipt Notes: ', ?)
             WHERE id = ? AND ngo_id = ?
         ");
-        $updateStmt->execute([$receiptNotes, $requestId, $_SESSION['user_id']]);
+        $updateStmt->execute([$receiptNotes, $requestId, $ngoId]);
         
-        // Mark the product as claimed in the product_waste table
-        $updateProductStmt = $pdo->prepare("
-            UPDATE product_waste pw
-            JOIN donation_requests dr ON pw.id = dr.product_waste_id
-            SET pw.is_claimed = 1
-            WHERE dr.id = ?
-        ");
-        $updateProductStmt->execute([$requestId]);
-        
-        // Get donation details for notification and email
-        $detailsStmt = $pdo->prepare("
-            SELECT 
-                dr.id,
-                dr.quantity_requested,
-                p.name as product_name,
-                b.name as branch_name,
-                b.address as branch_address,
-                CONCAT(u.fname, ' ', u.lname) as ngo_name,
-                u.organization_name,
-                u.email as ngo_email
-            FROM 
-                donation_requests dr
-            JOIN 
-                product_waste pw ON dr.product_waste_id = pw.id
-            JOIN 
-                products p ON pw.product_id = p.id
-            JOIN 
-                branches b ON pw.branch_id = b.id
-            JOIN
-                users u ON dr.ngo_id = u.id
-            WHERE 
-                dr.id = ?
-        ");
-        $detailsStmt->execute([$requestId]);
-        $donationDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$donationDetails) {
-            throw new Exception("Donation details not found");
+        if ($updateStmt->rowCount() > 0) {
+            // Get donation details FIRST before using it
+            $detailsStmt = $pdo->prepare("
+                SELECT 
+                    ndr.product_id,
+                    ndr.donation_request_id,
+                    ndr.branch_id,
+                    ndr.quantity_requested,
+                    p.name as product_name,
+                    p.price_per_unit,
+                    b.name as branch_name,
+                    b.address as branch_address,
+                    u.fname,
+                    u.lname,
+                    u.email
+                FROM 
+                    ngo_donation_requests ndr
+                JOIN 
+                    products p ON ndr.product_id = p.id
+                JOIN 
+                    branches b ON ndr.branch_id = b.id
+                JOIN 
+                    users u ON ndr.ngo_id = u.id
+                WHERE 
+                    ndr.id = ?
+            ");
+            $detailsStmt->execute([$requestId]);
+            $donationDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Update product quantity
+            $updateProductStmt = $pdo->prepare("
+                UPDATE donation_requests dr
+                JOIN ngo_donation_requests ndr ON dr.id = ndr.donation_request_id
+                SET dr.quantity = dr.quantity - ndr.quantity_requested
+                WHERE ndr.id = ?
+            ");
+            $updateProductStmt->execute([$requestId]);
+            
+            // Get the staff who created the original donation request
+            $staffQuery = $pdo->prepare("
+                SELECT dr.staff_id, dr.id as donation_request_id
+                FROM donation_requests dr
+                JOIN ngo_donation_requests ndr ON dr.id = ndr.donation_request_id
+                WHERE ndr.id = ?
+            ");
+            $staffQuery->execute([$requestId]);
+            $donationData = $staffQuery->fetch(PDO::FETCH_ASSOC);
+
+            if ($donationData && $donationDetails) {
+                // Create waste record with donation as disposal method
+                $wasteStmt = $pdo->prepare("
+                    INSERT INTO product_waste (
+                        product_id,
+                        branch_id,
+                        staff_id,
+                        waste_quantity,
+                        waste_date,
+                        waste_value,
+                        waste_reason,
+                        production_stage,
+                        disposal_method,
+                        notes
+                    ) VALUES (?, ?, ?, ?, NOW(), ?, 'unsold', 'storage', 'donation', ?)
+                ");
+                
+                // Calculate waste value based on quantity and product price
+                $wasteValue = $donationDetails['quantity_requested'] * ($donationDetails['price_per_unit'] ?? 0);
+                
+                $wasteStmt->execute([
+                    $donationDetails['product_id'],
+                    $donationDetails['branch_id'],
+                    $donationData['staff_id'] ?? $_SESSION['user_id'], // Fallback to current user if needed
+                    $donationDetails['quantity_requested'],
+                    $wasteValue,
+                    "Donated to NGO: " . $ngoInfo['organization_name'] . " (Request #" . $requestId . ")"
+                ]);
+            }
+            
+            // Create admin notification
+            $notifyAdminStmt = $pdo->prepare("
+                INSERT INTO notifications (
+                    target_role,
+                    message,
+                    notification_type,
+                    link,
+                    is_read
+                ) VALUES (
+                    'admin',
+                    ?,
+                    'donation_completed',
+                    '/capstone/WASTE-WISE-CAPSTONE/pages/admin/ngo.php',
+                    0
+                )
+            ");
+            
+            $ngoName = $donationDetails['fname'] . ' ' . $donationDetails['lname'];
+            $notifyMessage = "{$ngoName} has confirmed receipt of {$donationDetails['product_name']}.";
+            $notifyAdminStmt->execute([$notifyMessage]);
+            
+            // Send email confirmation
+            if (isset($donationDetails['email'])) {
+                sendReceiptEmail(
+                    $donationDetails['email'],
+                    $ngoName,
+                    $donationDetails,
+                    $receiptNotes,
+                    $requestId
+                );
+            }
+
+            // Insert into donated_products
+            $donatedStmt = $pdo->prepare("
+                INSERT INTO donated_products (
+                    donation_request_id, 
+                    ngo_id, 
+                    received_by, 
+                    received_date,
+                    received_quantity, 
+                    remarks
+                ) VALUES (?, ?, ?, NOW(), ?, ?)
+            ");
+            
+            $donatedStmt->execute([
+                $donationDetails['donation_request_id'],
+                $ngoId,
+                $ngoInfo['full_name'],
+                $donationDetails['quantity_requested'],
+                $receiptNotes
+            ]);
+            
+            $successMessage = "Successfully confirmed receipt of donation.";
+        } else {
+            throw new Exception("Failed to update donation status. Please try again.");
         }
-        
-        // Create notification for admin
-        $notifyStmt = $pdo->prepare("
-            INSERT INTO notifications (
-                target_role,
-                message,
-                notification_type,
-                link,
-                is_read
-            ) VALUES (
-                'admin',
-                ?,
-                'donation_received',
-                ?,
-                0
-            )
-        ");
-        
-        $orgName = !empty($donationDetails['organization_name']) ? $donationDetails['organization_name'] : $donationDetails['ngo_name'];
-        $notifyMessage = "Donation #" . $requestId . " (" . $donationDetails['product_name'] . 
-                         ") has been confirmed as received by " . $orgName;
-        $notifyLink = "/capstone/WASTE-WISE-CAPSTONE/pages/admin/donation_details.php?id=" . $requestId;
-        
-        $notifyStmt->execute([$notifyMessage, $notifyLink]);
-        
-        // Generate and send receipt via email
-        $receiptSuccess = sendReceiptEmail(
-            $donationDetails['ngo_email'],
-            $donationDetails['ngo_name'],
-            $donationDetails,
-            $receiptNotes,
-            $requestId
-        );
         
         $pdo->commit();
-        
-        if ($receiptSuccess) {
-            $successMessage = "Receipt confirmed. An acknowledgment has been sent to your email.";
-        } else {
-            $successMessage = "Receipt confirmed, but there was an issue sending the email acknowledgment.";
-        }
-        
     } catch (Exception $e) {
         $pdo->rollBack();
         $errorMessage = "Error: " . $e->getMessage();
@@ -306,40 +358,35 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                     <td><?= htmlspecialchars($donation['product_name']) ?></td>
                                     <td><?= $donation['quantity_requested'] ?></td>
                                     <td><?= htmlspecialchars($donation['branch_name']) ?></td>
-                                    <td>
-                                        <?= date('M d, Y', strtotime($donation['pickup_date'])) ?>
-                                        <span class="text-xs text-gray-500">
-                                            (<?= date('h:i A', strtotime($donation['pickup_time'])) ?>)
-                                        </span>
-                                    </td>
+                                    <td><?= date('M d, Y', strtotime($donation['pickup_date'])) ?> 
+                                        <?= date('h:i A', strtotime($donation['pickup_time'])) ?></td>
                                     <td>
                                         <?php if ($donation['status'] === 'approved'): ?>
                                             <?php if ($donation['is_received']): ?>
                                                 <span class="badge badge-success">Received</span>
                                             <?php else: ?>
-                                                <span class="badge badge-warning">Ready for Pickup</span>
+                                                <span class="badge badge-success">Ready for Pickup</span>
                                             <?php endif; ?>
                                         <?php elseif ($donation['status'] === 'rejected'): ?>
                                             <span class="badge badge-error">Rejected</span>
                                         <?php elseif ($donation['status'] === 'pending'): ?>
-                                            <span class="badge badge-info">Pending</span>
+                                            <span class="badge badge-warning">Awaiting Approval</span>
                                         <?php elseif ($donation['status'] === 'completed'): ?>
                                             <span class="badge badge-success">Completed</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm bg-primarycol text-white view-details-btn" 
-                                                data-id="<?= $donation['id'] ?>">
-                                            Details
-                                        </button>
-                                        
                                         <?php if ($donation['status'] === 'approved' && !$donation['is_received']): ?>
-                                            <button class="btn btn-sm bg-green-600 text-white confirm-receipt-btn"
-                                                    data-id="<?= $donation['id'] ?>"
-                                                    data-product="<?= htmlspecialchars($donation['product_name']) ?>">
-                                                Confirm Receipt
+                                            <button data-id="<?= $donation['id'] ?>" 
+                                                    data-product="<?= htmlspecialchars($donation['product_name']) ?>"
+                                                    class="confirm-receipt-btn btn btn-sm btn-success">
+                                                Confirm Pickup
                                             </button>
                                         <?php endif; ?>
+                                        <button data-id="<?= $donation['id'] ?>"
+                                                class="view-details-btn btn btn-sm bg-primarycol text-white">
+                                            View Details
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -398,27 +445,25 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['product_name']) ?></p>
                     <p><span class="font-medium">Category:</span> <?= htmlspecialchars($donation['category']) ?></p>
                     <p><span class="font-medium">Quantity Requested:</span> <?= $donation['quantity_requested'] ?></p>
-                    <?php if (!empty($donation['donation_expiry_date'])): ?>
-                        <p><span class="font-medium">Expiry Date:</span> <?= date('M d, Y', strtotime($donation['donation_expiry_date'])) ?></p>
-                    <?php endif; ?>
                 </div>
                 
                 <div class="bg-sec rounded-lg p-4 mb-4">
                     <h4 class="font-semibold text-primarycol mb-2">Branch Information</h4>
                     <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['branch_name']) ?></p>
+                    <?php if (isset($donation['branch_address'])): ?>
                     <p><span class="font-medium">Address:</span> <?= htmlspecialchars($donation['branch_address']) ?></p>
+                    <?php endif; ?>
                 </div>
                 
                 <div class="bg-sec rounded-lg p-4 mb-4">
                     <h4 class="font-semibold text-primarycol mb-2">Pickup Information</h4>
-                    <p><span class="font-medium">Date:</span> <?= date('M d, Y', strtotime($donation['pickup_date'])) ?></p>
-                    <p><span class="font-medium">Time:</span> <?= date('h:i A', strtotime($donation['pickup_time'])) ?></p>
+                    <p><span class="font-medium">Date:</span> <?= date('M d, Y', strtotime($donation['request_date'])) ?></p>
                 </div>
                 
-                <?php if (!empty($donation['staff_notes'])): ?>
+                <?php if (!empty($donation['admin_notes'])): ?>
                     <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                        <h4 class="font-semibold text-yellow-800 mb-2">Staff Notes</h4>
-                        <p><?= nl2br(htmlspecialchars($donation['staff_notes'])) ?></p>
+                        <h4 class="font-semibold text-yellow-800 mb-2">Admin Notes</h4>
+                        <p><?= nl2br(htmlspecialchars($donation['admin_notes'])) ?></p>
                     </div>
                 <?php endif; ?>
                 
