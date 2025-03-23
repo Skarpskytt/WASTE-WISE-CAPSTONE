@@ -34,6 +34,50 @@ $pdo = getPDO();
    <!-- Toast notification script -->
    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Error notifications
+        <?php if (isset($_SESSION['error'])): ?>
+            Toastify({
+                text: "❌ <?= htmlspecialchars($_SESSION['error']) ?>",
+                duration: 5000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#EF4444",
+                stopOnFocus: true,
+                className: "toast-message"
+            }).showToast();
+            <?php unset($_SESSION['error']); ?>
+        <?php endif; ?>
+
+        // Success messages
+        <?php if (isset($_SESSION['success'])): ?>
+            Toastify({
+                text: "✅ <?= htmlspecialchars($_SESSION['success']) ?>",
+                duration: 5000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#10B981",
+                stopOnFocus: true,
+                className: "toast-message"
+            }).showToast();
+            <?php unset($_SESSION['success']); ?>
+        <?php endif; ?>
+    });
+    </script>
+
+    <style>
+    .toast-message {
+        font-family: 'Arial', sans-serif;
+        font-weight: 500;
+        font-size: 14px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 6px;
+        max-width: 350px;
+    }
+    </style>
 </head>
 <body>
   <div class="flex h-screen">
@@ -176,136 +220,71 @@ $pdo = getPDO();
   </div>
   <script>
     function togglePassword(inputId, iconId) {
-        const input = document.getElementById(inputId);
-        const icon = document.getElementById(iconId);
-        
-        if (input.type === 'password') {
-            input.type = 'text';
-            icon.textContent = '👁️';
-        } else {
-            input.type = 'password';
-            icon.textContent = '👁️‍🗨️';
-        }
+      const input = document.getElementById(inputId);
+      const icon = document.getElementById(iconId);
+      
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = '👁️';
+      } else {
+        input.type = 'password';
+        icon.textContent = '👁️‍🗨️';
+      }
     }
 
     function checkPasswordStrength(password) {
-        const strengthDiv = document.getElementById('password-strength');
-        const strength = {
-            1: { text: 'Weak', color: 'text-red-500' },
-            2: { text: 'Medium', color: 'text-yellow-500' },
-            3: { text: 'Strong', color: 'text-green-500' }
-        };
+      const strengthDiv = document.getElementById('password-strength');
+      const strength = {
+        1: { text: 'Weak', color: 'text-red-500' },
+        2: { text: 'Medium', color: 'text-yellow-500' },
+        3: { text: 'Strong', color: 'text-green-500' }
+      };
 
-        let strengthScore = 0;
+      let strengthScore = 0;
+      if (password.length >= 8) strengthScore++;
+      if (password.match(/[a-z]/) && password.match(/[A-Z]/) && password.match(/[0-9]/)) strengthScore++;
+      if (password.match(/[^a-zA-Z0-9]/)) strengthScore++;
 
-        // Check length
-        if (password.length >= 8) strengthScore++;
-        
-        // Check for mix of characters
-        if (password.match(/[a-z]/) && password.match(/[A-Z]/) && password.match(/[0-9]/)) strengthScore++;
-        
-        // Check for special characters
-        if (password.match(/[^a-zA-Z0-9]/)) strengthScore++;
-
-        // Display result
-        const result = strength[strengthScore] || strength[1];
-        strengthDiv.className = `mt-1 text-xs ${result.color}`;
-        strengthDiv.textContent = `Password Strength: ${result.text}`;
+      const result = strength[strengthScore] || strength[1];
+      strengthDiv.className = `mt-1 text-xs ${result.color}`;
+      strengthDiv.textContent = `Password Strength: ${result.text}`;
     }
 
     function checkPasswordMatch() {
-        const password = document.getElementById('password').value;
-        const confirmPassword = document.getElementById('conpassword').value;
-        const matchDiv = document.getElementById('password-match');
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('conpassword').value;
+      const matchDiv = document.getElementById('password-match');
 
-        if (confirmPassword === '') {
-            matchDiv.className = 'mt-1 text-xs text-gray-500';
-            matchDiv.textContent = '';
-        } else if (password === confirmPassword) {
-            matchDiv.className = 'mt-1 text-xs text-green-500';
-            matchDiv.textContent = 'Passwords match!';
-        } else {
-            matchDiv.className = 'mt-1 text-xs text-red-500';
-            matchDiv.textContent = 'Passwords do not match!';
-        }
+      if (confirmPassword === '') {
+        matchDiv.className = 'mt-1 text-xs text-gray-500';
+        matchDiv.textContent = '';
+      } else if (password === confirmPassword) {
+        matchDiv.className = 'mt-1 text-xs text-green-500';
+        matchDiv.textContent = 'Passwords match!';
+      } else {
+        matchDiv.className = 'mt-1 text-xs text-red-500';
+        matchDiv.textContent = 'Passwords do not match!';
+      }
     }
 
     document.getElementById('role').addEventListener('change', function() {
-        const ngoFields = document.getElementById('ngo-fields');
-        const branchFields = document.getElementById('branch-fields');
-        
-        // Hide all conditional fields first
-        ngoFields.classList.add('hidden');
-        branchFields.classList.add('hidden');
-        
-        // Reset required attributes
-        document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = false);
-        document.querySelector('#branch').required = false;
-        
-        // Show relevant fields based on role
-        if (this.value === 'ngo') {
-            ngoFields.classList.remove('hidden');
-            document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = true);
-        } else if (this.value.includes('staff')) {
-            branchFields.classList.remove('hidden');
-            document.querySelector('#branch').required = true;
-        }
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
-        <?php if (isset($_SESSION['error'])): ?>
-            Toastify({
-                text: "❌ <?= $_SESSION['error'] ?>",
-                duration: 5000,
-                close: true,
-                gravity: "top",
-                position: "center",
-                backgroundColor: "#EF4444",
-                stopOnFocus: true,
-                className: "toast-message"
-            }).showToast();
-            <?php unset($_SESSION['error']); ?>
-        <?php endif; ?>
-
-        <?php if (isset($_SESSION['success'])): ?>
-            Toastify({
-                text: "✅ <?= $_SESSION['success'] ?>",
-                duration: 4000,
-                close: true,
-                gravity: "top",
-                position: "center",
-                backgroundColor: "#10B981",
-                stopOnFocus: true,
-                className: "toast-message"
-            }).showToast();
-            <?php unset($_SESSION['success']); ?>
-        <?php endif; ?>
-
-        <?php if (isset($_SESSION['pending_approval'])): ?>
-            Toastify({
-                text: "⏳ <?= $_SESSION['pending_approval'] ?>",
-                duration: 5000,
-                close: true,
-                gravity: "top",
-                position: "center",
-                backgroundColor: "#F59E0B",
-                stopOnFocus: true,
-                className: "toast-message"
-            }).showToast();
-            <?php unset($_SESSION['pending_approval']); ?>
-        <?php endif; ?>
+      const ngoFields = document.getElementById('ngo-fields');
+      const branchFields = document.getElementById('branch-fields');
+      
+      ngoFields.classList.add('hidden');
+      branchFields.classList.add('hidden');
+      
+      document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = false);
+      document.querySelector('#branch').required = false;
+      
+      if (this.value === 'ngo') {
+        ngoFields.classList.remove('hidden');
+        document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = true);
+      } else if (this.value.includes('staff')) {
+        branchFields.classList.remove('hidden');
+        document.querySelector('#branch').required = true;
+      }
     });
   </script>
-
-  <style>
-    .toast-message {
-        font-family: 'Arial', sans-serif;
-        font-weight: 500;
-        font-size: 14px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border-radius: 6px;
-        max-width: 350px;
-    }
-  </style>
 </body>
 </html>

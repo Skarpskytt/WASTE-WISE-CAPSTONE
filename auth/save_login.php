@@ -17,15 +17,6 @@ use App\Mail\EmailService;
 // Add explicit debugging
 error_log("Login attempt started");
 
-// Create database connection
-try {
-    $pdo = new PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    error_log("Database connection error: " . $e->getMessage());
-    die("Database connection failed");
-}
-
 // Initialize session with our custom handler
 initSession($pdo);
 

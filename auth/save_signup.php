@@ -103,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Update success message
         $pdo->commit();
+        $_SESSION['success'] = "Account created successfully. Please login.";
         header('Location: signup.php');
         exit();
 
