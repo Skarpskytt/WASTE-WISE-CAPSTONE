@@ -5,6 +5,17 @@ require_once '../vendor/autoload.php';
 require_once '../config/app_config.php';
 
 use App\Mail\EmailService;
+use CustomSession\SessionHandler;
+use function CustomSession\initSession;
+
+// Get database connection
+$pdo = getPDO();
+
+// Initialize session with our custom handler
+initSession($pdo);
+
+// Get session handler instance
+$session = SessionHandler::getInstance($pdo);
 
 // Enable error reporting
 error_reporting(E_ALL);

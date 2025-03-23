@@ -14,18 +14,22 @@ if (!isset($_SESSION['temp_user_id'])) {
     exit();
 }
 
-// Include necessary files for UI only
 require_once '../config/app_config.php';
 require_once '../config/db_connect.php';
+require_once '../config/session_handler.php';
 
-// Create database connection
-try {
-    $pdo = new PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    error_log("Database connection error: " . $e->getMessage());
-    die("Database connection failed");
-}
+use CustomSession\SessionHandler;
+use function CustomSession\initSession;
+
+// Get database connection
+$pdo = getPDO();
+
+// Initialize session with our custom handler
+initSession($pdo);
+
+// Get session handler instance
+$session = SessionHandler::getInstance($pdo);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">

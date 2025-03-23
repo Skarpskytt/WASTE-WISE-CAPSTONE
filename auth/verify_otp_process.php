@@ -4,23 +4,28 @@ session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+require_once '../config/app_config.php';
+require_once '../config/db_connect.php';
+require_once '../config/session_handler.php';
+
+use CustomSession\SessionHandler;
+use function CustomSession\initSession;
+
+// Get database connection
+$pdo = getPDO();
+
+// Initialize session with our custom handler
+initSession($pdo);
+
+// Get session handler instance
+$session = SessionHandler::getInstance($pdo);
+
 // Debug session data
 error_log("SESSION in verify_otp_process.php: " . print_r($_SESSION, true));
 
 // Check if temp_user_id exists
 if (!isset($_SESSION['temp_user_id'])) {
     $_SESSION['error'] = "Session expired. Please login again.";
-    header('Location: ../index.php');
-    exit();
-}
-
-// Connect to database
-try {
-    $pdo = new PDO('mysql:host=localhost;dbname=wastewise', 'root', '');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    error_log("Database connection error: " . $e->getMessage());
-    $_SESSION['error'] = "System error. Please try again later.";
     header('Location: ../index.php');
     exit();
 }
