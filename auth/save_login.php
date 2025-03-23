@@ -17,6 +17,9 @@ use App\Mail\EmailService;
 // Add explicit debugging
 error_log("Login attempt started");
 
+// Get database connection - THIS LINE WAS MISSING
+$pdo = getPDO();
+
 // Initialize session with our custom handler
 initSession($pdo);
 
