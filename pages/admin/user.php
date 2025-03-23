@@ -1,10 +1,20 @@
 <?php
+// Start output buffering to ensure headers can be sent
+ob_start();
+
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 require_once '../../vendor/autoload.php';
 
-$dotenv = Dotenv\Dotenv::createImmutable('../../');
-$dotenv->load();
+// Try to load environment variables with better path handling
+try {
+    $rootPath = dirname(dirname(__DIR__)); // Get absolute path to project root
+    $dotenv = Dotenv\Dotenv::createImmutable($rootPath);
+    $dotenv->load();
+} catch (\Dotenv\Exception\InvalidPathException $e) {
+    // Silent fail - continue without .env if it can't be found
+    // You could add error logging here if needed
+}
 
 use App\Mail\EmailService;
 
@@ -482,3 +492,7 @@ function closeEditModal() {
 
 </body>
 </html>
+<?php
+// Flush output buffer at the end
+ob_end_flush();
+?>
