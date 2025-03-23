@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Get search parameters with proper error handling
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $start_date = isset($_GET['start_date']) && !empty($_GET['start_date']) ? trim($_GET['start_date']) : '';
@@ -75,7 +77,8 @@ if (!empty($end_date)) {
 }
 
 // Finalize the data query
-$dataQuery .= " ORDER BY dp.received_date DESC LIMIT ? OFFSET ?";
+// REMOVE THIS LINE COMPLETELY:
+// $dataQuery .= " ORDER BY dp.received_date DESC LIMIT ? OFFSET ?";
 
 // Get total count with filters
 $countStmt = $pdo->prepare($countQuery);
@@ -84,12 +87,12 @@ $total = $countStmt->fetchColumn();
 $total_pages = ceil($total / $per_page);
 $offset = ($page - 1) * $per_page;
 
-// Fetch donation data with filters
+// Add LIMIT and OFFSET directly to the SQL string
+$dataQuery .= " ORDER BY dp.received_date DESC LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
+
+// Fetch donation data with filters - use only the filter params, not pagination ones
 $stmt = $pdo->prepare($dataQuery);
-$queryParams = $params;
-$queryParams[] = $per_page;
-$queryParams[] = $offset;
-$stmt->execute($queryParams);
+$stmt->execute($params);  // Don't add pagination parameters to this array
 $donationData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Generate pagination URL with filters preserved
@@ -357,7 +360,7 @@ $uniqueNgos = $uniqueNgosStmt->fetch(PDO::FETCH_ASSOC)['unique_ngos'] ?? 0;
           <a href="javascript:void(0)" onclick="printPage()" 
              class="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm inline-flex items-center text-sm">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 01-2 2z" />
             </svg>
             Print
           </a>

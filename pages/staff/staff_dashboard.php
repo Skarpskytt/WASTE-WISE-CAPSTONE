@@ -2,10 +2,11 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Change the role check to use the 'staff' role which covers both branch staff types
-checkAuth(['staff']);
+// Fix: Update to check for both branch staff roles
+checkAuth(['branch1_staff', 'branch2_staff']);
 
 // Get branch ID from session
+$pdo = getPDO();  // Make sure we initialize the database connection
 $branchId = $_SESSION['branch_id'];
 
 // Make sure we have the user's name for display

@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {

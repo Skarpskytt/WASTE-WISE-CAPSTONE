@@ -5,7 +5,10 @@ require_once '../../includes/mail/EmailService.php';
 use App\Mail\EmailService;
 
 // Check for admin access only
-checkAuth(['admin', 'staff']);
+checkAuth(['admin']);
+
+$pdo = getPDO();
+
 
 // Handle approve/reject actions
 if (isset($_POST['action']) && isset($_POST['request_id'])) {
@@ -48,6 +51,17 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
                 WHERE id = ?
             ");
             $updateStmt->execute([$adminNotes, $requestId]);
+            
+            // Also update the status of the original donation request to 'reserved'
+            // This ensures it won't show up for other NGOs
+            $updateDonationStmt = $pdo->prepare("
+                UPDATE donation_requests 
+                SET status = 'reserved'
+                WHERE id = (
+                    SELECT donation_request_id FROM ngo_donation_requests WHERE id = ?
+                )
+            ");
+            $updateDonationStmt->execute([$requestId]);
             
             // Get email data
             $detailsStmt = $pdo->prepare("

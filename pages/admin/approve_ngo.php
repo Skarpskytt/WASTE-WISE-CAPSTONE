@@ -5,6 +5,8 @@ require_once '../../vendor/autoload.php';
 
 use App\Mail\EmailService;
 
+$pdo = getPDO();
+
 // Check for admin access
 checkAuth(['admin']);
 

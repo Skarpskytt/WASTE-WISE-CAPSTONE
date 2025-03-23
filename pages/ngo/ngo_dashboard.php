@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check if user is NGO
 checkAuth(['ngo']);
 
+$pdo = getPDO();
+
 $ngoId = $_SESSION['user_id'];
 
 // Fetch more detailed NGO information

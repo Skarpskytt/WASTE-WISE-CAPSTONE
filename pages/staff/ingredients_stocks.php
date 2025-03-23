@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Handle edit/update action
 if (isset($_POST['update_stock'])) {
     $ingredientId = $_POST['ingredient_id'] ?? 0;

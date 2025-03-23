@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Set branch ID for this page
 $branchId = 1;  // Branch 1
 
@@ -65,22 +67,21 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-// Finalize the data query
-$dataQuery .= " ORDER BY pw.waste_date DESC LIMIT ? OFFSET ?";
-
-// Get total count with filters
+// First, get the total count with filters
 $prodCountStmt = $pdo->prepare($countQuery);
 $prodCountStmt->execute($params);
 $prod_total = $prodCountStmt->fetchColumn();
+
+// Then calculate pagination values
 $prod_total_pages = ceil($prod_total / $prod_per_page);
 $prod_offset = ($prod_page - 1) * $prod_per_page;
 
+// Finally, add the LIMIT and OFFSET to the data query
+$dataQuery .= " ORDER BY pw.waste_date DESC LIMIT " . (int)$prod_per_page . " OFFSET " . (int)$prod_offset;
+
 // Fetch Product Waste Data with filters
 $prodStmt = $pdo->prepare($dataQuery);
-$queryParams = $params;
-$queryParams[] = $prod_per_page;
-$queryParams[] = $prod_offset;
-$prodStmt->execute($queryParams);
+$prodStmt->execute($params);
 $productWasteData = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get branch name

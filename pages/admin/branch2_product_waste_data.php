@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Set branch ID for this page
 $branchId = 2;  // Branch 2
 
@@ -65,23 +67,22 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-// Finalize the data query
-$dataQuery .= " ORDER BY pw.waste_date DESC LIMIT ? OFFSET ?";
+// Get count first
+$countStmt = $pdo->prepare($countQuery);
+$countStmt->execute($params);
+$total = $countStmt->fetchColumn();
 
-// Get total count with filters
-$prodCountStmt = $pdo->prepare($countQuery);
-$prodCountStmt->execute($params);
-$prod_total = $prodCountStmt->fetchColumn();
-$prod_total_pages = ceil($prod_total / $prod_per_page);
-$prod_offset = ($prod_page - 1) * $prod_per_page;
+// Calculate pagination
+$totalPages = ceil($total / $prod_per_page);
+$offset = ($prod_page - 1) * $prod_per_page;
 
-// Fetch Product Waste Data with filters
-$prodStmt = $pdo->prepare($dataQuery);
-$queryParams = $params;
-$queryParams[] = $prod_per_page;
-$queryParams[] = $prod_offset;
-$prodStmt->execute($queryParams);
-$productWasteData = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
+// Add LIMIT/OFFSET directly to SQL
+$dataQuery .= " ORDER BY pw.waste_date DESC LIMIT " . (int)$prod_per_page . " OFFSET " . (int)$offset;
+
+// Execute with only filter params
+$stmt = $pdo->prepare($dataQuery);
+$stmt->execute($params);
+$productWasteData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get branch name
 $branchStmt = $pdo->prepare("SELECT name FROM branches WHERE id = ?");
@@ -380,16 +381,16 @@ function getPaginationUrl($page) {
       </div>
       
       <!-- Product Waste Pagination -->
-      <?php if ($prod_total_pages > 1): ?>
+      <?php if ($totalPages > 1): ?>
       <div class="flex justify-center mt-4">
         <nav class="inline-flex shadow-sm">
           <?php if ($prod_page > 1): ?>
             <a href="<?= getPaginationUrl($prod_page - 1) ?>" class="px-3 py-2 bg-white border border-gray-300 text-gray-700">Prev</a>
           <?php endif; ?>
-          <?php for ($i = 1; $i <= $prod_total_pages; $i++): ?>
+          <?php for ($i = 1; $i <= $totalPages; $i++): ?>
             <a href="<?= getPaginationUrl($i) ?>" class="px-3 py-2 <?= $i == $prod_page ? 'bg-primarycol text-white' : 'bg-white text-gray-700' ?> border border-gray-300"><?= $i ?></a>
           <?php endfor; ?>
-          <?php if ($prod_page < $prod_total_pages): ?>
+          <?php if ($prod_page < $totalPages): ?>
             <a href="<?= getPaginationUrl($prod_page + 1) ?>" class="px-3 py-2 bg-white border border-gray-300 text-gray-700">Next</a>
           <?php endif; ?>
         </nav>

@@ -8,6 +8,8 @@ use App\Mail\EmailService;
 // Check if user is NGO
 checkAuth(['ngo']);
 
+$pdo = getPDO();
+
 $ngoId = $_SESSION['user_id'];
 
 // Get NGO's information

@@ -3,18 +3,22 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Use absolute path for includes
+// Include necessary files
+require_once 'config/app_config.php';
+require_once 'config/db_connect.php';
 require_once 'config/session_handler.php';
-use CustomSession\SessionHandler;
 
-// Test session functionality
-try {
-    $pdo = new \PDO('mysql:host=localhost;dbname=u697061521_wastewise', 'u697061521_skarpskytt', 'uLVQV*zhK*1?');
-    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-    $session = SessionHandler::getInstance($pdo);
-} catch (Exception $e) {
-    error_log("Session Error: " . $e->getMessage());
-}
+use CustomSession\SessionHandler;
+use function CustomSession\initSession;
+
+// Get database connection
+$pdo = getPDO();
+
+// Initialize session with our custom handler
+initSession($pdo);
+
+// Get session handler instance
+$session = SessionHandler::getInstance($pdo);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -24,6 +28,10 @@ try {
   <title>Login</title>
   <link rel="icon" type="image/x-icon" href="assets/images/Company Logo.jpg">
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Add Toastify CSS and JS -->
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  
   <script>
    tailwind.config = {
      theme: {
@@ -49,7 +57,116 @@ function togglePassword() {
         eyeIcon.innerHTML = '👁️‍🗨️';
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Error/Failed authentication notifications
+    <?php if (isset($_SESSION['error'])): ?>
+        Toastify({
+            text: "<?php 
+                $error = $_SESSION['error'];
+                if (strpos($error, 'pending') !== false) {
+                    echo '⏳ Pending Approval: ' . $error;
+                } elseif (strpos($error, 'password') !== false) {
+                    echo '🔒 Authentication Error: ' . $error;
+                } elseif (strpos($error, 'locked') !== false) {
+                    echo '🔐 Account Locked: ' . $error;
+                } else {
+                    echo '❌ ' . $error;
+                }
+            ?>",
+            duration: 5000,
+            close: true,
+            gravity: "top",
+            position: "center",
+            backgroundColor: "#EF4444",
+            stopOnFocus: true,
+            className: "toast-message"
+        }).showToast();
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
+    // Login-specific errors (with attempts tracking)
+    <?php if (isset($_SESSION['login_error']) || isset($_SESSION['attempts_left'])): ?>
+        console.log("Login error detected: <?= isset($_SESSION['login_error']) ? htmlspecialchars($_SESSION['login_error']) : '' ?>");
+        console.log("Attempts left: <?= isset($_SESSION['attempts_left']) ? $_SESSION['attempts_left'] : 'not set' ?>");
+        
+        Toastify({
+            text: "<?php 
+                $error = isset($_SESSION['login_error']) ? $_SESSION['login_error'] : 'Authentication error';
+                $attempts = isset($_SESSION['attempts_left']) ? $_SESSION['attempts_left'] : null;
+                
+                if (strpos($error, 'password') !== false) {
+                    echo '🔒 Authentication Error: ' . $error;
+                    if ($attempts !== null) {
+                        echo ' (' . $attempts . ' attempts left)';
+                    }
+                } else {
+                    echo '❌ ' . $error;
+                    if ($attempts !== null) {
+                        echo ' (' . $attempts . ' attempts left)';
+                    }
+                }
+            ?>",
+            duration: 5000,
+            close: true,
+            gravity: "top",
+            position: "center",
+            backgroundColor: "#EF4444",
+            stopOnFocus: true,
+            className: "toast-message"
+        }).showToast();
+        
+        <?php 
+        // Unset both variables
+        if (isset($_SESSION['login_error'])) unset($_SESSION['login_error']); 
+        if (isset($_SESSION['attempts_left'])) unset($_SESSION['attempts_left']);
+        ?>
+    <?php endif; ?>
+
+    // Success messages
+    <?php if (isset($_SESSION['success'])): ?>
+        Toastify({
+            text: "✅ <?= $_SESSION['success'] ?>",
+            duration: 5000,
+            close: true,
+            gravity: "top",
+            position: "center",
+            backgroundColor: "#10B981",
+            stopOnFocus: true,
+            className: "toast-message"
+        }).showToast();
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    // Pending approval messages (warning style)
+    <?php if (isset($_SESSION['pending_message'])): ?>
+        Toastify({
+            text: "⏳ Account Status: <?= $_SESSION['pending_message'] ?>",
+            duration: 5000,
+            close: true,
+            gravity: "top",
+            position: "center",
+            backgroundColor: "#F59E0B",
+            stopOnFocus: true,
+            className: "toast-message"
+        }).showToast();
+        <?php unset($_SESSION['pending_message']); ?>
+    <?php endif; ?>
+}); // <--- This closing bracket was missing or misplaced
 </script>
+
+<!-- Add this CSS for better toast styling -->
+<style>
+.toast-message {
+    font-family: 'Arial', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 6px;
+    max-width: 350px;
+}
+</style>
+
 </head>
 <body>
 <div class="flex h-screen">
@@ -63,57 +180,6 @@ function togglePassword() {
     <div class="max-w-md w-full p-6">
       <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign in</h1>
       <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Welcome to Bea Bakes: A Food Waste Management Hub System</h1>
-      
-      <?php if (isset($_SESSION['error'])): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-4">
-            <p class="text-center">
-                <?php 
-                $error = $_SESSION['error'];
-                if (strpos($error, 'NGO account is still pending') !== false) {
-                    echo '<span class="font-semibold">Pending Approval:</span> ' . $error;
-                } elseif (strpos($error, 'Wrong password') !== false) {
-                    echo '<span class="font-semibold">Authentication Error:</span> ' . $error;
-                } else {
-                    echo $error;
-                }
-                ?>
-            </p>
-        </div>
-        <?php unset($_SESSION['error']); ?>
-      <?php endif; ?>
-
-      <?php if (isset($_SESSION['login_error'])): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-4">
-            <p class="text-center">
-                <?php 
-                $error = $_SESSION['login_error'];
-                if (strpos($error, 'Wrong password') !== false) {
-                    echo '<span class="font-semibold">Authentication Error:</span> ' . $error;
-                } else {
-                    echo $error;
-                }
-                ?>
-            </p>
-        </div>
-        <?php unset($_SESSION['login_error']); ?>
-      <?php endif; ?>
-
-      <?php if (isset($_SESSION['success'])): ?>
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-md mb-4">
-            <p class="text-center"><?= $_SESSION['success'] ?></p>
-        </div>
-        <?php unset($_SESSION['success']); ?>
-      <?php endif; ?>
-
-      <?php if (isset($_SESSION['pending_message'])): ?>
-        <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-md mb-4">
-            <p class="text-center">
-                <span class="font-semibold">Account Status:</span> 
-                <?php echo $_SESSION['pending_message']; ?>
-            </p>
-        </div>
-        <?php unset($_SESSION['pending_message']); ?>
-      <?php endif; ?>
       
       <form action="auth/save_login.php" method="POST" class="space-y-4">
         <div>

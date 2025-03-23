@@ -1,3 +1,16 @@
+<?php
+// Start the session properly
+session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Include app config for BASE_URL and other constants
+require_once '../config/app_config.php';
+require_once '../config/db_connect.php';
+
+// Get the database connection once
+$pdo = getPDO();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,6 +31,9 @@
       }
     }
    </script>
+   <!-- Toast notification script -->
+   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 </head>
 <body>
   <div class="flex h-screen">
@@ -26,17 +42,24 @@
         <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign Up</h1>
         <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Join our community with all-time access and free</h1>
         
-        <?php
-        session_start();
-        if (isset($_SESSION['error'])) {
-            echo '<div class="mb-4 text-red-500">' . $_SESSION['error'] . '</div>';
-            unset($_SESSION['error']);
-        }
-        if (isset($_SESSION['success'])) {
-            echo '<div class="mb-4 text-green-500">' . $_SESSION['success'] . '</div>';
-            unset($_SESSION['success']);
-        }
-        ?>
+        <div class="hidden">
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="mb-4 text-red-500"><?= $_SESSION['error'] ?></div>
+                <?php unset($_SESSION['error']); ?>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="mb-4 text-green-500"><?= $_SESSION['success'] ?></div>
+                <?php unset($_SESSION['success']); ?>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['pending_approval'])): ?>
+                <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mt-4" role="alert">
+                    <span class="block sm:inline"><?php echo $_SESSION['pending_approval']; ?></span>
+                </div>
+                <?php unset($_SESSION['pending_approval']); ?>
+            <?php endif; ?>
+        </div>
         
         <form action="save_signup.php" method="POST" class="space-y-4">
           <?php if (isset($_SESSION['pending_approval'])): ?>
@@ -109,7 +132,7 @@
             <select id="branch" name="branch_id" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
                 <option value="">Select a branch</option>
                 <?php
-                include('../config/db_connect.php');
+                // Use the existing PDO connection instead of creating a new one
                 $stmt = $pdo->query('SELECT id, name FROM branches');
                 while ($branch = $stmt->fetch()) {
                     echo '<option value="' . htmlspecialchars($branch['id']) . '">' . 
@@ -228,6 +251,61 @@
             document.querySelector('#branch').required = true;
         }
     });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        <?php if (isset($_SESSION['error'])): ?>
+            Toastify({
+                text: "❌ <?= $_SESSION['error'] ?>",
+                duration: 5000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#EF4444",
+                stopOnFocus: true,
+                className: "toast-message"
+            }).showToast();
+            <?php unset($_SESSION['error']); ?>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['success'])): ?>
+            Toastify({
+                text: "✅ <?= $_SESSION['success'] ?>",
+                duration: 4000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#10B981",
+                stopOnFocus: true,
+                className: "toast-message"
+            }).showToast();
+            <?php unset($_SESSION['success']); ?>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['pending_approval'])): ?>
+            Toastify({
+                text: "⏳ <?= $_SESSION['pending_approval'] ?>",
+                duration: 5000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#F59E0B",
+                stopOnFocus: true,
+                className: "toast-message"
+            }).showToast();
+            <?php unset($_SESSION['pending_approval']); ?>
+        <?php endif; ?>
+    });
   </script>
+
+  <style>
+    .toast-message {
+        font-family: 'Arial', sans-serif;
+        font-weight: 500;
+        font-size: 14px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 6px;
+        max-width: 350px;
+    }
+  </style>
 </body>
 </html>

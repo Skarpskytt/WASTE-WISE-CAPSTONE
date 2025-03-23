@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Fetch the user's name from the session
 $userId = $_SESSION['user_id'];
 $userName = $_SESSION['fname'] . ' ' . $_SESSION['lname'];

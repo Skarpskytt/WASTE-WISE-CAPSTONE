@@ -15,6 +15,8 @@ if (!is_dir($uploadPath)) {
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 $errors = [];
 $successMessage = '';
 

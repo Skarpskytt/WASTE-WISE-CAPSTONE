@@ -57,29 +57,28 @@ class SessionHandler
     }
 }
 
-// Move session handler setup before any session operations
-if (session_status() == PHP_SESSION_NONE) {
-    try {
-        $pdo = new \PDO('mysql:host=localhost;dbname=u697061521_wastewise', 'u697061521_skarpskytt', 'uLVQV*zhK*1?');
-        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        
-        $handler = SessionHandler::getInstance($pdo);
-        session_set_save_handler(
-            [$handler, 'open'],
-            [$handler, 'close'],
-            [$handler, 'read'],
-            [$handler, 'write'],
-            [$handler, 'destroy'],
-            [$handler, 'gc']
-        );
-        
-        // Register shutdown function to ensure session data is saved
-        register_shutdown_function('session_write_close');
-        
-        // Start the session after setting the handler
-        session_start();
-    } catch (\PDOException $e) {
-        die("Database connection failed: " . $e->getMessage());
+// Initialize session only if explicitly requested
+function initSession($pdo) {
+    if (session_status() == PHP_SESSION_NONE) {
+        try {
+            $handler = SessionHandler::getInstance($pdo);
+            session_set_save_handler(
+                [$handler, 'open'],
+                [$handler, 'close'],
+                [$handler, 'read'],
+                [$handler, 'write'],
+                [$handler, 'destroy'],
+                [$handler, 'gc']
+            );
+            
+            register_shutdown_function('session_write_close');
+            session_start();
+            return true;
+        } catch (\PDOException $e) {
+            error_log("Session initialization error: " . $e->getMessage());
+            return false;
+        }
     }
+    return true;
 }
 ?>

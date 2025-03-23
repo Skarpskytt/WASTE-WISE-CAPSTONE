@@ -6,6 +6,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
     $branchId = isset($_POST['branch_id']) ? (int)$_POST['branch_id'] : 0;

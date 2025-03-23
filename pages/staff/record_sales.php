@@ -4,6 +4,8 @@ require_once '../../config/db_connect.php';
 
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Initialize variables
 $message = '';
 $messageType = '';

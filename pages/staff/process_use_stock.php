@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Check if the form was submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {

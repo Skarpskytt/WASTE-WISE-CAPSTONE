@@ -5,6 +5,9 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
+
 // Branch ID for Branch 2 (assuming it's 2)
 $branchId = 2;
 

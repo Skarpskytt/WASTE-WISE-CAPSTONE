@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Get user ID from session
 $userId = $_SESSION['user_id'];
 $successMsg = '';

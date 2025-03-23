@@ -5,8 +5,12 @@ require_once '../../config/db_connect.php';
 // Check for NGO access only
 checkAuth(['ngo']);
 
+$pdo = getPDO();
+
 // Add this near the top of your file, right after checkAuth(['ngo']);
 $ngoId = $_SESSION['user_id']; // Make sure $ngoId is defined
+
+
 
 // Get NGO name for greeting - MOVE THIS TO THE TOP
 $ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organization_name FROM users WHERE id = ?");
@@ -31,8 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
     if ($donationRequestId <= 0) {
         $errors[] = "Invalid donation selection.";
     }
-    if ($quantity <= 0) {
-        $errors[] = "Please enter a valid quantity.";
+    if ($quantity < 20) {
+        $errors[] = "Please request at least 20 items.";
+    }
+    if ($quantity > 30) {
+        $errors[] = "Maximum request limit is 30 items.";
     }
     if (empty($pickupDate)) {
         $errors[] = "Please select a pickup date.";
@@ -148,7 +155,7 @@ $donorFilter = isset($_GET['donor_name']) ? $_GET['donor_name'] : '';
 
 // Add this line BEFORE you start building your SQL query (around line 159)
 
-$params = []; // Initialize the params array
+$params = [$ngoId]; // Initialize the params array
 
 // Replace your current SQL query with this one:
 
@@ -174,6 +181,13 @@ JOIN
 WHERE 
     dr.status = 'prepared'
     AND p.expiry_date > NOW()
+    AND dr.id NOT IN (
+        /* Exclude donations that are already approved for this NGO */
+        SELECT ndr.donation_request_id 
+        FROM ngo_donation_requests ndr 
+        WHERE ndr.ngo_id = ? 
+        AND (ndr.status = 'approved' OR ndr.status = 'completed')
+    )
 ";
 
 // Apply filters (needs adjusting for the new query structure)
@@ -343,14 +357,28 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <?php if (count($donations) > 0): ?>
-                    <?php foreach ($donations as $item): ?>
-                        <?php $alreadyRequested = in_array($item['id'], $requestedDonations); ?>
+                    <?php 
+                    // Update the logic for determining if an item has been requested
+                    $checkRequestStmt = $pdo->prepare("
+                        SELECT status FROM ngo_donation_requests 
+                        WHERE ngo_id = ? AND donation_request_id = ?
+                    ");
+
+                    foreach ($donations as $item): 
+                        $checkRequestStmt->execute([$ngoId, $item['id']]);
+                        $requestStatus = $checkRequestStmt->fetchColumn();
+                        $alreadyRequested = ($requestStatus === 'pending');
+                        $alreadyApproved = ($requestStatus === 'approved');
+                        
+                        // Skip this item if it's already approved - belt and suspenders approach
+                        if ($alreadyApproved) continue;
+                    ?>
                         <div class="bg-white border <?= $alreadyRequested ? 'border-yellow-400' : 'border-gray-200' ?> p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
                             <!-- If already requested, show a badge -->
                             <?php if ($alreadyRequested): ?>
                                 <div class="mb-2">
                                     <span class="inline-block bg-yellow-400 text-white text-xs px-2 py-1 rounded-full ml-1">
-                                        Already Requested
+                                        Pending Approval
                                     </span>
                                 </div>
                             <?php endif; ?>
@@ -434,8 +462,9 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
           
           <div class="mb-4">
             <label class="block text-gray-700 font-medium mb-1">Quantity <span id="maxQuantity" class="text-sm text-gray-500"></span></label>
-            <input type="number" name="quantity" required min="0.1" step="0.1"
+            <input type="number" name="quantity" required min="20" max="30" value="20"
                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
+            <p class="text-xs text-gray-500 mt-1">Minimum: 20, Maximum: 30 items</p>
           </div>
           
           <div class="mb-4">
@@ -486,10 +515,26 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
       `;
       
       // Set max quantity hint
-      document.getElementById('maxQuantity').textContent = `(Max: ${quantity})`;
+      document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
       
       // Set max quantity attribute
-      document.querySelector('input[name="quantity"]').setAttribute('max', quantity);
+      const maxQuantity = Math.min(30, parseFloat(quantity));
+      const quantityInput = document.querySelector('input[name="quantity"]');
+      quantityInput.setAttribute('max', maxQuantity);
+      // If available is less than 20, disable the form
+      if (parseFloat(quantity) < 20) {
+        quantityInput.setAttribute('disabled', true);
+        document.querySelector('button[type="submit"]').setAttribute('disabled', true);
+        document.querySelector('button[type="submit"]').classList.add('opacity-50');
+        // Add a notice
+        const notice = document.createElement('p');
+        notice.className = 'text-red-500 text-sm mt-1';
+        notice.textContent = 'Not enough quantity available to meet minimum request requirement.';
+        quantityInput.parentNode.appendChild(notice);
+      } else {
+        // Set default value to 20 or max available if less than 30
+        quantityInput.value = Math.min(20, maxQuantity);
+      }
       
       // Show the modal
       document.getElementById('requestModal').classList.add('modal-open');

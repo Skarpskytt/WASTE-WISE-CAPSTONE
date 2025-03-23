@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Set branch ID for this page
 $branchId = 1;  // Branch 1
 
@@ -68,23 +70,22 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-// Finalize the data query
-$dataQuery .= " ORDER BY iw.waste_date DESC LIMIT ? OFFSET ?";
+// 1. Get the total count first
+$stmt = $pdo->prepare($countQuery);
+$stmt->execute($params);
+$total = $stmt->fetchColumn();
 
-// Get total count with filters
-$ingCountStmt = $pdo->prepare($countQuery);
-$ingCountStmt->execute($params);
-$ing_total = $ingCountStmt->fetchColumn();
-$ing_total_pages = ceil($ing_total / $ing_per_page);
-$ing_offset = ($ing_page - 1) * $ing_per_page;
+// 2. Calculate pagination values
+$totalPages = ceil($total / $ing_per_page);
+$offset = ($ing_page - 1) * $ing_per_page;
 
-// Fetch Ingredient Waste Data with filters
-$ingStmt = $pdo->prepare($dataQuery);
-$queryParams = $params;
-$queryParams[] = $ing_per_page;
-$queryParams[] = $ing_offset;
-$ingStmt->execute($queryParams);
-$ingredientWasteData = $ingStmt->fetchAll(PDO::FETCH_ASSOC);
+// 3. Add pagination directly to SQL
+$dataQuery .= " ORDER BY iw.waste_date DESC LIMIT " . (int)$ing_per_page . " OFFSET " . (int)$offset;
+
+// 4. Execute with original parameters
+$stmt = $pdo->prepare($dataQuery);
+$stmt->execute($params);
+$ingredientWasteData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get branch name
 $branchStmt = $pdo->prepare("SELECT name FROM branches WHERE id = ?");
@@ -375,16 +376,16 @@ function getPaginationUrl($page) {
         </table>
       </div>
       <!-- Ingredient Waste Pagination -->
-      <?php if ($ing_total_pages > 1): ?>
+      <?php if ($totalPages > 1): ?>
       <div class="flex justify-center mt-4">
         <nav class="inline-flex shadow-sm">
           <?php if ($ing_page > 1): ?>
             <a href="<?= getPaginationUrl($ing_page - 1) ?>" class="px-3 py-2 bg-white border border-gray-300 text-gray-700">Prev</a>
           <?php endif; ?>
-          <?php for ($i = 1; $i <= $ing_total_pages; $i++): ?>
+          <?php for ($i = 1; $i <= $totalPages; $i++): ?>
             <a href="<?= getPaginationUrl($i) ?>" class="px-3 py-2 <?= $i == $ing_page ? 'bg-primarycol text-white' : 'bg-white text-gray-700' ?> border border-gray-300"><?= $i ?></a>
           <?php endfor; ?>
-          <?php if ($ing_page < $ing_total_pages): ?>
+          <?php if ($ing_page < $totalPages): ?>
             <a href="<?= getPaginationUrl($ing_page + 1) ?>" class="px-3 py-2 bg-white border border-gray-300 text-gray-700">Next</a>
           <?php endif; ?>
         </nav>

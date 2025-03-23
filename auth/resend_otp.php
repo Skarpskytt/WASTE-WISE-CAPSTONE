@@ -2,6 +2,7 @@
 require_once '../config/db_connect.php';
 require_once '../config/session_handler.php';
 require_once '../vendor/autoload.php';
+require_once '../config/app_config.php';
 
 use App\Mail\EmailService;
 

@@ -4,6 +4,8 @@ require_once '../../config/db_connect.php';
 
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Handle delete action
 if (isset($_POST['delete_product'])) {
     $productId = $_POST['product_id'] ?? 0;

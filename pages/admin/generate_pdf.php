@@ -6,6 +6,8 @@ require_once 'fpdf186/fpdf.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Get parameters
 $branchId = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : 1;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';

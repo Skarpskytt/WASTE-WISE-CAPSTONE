@@ -6,6 +6,8 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Get all donation requests for this branch
 $stmt = $pdo->prepare("
     SELECT 

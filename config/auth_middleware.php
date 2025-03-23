@@ -1,32 +1,29 @@
 <?php
-function checkAuth($allowed_roles = []) {
-    // Start session if not already started
-    if (session_status() === PHP_SESSION_NONE) {
+require_once 'app_config.php';
+
+function checkAuth($allowedRoles = []) {
+    // Use standard sessions
+    if (session_status() == PHP_SESSION_NONE) {
         session_start();
     }
     
-    // Check if user is logged in
+    // Debug auth check
+    error_log("Auth check - SESSION: " . print_r($_SESSION, true));
+    error_log("Checking for roles: " . implode(", ", $allowedRoles));
+    
     if (!isset($_SESSION['user_id'])) {
         $_SESSION['error'] = 'Please log in to access this page.';
-        // Fix typo in path: capstozne -> capstone
-        header('Location: ../index.php');
+        header('Location: ' . BASE_URL . '/index.php');
         exit();
     }
-
-    // Check if user's role is allowed
-    if (!empty($allowed_roles)) {
-        // Modified to handle staff roles together
+    
+    // If specific roles are required
+    if (!empty($allowedRoles)) {
         $userHasAccess = false;
         
-        foreach ($allowed_roles as $role) {
-            // Special case for 'staff' to allow both branch1_staff and branch2_staff
-            if ($role === 'staff' && (($_SESSION['role'] === 'branch1_staff') || ($_SESSION['role'] === 'branch2_staff'))) {
-                $userHasAccess = true;
-                break;
-            }
-            
-            // Direct role match
-            if ($_SESSION['role'] === $role) {
+        foreach ($allowedRoles as $role) {
+            if ($_SESSION['role'] === $role || 
+                ($role === 'staff' && ($_SESSION['role'] === 'branch1_staff' || $_SESSION['role'] === 'branch2_staff'))) {
                 $userHasAccess = true;
                 break;
             }
@@ -34,7 +31,7 @@ function checkAuth($allowed_roles = []) {
         
         if (!$userHasAccess) {
             $_SESSION['error'] = 'You do not have permission to access this page.';
-            header('Location: ../pages/unauthorized.php');
+            header('Location: ' . BASE_URL . '/pages/unauthorized.php');
             exit();
         }
     }
@@ -44,8 +41,11 @@ function checkAuth($allowed_roles = []) {
         // Only check status if it's set in the session
         if (isset($_SESSION['status']) && $_SESSION['status'] !== 'approved') {
             $_SESSION['error'] = 'Your NGO account is pending approval.';
-            header('Location: ../pages/unauthorized.php');
+            header('Location: ' . BASE_URL . '/pages/unauthorized.php');
             exit();
         }
     }
+    
+    return true;
 }
+?>

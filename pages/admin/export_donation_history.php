@@ -6,6 +6,8 @@ require_once 'fpdf186/fpdf.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Get parameters
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $start_date = isset($_GET['start_date']) && !empty($_GET['start_date']) ? trim($_GET['start_date']) : '';

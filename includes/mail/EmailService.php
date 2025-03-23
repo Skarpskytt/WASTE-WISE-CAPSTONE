@@ -4,9 +4,22 @@ namespace App\Mail;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
-use Dotenv\Dotenv;
 
-require_once __DIR__ . '/../../vendor/autoload.php';
+// Ensure BASE_URL is available - add error handling
+if (!file_exists(__DIR__ . '/../../config/app_config.php')) {
+    error_log("Critical error: app_config.php not found");
+}
+require_once __DIR__ . '/../../config/app_config.php';
+
+// Check if autoload exists
+if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
+    require_once __DIR__ . '/../../vendor/autoload.php';
+} else {
+    // If not using Composer, include PHPMailer directly
+    require_once __DIR__ . '/../../includes/phpmailer/src/Exception.php';
+    require_once __DIR__ . '/../../includes/phpmailer/src/PHPMailer.php';
+    require_once __DIR__ . '/../../includes/phpmailer/src/SMTP.php';
+}
 
 class EmailService {
     private $mailer;
@@ -77,14 +90,14 @@ class EmailService {
         }
     }
 
-    public function sendPasswordResetEmail($user, $resetLink) {
+    public function sendPasswordResetEmail($userData) {
         try {
             $this->mailer->clearAddresses();
-            $this->mailer->addAddress($user['email']); // Get email from user array
+            $this->mailer->addAddress($userData['email']); 
             $this->mailer->isHTML(true);
             $this->mailer->Subject = 'Password Reset Request';
             
-            $this->mailer->Body = $this->getPasswordResetTemplate($user, $resetLink);
+            $this->mailer->Body = $this->getPasswordResetTemplate($userData, $userData['resetLink']);
 
             $sent = $this->mailer->send();
             if (!$sent) {
@@ -175,13 +188,57 @@ class EmailService {
         }
     }
 
+    public function sendStaffApprovalEmail($staffData) {
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($staffData['email'], $staffData['name']);
+            
+            $this->mailer->isHTML(true);
+            $this->mailer->Subject = 'Staff Account Approved';
+            
+            $this->mailer->Body = $this->getStaffApprovalTemplate($staffData);
+            
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to send staff approval email: " . $e->getMessage());
+            throw new Exception("Failed to send approval email: " . $e->getMessage());
+        }
+    }
+
+    public function sendStaffRejectionEmail($staffData) {
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($staffData['email'], $staffData['name']);
+            
+            $this->mailer->isHTML(true);
+            $this->mailer->Subject = 'Staff Account Application Status';
+            
+            $this->mailer->Body = $this->getStaffRejectionTemplate($staffData);
+            
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to send staff rejection email: " . $e->getMessage());
+            throw new Exception("Failed to send rejection email: " . $e->getMessage());
+        }
+    }
+
     private function getNGOApprovalTemplate($data) {
         return "
         <h2>Welcome to WasteWise Management!</h2>
         <p>Dear {$data['name']},</p>
         <p>We are pleased to inform you that your NGO partnership account for {$data['organization_name']} has been approved.</p>
         <p>You can now log in to your account using your registered email and password.</p>
-        <p>Visit our login page: <a href='http://localhost/capstone/WASTE-WISE-CAPSTONE/auth/login.php'>Login Here</a></p>
+        <p>Visit our login page: <a href='" . BASE_URL . "/index.php'>Login Here</a></p>
         <p>Best regards,<br>WasteWise Team</p>
     ";
     }
@@ -228,7 +285,7 @@ class EmailService {
                     <p>You recently requested to reset your password for your WasteWise account.</p>
                     <p>Click the button below to reset your password:</p>
                     <div style='text-align: center;'>
-                        <a href='{$resetLink}' class='button'>Reset Password</a>
+                        <a href='{$resetLink}' class='button text-stone-50'>Reset Password</a>
                     </div>
                     <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
                     <p>This password reset link is only valid for the next hour.</p>
@@ -386,6 +443,27 @@ class EmailService {
         <p>If you have any questions, please contact us.</p>
         <p>Thank you for your understanding and continued partnership in reducing food waste!</p>
         <p>Regards,<br>WasteWise Team</p>
+        ";
+    }
+
+    private function getStaffApprovalTemplate($data) {
+        return "
+        <h2>Welcome to WasteWise Management!</h2>
+        <p>Dear {$data['name']},</p>
+        <p>We are pleased to inform you that your staff account has been approved.</p>
+        <p>You can now log in to your account using your registered email and password.</p>
+        <p>Visit our login page: <a href='" . BASE_URL . "/index.php'>Login Here</a></p>
+        <p>Best regards,<br>WasteWise Team</p>
+        ";
+    }
+
+    private function getStaffRejectionTemplate($data) {
+        return "
+        <h2>Staff Account Application Status</h2>
+        <p>Dear {$data['name']},</p>
+        <p>We regret to inform you that your staff account application has not been approved at this time.</p>
+        <p>If you have any questions, please contact the system administrator for more information.</p>
+        <p>Best regards,<br>WasteWise Team</p>
         ";
     }
 }

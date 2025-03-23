@@ -8,6 +8,8 @@ checkAuth(['admin']);
 // Branch ID for Branch 1 (assuming it's 1)
 $branchId = 1;
 
+$pdo = getPDO();
+
 // Pagination setup
 $itemsPerPage = 10;
 $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;

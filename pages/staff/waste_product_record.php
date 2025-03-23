@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Get branch ID from session
 $branchId = $_SESSION['branch_id'];
 
@@ -145,12 +147,11 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-$sql .= " ORDER BY w.waste_date DESC LIMIT ? OFFSET ?";
-$params[] = $itemsPerPage;
-$params[] = $offset;
+$sql .= " ORDER BY w.waste_date DESC LIMIT " . (int)$itemsPerPage . " OFFSET " . (int)$offset;
 
 try {
     $stmt = $pdo->prepare($sql);
+    // Don't add pagination parameters to $params
     $stmt->execute($params);
     $wasteRecords = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {

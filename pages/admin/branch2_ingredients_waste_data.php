@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for admin access only
 checkAuth(['admin']);
 
+$pdo = getPDO();
+
 // Set branch ID for this page
 $branchId = 2;  // Branch 2
 
@@ -67,22 +69,21 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-// Finalize the data query
-$dataQuery .= " ORDER BY iw.waste_date DESC LIMIT ? OFFSET ?";
-
-// Get total count with filters
+// First, get the total count with filters
 $ingCountStmt = $pdo->prepare($countQuery);
 $ingCountStmt->execute($params);
 $ing_total = $ingCountStmt->fetchColumn();
+
+// Calculate pagination values
 $ing_total_pages = ceil($ing_total / $ing_per_page);
 $ing_offset = ($ing_page - 1) * $ing_per_page;
 
-// Fetch Ingredient Waste Data with filters
+// Add LIMIT and OFFSET directly into the SQL string instead of using placeholders
+$dataQuery .= " ORDER BY iw.waste_date DESC LIMIT " . (int)$ing_per_page . " OFFSET " . (int)$ing_offset;
+
+// Fetch Ingredient Waste Data with filters - only pass the original params
 $ingStmt = $pdo->prepare($dataQuery);
-$queryParams = $params;
-$queryParams[] = $ing_per_page;
-$queryParams[] = $ing_offset;
-$ingStmt->execute($queryParams);
+$ingStmt->execute($params);  // Don't add pagination params here
 $ingredientWasteData = $ingStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get branch name

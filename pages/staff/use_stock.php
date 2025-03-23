@@ -5,6 +5,8 @@ require_once '../../config/db_connect.php';
 // Check for staff access
 checkAuth(['staff']);
 
+$pdo = getPDO();
+
 // Get ingredient ID
 $ingredientId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 

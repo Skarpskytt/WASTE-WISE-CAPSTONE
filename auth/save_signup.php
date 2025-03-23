@@ -1,8 +1,20 @@
 <?php
-session_start();
-require_once('../config/db_connect.php');
-include('../config/session_handler.php');
+// Include necessary files
+require_once '../config/app_config.php';
+require_once '../config/db_connect.php';
+require_once '../config/session_handler.php';
+
 use CustomSession\SessionHandler;
+use function CustomSession\initSession;
+
+// Get database connection
+$pdo = getPDO();
+
+// Initialize session with our custom handler
+initSession($pdo);
+
+// Get session handler instance
+$session = SessionHandler::getInstance($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     try {
@@ -53,22 +65,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $branch_id = 2;
         }
 
-        // Insert user
-        $stmt = $pdo->prepare('INSERT INTO users (fname, lname, email, password, role, branch_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        // Insert user - set is_active to 0 for all newly created staff accounts
+        // This is key - all staff accounts start as inactive
+        $stmt = $pdo->prepare('INSERT INTO users (fname, lname, email, password, role, branch_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 0)');
         $stmt->execute([
             $fname,
             $lname,
             $email,
             password_hash($password, PASSWORD_DEFAULT),
             $role,
-            $branch_id,
-            $role === 'ngo' ? 0 : 1 // NGOs need approval
+            $branch_id
         ]);
 
+        // After inserting the user
         $user_id = $pdo->lastInsertId();
 
-        // Handle NGO registration
-        if ($role === 'ngo') {
+        if ($role === 'branch1_staff' || $role === 'branch2_staff') {
+            // Create staff profile with pending status
+            $stmt = $pdo->prepare("INSERT INTO staff_profiles (user_id, status) VALUES (?, 'pending')");
+            $stmt->execute([$user_id]);
+            
+            // Set success message about pending approval
+            $_SESSION['success'] = "Your staff account has been created successfully. Please wait for approval from an administrator.";
+        } elseif ($role === 'ngo') {
+            // Handle NGO registration
             $stmt = $pdo->prepare('INSERT INTO ngo_profiles (user_id, organization_name, phone, address, status) VALUES (?, ?, ?, ?, ?)');
             $stmt->execute([
                 $user_id,
@@ -77,12 +97,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_POST['address'],
                 'pending'
             ]);
+        } else {
+            $_SESSION['success'] = "Account created successfully. Please login.";
         }
 
+        // Update success message
         $pdo->commit();
-        $_SESSION['success'] = $role === 'ngo' ? 
-            'Registration successful. Please wait for admin approval.' : 
-            'Registration successful. Please log in.';
         header('Location: signup.php');
         exit();
 
