@@ -1,15 +1,23 @@
 <?php
-// Start the session properly
-session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Include app config for BASE_URL and other constants
+// Include necessary files
 require_once '../config/app_config.php';
 require_once '../config/db_connect.php';
+require_once '../config/session_handler.php';
 
-// Get the database connection once
+use CustomSession\SessionHandler;
+use function CustomSession\initSession;
+
+// Get database connection
 $pdo = getPDO();
+
+// Initialize session with our custom handler
+initSession($pdo);
+
+// Get session handler instance
+$session = SessionHandler::getInstance($pdo);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -65,6 +73,21 @@ $pdo = getPDO();
             }).showToast();
             <?php unset($_SESSION['success']); ?>
         <?php endif; ?>
+        
+        // Pending approval messages
+        <?php if (isset($_SESSION['pending_approval'])): ?>
+            Toastify({
+                text: "⏳ <?= htmlspecialchars($_SESSION['pending_approval']) ?>",
+                duration: 5000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#F59E0B",
+                stopOnFocus: true,
+                className: "toast-message"
+            }).showToast();
+            <?php unset($_SESSION['pending_approval']); ?>
+        <?php endif; ?>
     });
     </script>
 
@@ -86,32 +109,7 @@ $pdo = getPDO();
         <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign Up</h1>
         <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Join our community with all-time access and free</h1>
         
-        <div class="hidden">
-            <?php if (isset($_SESSION['error'])): ?>
-                <div class="mb-4 text-red-500"><?= $_SESSION['error'] ?></div>
-                <?php unset($_SESSION['error']); ?>
-            <?php endif; ?>
-            
-            <?php if (isset($_SESSION['success'])): ?>
-                <div class="mb-4 text-green-500"><?= $_SESSION['success'] ?></div>
-                <?php unset($_SESSION['success']); ?>
-            <?php endif; ?>
-            
-            <?php if (isset($_SESSION['pending_approval'])): ?>
-                <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mt-4" role="alert">
-                    <span class="block sm:inline"><?php echo $_SESSION['pending_approval']; ?></span>
-                </div>
-                <?php unset($_SESSION['pending_approval']); ?>
-            <?php endif; ?>
-        </div>
-        
         <form action="save_signup.php" method="POST" class="space-y-4">
-          <?php if (isset($_SESSION['pending_approval'])): ?>
-              <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mt-4" role="alert">
-                  <span class="block sm:inline"><?php echo $_SESSION['pending_approval']; ?></span>
-              </div>
-              <?php unset($_SESSION['pending_approval']); ?>
-          <?php endif; ?>
           
           <div class="flex flex-row gap-2">
             <div>
