@@ -3,7 +3,7 @@
 $host = 'localhost'; // Using IP instead of hostname
 $db   = 'u697061521_wastewise';
 $user = 'u697061521_skarpskytt';
-$pass = '0jOC?V~NM;|?';
+$pass = 'uLVQV*zhK*1?';
 $charset = 'utf8mb4';
 
 

@@ -9,7 +9,7 @@ use CustomSession\SessionHandler;
 
 // Test session functionality
 try {
-    $pdo = new \PDO('mysql:host=localhost;dbname=u697061521_wastewise', 'u697061521_skarpskytt', '0jOC?V~NM;|?');
+    $pdo = new \PDO('mysql:host=localhost;dbname=u697061521_wastewise', 'u697061521_skarpskytt', 'uLVQV*zhK*1?');
     $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     $session = SessionHandler::getInstance($pdo);
 } catch (Exception $e) {

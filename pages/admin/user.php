@@ -3,7 +3,7 @@ require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 require_once '../../vendor/autoload.php';
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../../');
+$dotenv = Dotenv\Dotenv::createImmutable('../../');
 $dotenv->load();
 
 use App\Mail\EmailService;
