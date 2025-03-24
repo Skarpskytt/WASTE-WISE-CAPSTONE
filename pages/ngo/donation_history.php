@@ -108,7 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
                     b.address as branch_address,
                     u.fname,
                     u.lname,
-                    u.email
+                    u.email,
+                    (SELECT quantity FROM donation_requests WHERE id = ndr.donation_request_id) as available_quantity
                 FROM 
                     ngo_donation_requests ndr
                 JOIN 
@@ -123,17 +124,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
             $detailsStmt->execute([$requestId]);
             $donationDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
             
-            // Update product quantity
+            // Add this right after fetching donation details
+            if (!$donationDetails) {
+                throw new Exception("Failed to retrieve donation details for request #$requestId");
+            }
+
+            if (!isset($donationDetails['donation_request_id']) || !$donationDetails['donation_request_id']) {
+                throw new Exception("Missing donation request reference for request #$requestId");
+            }
+
+            // Add validation check
+            if ($donationDetails['available_quantity'] < $donationDetails['quantity_requested']) {
+                throw new Exception("Cannot complete this request. The available quantity (" . 
+                                    $donationDetails['available_quantity'] . 
+                                    ") is less than what was requested (" . 
+                                    $donationDetails['quantity_requested'] . ")");
+            }
+
+            // Update product quantity - FIXED VERSION
             $updateProductStmt = $pdo->prepare("
                 UPDATE donation_requests 
-                SET quantity = quantity - ?
-                WHERE id = (
-                    SELECT donation_request_id 
-                    FROM ngo_donation_requests 
-                    WHERE id = ?
-                )
+                SET quantity = quantity - ?,
+                    status = CASE 
+                        WHEN quantity - ? <= 0 THEN 'completed' 
+                        ELSE status 
+                    END
+                WHERE id = ?
             ");
-            $updateProductStmt->execute([$donationDetails['quantity_requested'], $requestId]);
+            $updateProductStmt->execute([
+                $donationDetails['quantity_requested'], 
+                $donationDetails['quantity_requested'],
+                $donationDetails['donation_request_id']
+            ]);
             
             // Get the staff who created the original donation request
             $staffQuery = $pdo->prepare("
