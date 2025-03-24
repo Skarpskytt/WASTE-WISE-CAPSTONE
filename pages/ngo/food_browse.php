@@ -517,6 +517,7 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
             <button type="submit" class="btn bg-primarycol hover:bg-fourth text-white">Submit Request</button>
           </div>
         </form>
+        <button type="button" class="btn bg-gray-500 text-white" onclick="debugForm()">Debug Form</button>
       </div>
     </div>
 
@@ -525,17 +526,43 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
     function showModal(id, productName, quantity, expiryDate, branchName, branchId) {
         console.log("Showing modal with donation ID:", id);
         
-        // Direct assignment with stronger validation
-        document.getElementById('donationId').value = id;
-        document.getElementById('productName').value = productName;
-        document.getElementById('branchId').value = branchId;
+        // Force ID to be a proper integer
+        id = parseInt(id, 10);
         
-        console.log("Form fields populated:", {
-            donationId: document.getElementById('donationId').value,
-            productName: document.getElementById('productName').value,
-            branchId: document.getElementById('branchId').value
-        });
+        // Try multiple ways to set the donation ID
+        setTimeout(function() {
+            try {
+                // Method 1: Direct access
+                var donationIdField = document.getElementById('donationId');
+                if (donationIdField) {
+                    donationIdField.value = id;
+                    console.log("Set donation ID with method 1:", donationIdField.value);
+                } else {
+                    console.error("Could not find donationId element");
+                }
+                
+                // Method 2: Query selector
+                var donationIdAlt = document.querySelector('input[name="donation_id"]');
+                if (donationIdAlt) {
+                    donationIdAlt.value = id;
+                    console.log("Set donation ID with method 2:", donationIdAlt.value);
+                }
+                
+                // Method 3: Form direct access
+                var form = document.getElementById('requestForm');
+                if (form) {
+                    form.elements['donation_id'].value = id;
+                    console.log("Set donation ID with method 3:", form.elements['donation_id'].value);
+                    
+                    // Also store as data attribute
+                    form.dataset.donationId = id;
+                }
+            } catch (e) {
+                console.error("Error setting donation ID:", e);
+            }
+        }, 100); // Small delay to ensure DOM is ready
         
+        // Rest of your function...
         // Update the modal content
         document.getElementById('itemDetails').innerHTML = `
             <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
@@ -616,6 +643,73 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
         // Otherwise, allow the form to submit normally
         return true;
     });
+
+    // Improved form submission handler
+    document.addEventListener('DOMContentLoaded', function() {
+        var requestForm = document.getElementById('requestForm');
+        
+        if (requestForm) {
+            requestForm.addEventListener('submit', function(e) {
+                // Try multiple ways to get the donation ID
+                var donationId = "";
+                
+                // Method 1: Direct input value
+                var donationIdField = document.getElementById('donationId');
+                if (donationIdField && donationIdField.value) {
+                    donationId = donationIdField.value;
+                }
+                
+                // Method 2: Form dataset
+                if (!donationId && this.dataset.donationId) {
+                    donationId = this.dataset.donationId;
+                }
+                
+                // Method 3: Query selector
+                if (!donationId) {
+                    var donationIdAlt = document.querySelector('input[name="donation_id"]');
+                    if (donationIdAlt) {
+                        donationId = donationIdAlt.value;
+                    }
+                }
+                
+                console.log("Final donation ID for submission:", donationId);
+                
+                if (!donationId || donationId <= 0) {
+                    e.preventDefault();
+                    alert("Error: Missing donation ID. Please try again.");
+                    return false;
+                }
+                
+                // If we have a donation ID, make sure it's in the form
+                if (donationIdField) {
+                    donationIdField.value = donationId;
+                }
+                
+                // Create a backup field if needed
+                if (!document.querySelector('input[name="donation_id"]')) {
+                    var backupField = document.createElement('input');
+                    backupField.type = 'hidden';
+                    backupField.name = 'donation_id';
+                    backupField.value = donationId;
+                    this.appendChild(backupField);
+                    console.log("Created backup donation_id field");
+                }
+                
+                console.log("Form submission proceeding with donation ID:", donationId);
+                return true;
+            });
+        } else {
+            console.error("Could not find requestForm element");
+        }
+    });
+
+    function debugForm() {
+        const donationIdField = document.getElementById('donationId');
+        const formElement = document.getElementById('requestForm');
+        
+        alert("Donation ID value: " + (donationIdField ? donationIdField.value : "Not found") + 
+              "\nForm data attribute: " + (formElement ? formElement.dataset.donationId : "Form not found"));
+    }
     </script>
 </body>
 </html>
