@@ -79,8 +79,11 @@ if (isset($_POST['submitwaste'])) {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
+            // When executing the INSERT query, format the date properly
+            $formattedDate = date('Y-m-d H:i:s', strtotime($wasteDate));
+            // Then use $formattedDate in your SQL insert statement
             $stmt->execute([
-                $productId, $userId, $wasteDate, $wasteQuantity, 
+                $productId, $userId, $formattedDate, $wasteQuantity, 
                 $wasteValue, $wasteReason, $disposalMethod, $notes, 
                 $branchId, $productionStage
             ]);
@@ -440,11 +443,11 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Date of Waste
                                             </label>
-                                            <input type="date"
-                                                name="waste_date"
-                                                disabled
-                                                value="<?= date('Y-m-d') ?>"
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                            <input type="date" 
+                                                id="waste_date" 
+                                                name="waste_date" 
+                                                value="<?php echo date('Y-m-d'); ?>" 
+                                                class="input input-bordered w-full">
                                         </div>
                                         
                                         <div>

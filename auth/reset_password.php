@@ -1,24 +1,16 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+
+// Choose ONE session method - standard PHP sessions recommended
 session_start();
 
 // Include necessary files
 require_once '../config/app_config.php';
 require_once '../config/db_connect.php';
-require_once '../config/session_handler.php';
-
-use CustomSession\SessionHandler;
-use function CustomSession\initSession;
 
 // Get database connection
 $pdo = getPDO();
-
-// Initialize session with our custom handler
-initSession($pdo);
-
-// Get session handler instance
-$session = SessionHandler::getInstance($pdo);
 
 // Get token from URL
 $token = isset($_GET['token']) ? $_GET['token'] : '';
@@ -33,26 +25,43 @@ $tokenIsValid = false;
 $userEmail = '';
 $userName = '';
 
+// Replace your token validation with this improved version
 if (!empty($token)) {
     try {
+        // Use a more secure query that validates both token and expiry in the SQL
         $stmt = $pdo->prepare("
-            SELECT pr.*, u.email, u.fname 
+            SELECT pr.*, u.email, u.fname, u.id AS user_id
             FROM password_resets pr
             JOIN users u ON pr.user_id = u.id
-            WHERE pr.token = ? AND pr.used = 0
+            WHERE pr.token = ? 
+            AND pr.used = 0
+            AND pr.expiry_date > NOW()
         ");
-        $stmt->execute([$token]);
+        $stmt->execute([trim($token)]);
         $reset = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // Simple validation for now
-        if ($reset && strtotime($reset['expiry_date']) >= time()) {
+        if ($reset) {
             $tokenIsValid = true;
             $userEmail = $reset['email'];
             $userName = $reset['fname'];
-        } else if ($reset && strtotime($reset['expiry_date']) < time()) {
-            $_SESSION['error'] = "This password reset link has expired. Please request a new one.";
+            
+            // Store user_id in session for security during password update
+            $_SESSION['reset_user_id'] = $reset['user_id'];
+            $_SESSION['reset_token'] = $token;
         } else {
-            $_SESSION['error'] = "This password reset link is invalid.";
+            // Check if token exists but is expired
+            $stmt = $pdo->prepare("
+                SELECT expiry_date FROM password_resets 
+                WHERE token = ? AND used = 0
+            ");
+            $stmt->execute([trim($token)]);
+            $expiredToken = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($expiredToken && strtotime($expiredToken['expiry_date']) < time()) {
+                $_SESSION['error'] = "This password reset link has expired. Please request a new one.";
+            } else {
+                $_SESSION['error'] = "This password reset link is invalid.";
+            }
         }
     } catch (Exception $e) {
         $_SESSION['error'] = "An error occurred. Please try again.";
