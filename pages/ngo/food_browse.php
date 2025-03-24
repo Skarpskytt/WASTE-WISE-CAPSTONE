@@ -1,4 +1,13 @@
 <?php
+// Debug logging at the very top
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Log all POST data to a file that you can check
+    file_put_contents(__DIR__ . '/form_debug.log', 
+        date('Y-m-d H:i:s') . ' POST DATA: ' . print_r($_POST, true) . "\n", 
+        FILE_APPEND
+    );
+}
+
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
@@ -26,155 +35,140 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Debug all post variables
     error_log("All POST data: " . print_r($_POST, true));
     
-    // Check if donation_id exists and is valid
+    // First check if donation_id exists and is valid
     if (!isset($_POST['donation_id']) || empty($_POST['donation_id'])) {
         error_log("Error: donation_id not set or empty in POST data");
         $errorMessage = "Invalid donation selection. Please try again or contact support.";
     } else {
+        // All your form processing code...
         $donationRequestId = (int)$_POST['donation_id'];
-        error_log("Processing donation request with ID: $donationRequestId");
-        
-        // Continue with your existing processing...
-    
-    // Debug information - add this at the beginning of your form processing
-    // Log all POST data
-    error_log("POST data: " . print_r($_POST, true));
-    
-    // Get form data with additional validation
-    $donationRequestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
-    error_log("Parsed donation_id: $donationRequestId");
-    
-    // Rest of your code...
+        $quantity = isset($_POST['quantity']) ? (float)$_POST['quantity'] : 0;
+        $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
+        $pickupDate = isset($_POST['pickup_date']) ? $_POST['pickup_date'] : '';
+        $pickupTime = isset($_POST['pickup_time']) ? $_POST['pickup_time'] : '';
 
-    // Get form data
-    $donationRequestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
-    $quantity = isset($_POST['quantity']) ? (float)$_POST['quantity'] : 0;
-    $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
-    $pickupDate = isset($_POST['pickup_date']) ? $_POST['pickup_date'] : '';
-    $pickupTime = isset($_POST['pickup_time']) ? $_POST['pickup_time'] : '';
+        // Debugging: Log form data
+        error_log("Form Data: donation_id={$donationRequestId}, quantity={$quantity}, pickup_date={$pickupDate}, pickup_time={$pickupTime}");
 
-    // Debugging: Log form data
-    error_log("Form Data: donation_id={$donationRequestId}, quantity={$quantity}, pickup_date={$pickupDate}, pickup_time={$pickupTime}");
-
-    // Validate input
-    $errors = [];
-    if ($donationRequestId <= 0) {
-        $errors[] = "Invalid donation selection.";
-    }
-    if ($quantity < 20) {
-        $errors[] = "Please request at least 20 items.";
-    }
-    if ($quantity > 30) {
-        $errors[] = "Maximum request limit is 30 items.";
-    }
-    if (empty($pickupDate)) {
-        $errors[] = "Please select a pickup date.";
-    }
-    if (empty($pickupTime)) {
-        $errors[] = "Please select a pickup time.";
-    }
-
-    // Check if the donation exists and has enough quantity
-    try {
-        $checkStmt = $pdo->prepare("
-            SELECT 
-                dr.id,
-                dr.product_id,
-                dr.branch_id,
-                dr.quantity,
-                p.name as product_name,
-                b.name as branch_name
-            FROM 
-                donation_requests dr
-            JOIN 
-                products p ON dr.product_id = p.id
-            JOIN 
-                branches b ON dr.branch_id = b.id
-            WHERE 
-                dr.id = ? AND dr.status = 'prepared' AND dr.quantity >= ?
-        ");
-        $checkStmt->execute([$donationRequestId, $quantity]);
-        $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-        // Debugging: Log SQL query result
-        error_log("SQL Query Result: " . print_r($donation, true));
-
-        if (!$donation) {
-            $errors[] = "The requested donation is not available or has insufficient quantity.";
+        // Validate input
+        $errors = [];
+        if ($donationRequestId <= 0) {
+            $errors[] = "Invalid donation selection.";
         }
-    } catch (PDOException $e) {
-        $errors[] = "Database error: " . $e->getMessage();
-    }
+        if ($quantity < 20) {
+            $errors[] = "Please request at least 20 items.";
+        }
+        if ($quantity > 30) {
+            $errors[] = "Maximum request limit is 30 items.";
+        }
+        if (empty($pickupDate)) {
+            $errors[] = "Please select a pickup date.";
+        }
+        if (empty($pickupTime)) {
+            $errors[] = "Please select a pickup time.";
+        }
 
-    // If no errors, process the request
-    if (empty($errors)) {
+        // Check if the donation exists and has enough quantity
         try {
-            // Start a transaction
-            $pdo->beginTransaction();
-
-            // Create a pending request in the NGO donation requests table
-            $insertStmt = $pdo->prepare("
-                INSERT INTO ngo_donation_requests (
-                    product_id,
-                    ngo_id,
-                    branch_id,
-                    donation_request_id,
-                    request_date,
-                    pickup_date,
-                    pickup_time,
-                    status,
-                    quantity_requested,
-                    ngo_notes
-                ) VALUES (?, ?, ?, ?, NOW(), ?, ?, 'pending', ?, ?)
+            $checkStmt = $pdo->prepare("
+                SELECT 
+                    dr.id,
+                    dr.product_id,
+                    dr.branch_id,
+                    dr.quantity,
+                    p.name as product_name,
+                    b.name as branch_name
+                FROM 
+                    donation_requests dr
+                JOIN 
+                    products p ON dr.product_id = p.id
+                JOIN 
+                    branches b ON dr.branch_id = b.id
+                WHERE 
+                    dr.id = ? AND dr.status = 'prepared' AND dr.quantity >= ?
             ");
+            $checkStmt->execute([$donationRequestId, $quantity]);
+            $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
-            $insertStmt->execute([
-                $donation['product_id'],
-                $ngoId,
-                $donation['branch_id'],
-                $donationRequestId,
-                $pickupDate,
-                $pickupTime,
-                $quantity,
-                $notes
-            ]);
+            // Debugging: Log SQL query result
+            error_log("SQL Query Result: " . print_r($donation, true));
 
-            // Create notification for admin
-            $notifyAdminStmt = $pdo->prepare("
-                INSERT INTO notifications (
-                    target_role,
-                    message,
-                    notification_type,
-                    link,
-                    is_read
-                ) VALUES (
-                    'admin',
-                    ?,
-                    'ngo_donation_request',
-                    '/capstone/WASTE-WISE-CAPSTONE/pages/admin/ngo.php',
-                    0
-                )
-            ");
-
-            $orgName = $ngoInfo['organization_name'] ?: $ngoInfo['full_name'];
-            $notifyMessage = "New donation request from {$orgName} for {$donation['product_name']}";
-            $notifyAdminStmt->execute([$notifyMessage]);
-
-            // Commit transaction
-            $pdo->commit();
-
-            // Set success message
-            $successMessage = "Your donation request has been submitted and is awaiting approval.";
-
+            if (!$donation) {
+                $errors[] = "The requested donation is not available or has insufficient quantity.";
+            }
         } catch (PDOException $e) {
-            // Rollback on error
-            $pdo->rollBack();
-            $errorMessage = "Error processing request: " . $e->getMessage();
+            $errors[] = "Database error: " . $e->getMessage();
         }
-    } else {
-        $errorMessage = implode(" ", $errors);
+
+        // If no errors, process the request
+        if (empty($errors)) {
+            try {
+                // Start a transaction
+                $pdo->beginTransaction();
+
+                // Create a pending request in the NGO donation requests table
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO ngo_donation_requests (
+                        product_id,
+                        ngo_id,
+                        branch_id,
+                        donation_request_id,
+                        request_date,
+                        pickup_date,
+                        pickup_time,
+                        status,
+                        quantity_requested,
+                        ngo_notes
+                    ) VALUES (?, ?, ?, ?, NOW(), ?, ?, 'pending', ?, ?)
+                ");
+
+                $insertStmt->execute([
+                    $donation['product_id'],
+                    $ngoId,
+                    $donation['branch_id'],
+                    $donationRequestId,
+                    $pickupDate,
+                    $pickupTime,
+                    $quantity,
+                    $notes
+                ]);
+
+                // Create notification for admin
+                $notifyAdminStmt = $pdo->prepare("
+                    INSERT INTO notifications (
+                        target_role,
+                        message,
+                        notification_type,
+                        link,
+                        is_read
+                    ) VALUES (
+                        'admin',
+                        ?,
+                        'ngo_donation_request',
+                        '/capstone/WASTE-WISE-CAPSTONE/pages/admin/ngo.php',
+                        0
+                    )
+                ");
+
+                $orgName = $ngoInfo['organization_name'] ?: $ngoInfo['full_name'];
+                $notifyMessage = "New donation request from {$orgName} for {$donation['product_name']}";
+                $notifyAdminStmt->execute([$notifyMessage]);
+
+                // Commit transaction
+                $pdo->commit();
+
+                // Set success message
+                $successMessage = "Your donation request has been submitted and is awaiting approval.";
+
+            } catch (PDOException $e) {
+                // Rollback on error
+                $pdo->rollBack();
+                $errorMessage = "Error processing request: " . $e->getMessage();
+            }
+        } else {
+            $errorMessage = implode(" ", $errors);
+        }
     }
-}
 }
 
 // Initialize filter variables
@@ -485,7 +479,7 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
           <!-- Item details filled by JavaScript -->
         </div>
         
-        <form id="requestForm" method="POST" action="">
+        <form id="requestForm" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
           <!-- Add name attribute to form for easier debugging -->
           <input type="hidden" id="donationId" name="donation_id" value="">
           <input type="hidden" id="productName" name="product_name" value="">
@@ -603,6 +597,24 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
                 showModal(id, name, quantity, expiryDate, branchName, branchId);
             });
         });
+    });
+
+    // Add this to your script section, right before the closing script tag
+    document.getElementById('requestForm').addEventListener('submit', function(e) {
+        // Get the donation ID value
+        const donationId = document.getElementById('donationId').value;
+        
+        console.log("Form submitting with donation ID:", donationId);
+        
+        if (!donationId || donationId <= 0) {
+            e.preventDefault(); // Stop the form submission
+            alert("Error: Missing donation ID. Please try again.");
+            console.error("Form submission prevented - missing donation ID");
+            return false;
+        }
+        
+        // Otherwise, allow the form to submit normally
+        return true;
     });
     </script>
 </body>
