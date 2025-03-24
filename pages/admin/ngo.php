@@ -12,6 +12,11 @@ $pdo = getPDO();
 
 // Handle approve/reject actions
 if (isset($_POST['action']) && isset($_POST['request_id'])) {
+    file_put_contents(__DIR__ . '/admin_approval_debug.log', 
+        date('Y-m-d H:i:s') . ' APPROVAL DATA: ' . print_r($_POST, true) . "\n", 
+        FILE_APPEND
+    );
+    
     $requestId = (int)$_POST['request_id'];
     $action = $_POST['action'];
     $adminNotes = isset($_POST['admin_notes']) ? $_POST['admin_notes'] : '';
@@ -43,7 +48,18 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
         $productName = $requestInfo['product_name'];
         
         if ($action === 'approve') {
-            // Update request status
+            // First get the donation_request_id for this NGO request
+            $donationIdStmt = $pdo->prepare("
+                SELECT donation_request_id FROM ngo_donation_requests WHERE id = ?
+            ");
+            $donationIdStmt->execute([$requestId]);
+            $donationRequestId = $donationIdStmt->fetchColumn();
+            
+            if (!$donationRequestId) {
+                throw new Exception("Original donation request not found");
+            }
+            
+            // Update NGO request status
             $updateStmt = $pdo->prepare("
                 UPDATE ngo_donation_requests 
                 SET status = 'approved', 
@@ -52,16 +68,13 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
             ");
             $updateStmt->execute([$adminNotes, $requestId]);
             
-            // Also update the status of the original donation request to 'reserved'
-            // This ensures it won't show up for other NGOs
+            // Update the status of the original donation request
             $updateDonationStmt = $pdo->prepare("
                 UPDATE donation_requests 
                 SET status = 'reserved'
-                WHERE id = (
-                    SELECT donation_request_id FROM ngo_donation_requests WHERE id = ?
-                )
+                WHERE id = ?
             ");
-            $updateDonationStmt->execute([$requestId]);
+            $updateDonationStmt->execute([$donationRequestId]);
             
             // Get email data
             $detailsStmt = $pdo->prepare("

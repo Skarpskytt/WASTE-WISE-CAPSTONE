@@ -125,12 +125,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
             
             // Update product quantity
             $updateProductStmt = $pdo->prepare("
-                UPDATE donation_requests dr
-                JOIN ngo_donation_requests ndr ON dr.id = ndr.donation_request_id
-                SET dr.quantity = dr.quantity - ndr.quantity_requested
-                WHERE ndr.id = ?
+                UPDATE donation_requests 
+                SET quantity = quantity - ?
+                WHERE id = (
+                    SELECT donation_request_id 
+                    FROM ngo_donation_requests 
+                    WHERE id = ?
+                )
             ");
-            $updateProductStmt->execute([$requestId]);
+            $updateProductStmt->execute([$donationDetails['quantity_requested'], $requestId]);
             
             // Get the staff who created the original donation request
             $staffQuery = $pdo->prepare("
