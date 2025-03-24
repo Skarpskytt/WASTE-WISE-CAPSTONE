@@ -522,194 +522,144 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
     </div>
 
     <script>
-    // Modal functionality
-    function showModal(id, productName, quantity, expiryDate, branchName, branchId) {
-        console.log("Showing modal with donation ID:", id);
-        
-        // Force ID to be a proper integer
-        id = parseInt(id, 10);
-        
-        // Try multiple ways to set the donation ID
-        setTimeout(function() {
-            try {
-                // Method 1: Direct access
-                var donationIdField = document.getElementById('donationId');
-                if (donationIdField) {
-                    donationIdField.value = id;
-                    console.log("Set donation ID with method 1:", donationIdField.value);
-                } else {
-                    console.error("Could not find donationId element");
-                }
-                
-                // Method 2: Query selector
-                var donationIdAlt = document.querySelector('input[name="donation_id"]');
-                if (donationIdAlt) {
-                    donationIdAlt.value = id;
-                    console.log("Set donation ID with method 2:", donationIdAlt.value);
-                }
-                
-                // Method 3: Form direct access
-                var form = document.getElementById('requestForm');
-                if (form) {
-                    form.elements['donation_id'].value = id;
-                    console.log("Set donation ID with method 3:", form.elements['donation_id'].value);
-                    
-                    // Also store as data attribute
-                    form.dataset.donationId = id;
-                }
-            } catch (e) {
-                console.error("Error setting donation ID:", e);
-            }
-        }, 100); // Small delay to ensure DOM is ready
-        
-        // Rest of your function...
-        // Update the modal content
-        document.getElementById('itemDetails').innerHTML = `
-            <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
-            <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
-            <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
-            <div><span class="font-semibold">Branch:</span> ${branchName}</div>
-        `;
-        
-        // Set max quantity hint
-        document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
-        
-        // Show the modal
-        document.getElementById('requestModal').classList.add('modal-open');
-    }
+        // Replace ALL of your JavaScript code with this cleaner version
 
-    function closeModal() {
-        document.getElementById('requestModal').classList.remove('modal-open');
-    }
-
-    // Close modal when clicking outside
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('requestModal');
-        if (event.target === modal) {
-            closeModal();
-        }
-    });
-
-    // Attach event listeners to all request buttons
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add this debugging line
-        console.log("DOM loaded, setting up request buttons");
-        
-        const requestButtons = document.querySelectorAll('.request-btn');
-        console.log("Found " + requestButtons.length + " request buttons");
-        
-        requestButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                // Get all attributes with console logging for debugging
-                const id = this.getAttribute('data-id');
-                const name = this.getAttribute('data-name');
-                const branchId = this.getAttribute('data-branch');
-                
-                console.log("Button clicked with data:", { id, name, branchId });
-                
-                // Find the parent card
-                const card = this.closest('.bg-white.border');
-                
-                // Get details from card with more robust selectors
-                const quantityElement = card.querySelector('.font-bold');
-                const quantity = quantityElement ? quantityElement.textContent.split(' ')[0] : 'N/A';
-                
-                const expiryElement = card.querySelector('[class*="bg-"][class*="-500"]');
-                const expiryDate = expiryElement ? expiryElement.textContent.replace('Expires in ', '').replace(' days', '') : 'N/A';
-                
-                const branchElement = card.querySelector('p.text-sm.text-gray-600');
-                const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
-                
-                // Show modal and pass all parameters
-                showModal(id, name, quantity, expiryDate, branchName, branchId);
-            });
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded, initializing...");
+            
+            // Set up request buttons
+            setupRequestButtons();
+            
+            // Set up form submission handler (only one)
+            setupFormHandler();
         });
-    });
 
-    // Add this to your script section, right before the closing script tag
-    document.getElementById('requestForm').addEventListener('submit', function(e) {
-        // Get the donation ID value
-        const donationId = document.getElementById('donationId').value;
-        
-        console.log("Form submitting with donation ID:", donationId);
-        
-        if (!donationId || donationId <= 0) {
-            e.preventDefault(); // Stop the form submission
-            alert("Error: Missing donation ID. Please try again.");
-            console.error("Form submission prevented - missing donation ID");
-            return false;
-        }
-        
-        // Otherwise, allow the form to submit normally
-        return true;
-    });
-
-    // Improved form submission handler
-    document.addEventListener('DOMContentLoaded', function() {
-        var requestForm = document.getElementById('requestForm');
-        
-        if (requestForm) {
-            requestForm.addEventListener('submit', function(e) {
-                // Try multiple ways to get the donation ID
-                var donationId = "";
-                
-                // Method 1: Direct input value
-                var donationIdField = document.getElementById('donationId');
-                if (donationIdField && donationIdField.value) {
-                    donationId = donationIdField.value;
-                }
-                
-                // Method 2: Form dataset
-                if (!donationId && this.dataset.donationId) {
-                    donationId = this.dataset.donationId;
-                }
-                
-                // Method 3: Query selector
-                if (!donationId) {
-                    var donationIdAlt = document.querySelector('input[name="donation_id"]');
-                    if (donationIdAlt) {
-                        donationId = donationIdAlt.value;
-                    }
-                }
-                
-                console.log("Final donation ID for submission:", donationId);
-                
-                if (!donationId || donationId <= 0) {
-                    e.preventDefault();
-                    alert("Error: Missing donation ID. Please try again.");
-                    return false;
-                }
-                
-                // If we have a donation ID, make sure it's in the form
-                if (donationIdField) {
-                    donationIdField.value = donationId;
-                }
-                
-                // Create a backup field if needed
-                if (!document.querySelector('input[name="donation_id"]')) {
-                    var backupField = document.createElement('input');
-                    backupField.type = 'hidden';
-                    backupField.name = 'donation_id';
-                    backupField.value = donationId;
-                    this.appendChild(backupField);
-                    console.log("Created backup donation_id field");
-                }
-                
-                console.log("Form submission proceeding with donation ID:", donationId);
-                return true;
+        // Function to set up request buttons
+        function setupRequestButtons() {
+            const requestButtons = document.querySelectorAll('.request-btn');
+            console.log("Found " + requestButtons.length + " request buttons");
+            
+            requestButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Get all attributes
+                    const id = this.getAttribute('data-id');
+                    const name = this.getAttribute('data-name');
+                    const branchId = this.getAttribute('data-branch');
+                    
+                    console.log("Button clicked with donation ID:", id);
+                    
+                    // Find the parent card
+                    const card = this.closest('.bg-white.border');
+                    
+                    // Get details from card
+                    const quantityElement = card.querySelector('.font-bold');
+                    const quantity = quantityElement ? quantityElement.textContent.split(' ')[0] : 'N/A';
+                    
+                    const expiryElement = card.querySelector('[class*="bg-"][class*="-500"]');
+                    const expiryDate = expiryElement ? expiryElement.textContent.replace('Expires in ', '').replace(' days', '') : 'N/A';
+                    
+                    const branchElement = card.querySelector('p.text-sm.text-gray-600');
+                    const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
+                    
+                    // Show modal and pass all parameters
+                    openModalWithData(id, name, quantity, expiryDate, branchName, branchId);
+                });
             });
-        } else {
-            console.error("Could not find requestForm element");
         }
-    });
 
-    function debugForm() {
-        const donationIdField = document.getElementById('donationId');
-        const formElement = document.getElementById('requestForm');
-        
-        alert("Donation ID value: " + (donationIdField ? donationIdField.value : "Not found") + 
-              "\nForm data attribute: " + (formElement ? formElement.dataset.donationId : "Form not found"));
-    }
+        // Function to open modal with data
+        function openModalWithData(id, productName, quantity, expiryDate, branchName, branchId) {
+            console.log("Opening modal with donation ID:", id);
+            
+            // IMPORTANT: Set hidden fields immediately and directly
+            document.getElementById('donationId').value = id;
+            document.getElementById('productName').value = productName;
+            document.getElementById('branchId').value = branchId;
+            
+            // Add data attribute to form as backup
+            const form = document.getElementById('requestForm');
+            if (form) {
+                form.setAttribute('data-donation-id', id);
+            }
+            
+            // Verify the values were set
+            console.log("Values set - donation ID:", document.getElementById('donationId').value);
+            
+            // Update the modal content
+            document.getElementById('itemDetails').innerHTML = `
+                <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
+                <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
+                <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
+                <div><span class="font-semibold">Branch:</span> ${branchName}</div>
+            `;
+            
+            // Set max quantity hint
+            document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
+            
+            // Show the modal
+            document.getElementById('requestModal').classList.add('modal-open');
+        }
+
+        // Function to set up form handler
+        function setupFormHandler() {
+            const form = document.getElementById('requestForm');
+            
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    // Get donation ID from the hidden field
+                    const donationId = document.getElementById('donationId').value;
+                    
+                    console.log("Form submitting with donation ID:", donationId);
+                    
+                    // Check if donation ID is valid
+                    if (!donationId || donationId <= 0) {
+                        e.preventDefault();
+                        
+                        // Try to get ID from data attribute as backup
+                        const formId = this.getAttribute('data-donation-id');
+                        if (formId && formId > 0) {
+                            // Set the field and let the form submit
+                            document.getElementById('donationId').value = formId;
+                            console.log("Using backup donation ID from data attribute:", formId);
+                            return true;
+                        }
+                        
+                        // If we still don't have a valid ID, show error
+                        alert("Error: Missing donation ID. Please try again.");
+                        console.error("Form submission prevented - missing donation ID");
+                        return false;
+                    }
+                    
+                    console.log("Form submission proceeding with donation ID:", donationId);
+                    return true;
+                });
+            } else {
+                console.error("Could not find requestForm element");
+            }
+        }
+
+        // Modal close function
+        function closeModal() {
+            document.getElementById('requestModal').classList.remove('modal-open');
+        }
+
+        // Debug function for troubleshooting
+        function debugForm() {
+            const donationIdField = document.getElementById('donationId');
+            const formElement = document.getElementById('requestForm');
+            
+            alert("Donation ID value: " + (donationIdField ? donationIdField.value : "Not found") + 
+                  "\nForm data attribute: " + (formElement ? formElement.getAttribute('data-donation-id') : "Form not found"));
+        }
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('requestModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
     </script>
 </body>
 </html>
