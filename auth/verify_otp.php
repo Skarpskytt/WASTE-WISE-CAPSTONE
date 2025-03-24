@@ -1,35 +1,38 @@
 <?php
-// Use standard PHP session only
+// Start with standard PHP session - MUST BE FIRST LINE
 session_start();
+
+// Debug settings
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Log the session for debugging
-error_log("SESSION in verify_otp.php: " . print_r($_SESSION, true));
+// Add more detailed logging
+error_log("verify_otp.php loaded - Session ID: " . session_id());
+error_log("REQUEST_URI: " . $_SERVER['REQUEST_URI']);
+error_log("HTTP_REFERER: " . ($_SERVER['HTTP_REFERER'] ?? 'not set'));
+error_log("QUERY_STRING: " . ($_SERVER['QUERY_STRING'] ?? 'not set'));
+error_log("SESSION data: " . print_r($_SESSION, true));
 
-// If no temp_user_id, redirect to login
+// Check session status
+if (session_status() != PHP_SESSION_ACTIVE) {
+    error_log("Session not active in verify_otp.php!");
+}
+
+// If no temp_user_id, redirect to login with clear message
 if (!isset($_SESSION['temp_user_id'])) {
-    $_SESSION['error'] = "Session expired. Please login again.";
+    $_SESSION['errorMessage'] = "We couldn't verify your login session. Please try again.";
     header('Location: ../index.php');
     exit();
 }
 
 require_once '../config/app_config.php';
 require_once '../config/db_connect.php';
-require_once '../config/session_handler.php';
 
-use CustomSession\SessionHandler;
-use function CustomSession\initSession;
-
-// Get database connection
+// Get database connection only
 $pdo = getPDO();
 
-// Initialize session with our custom handler
-initSession($pdo);
-
-// Get session handler instance
-$session = SessionHandler::getInstance($pdo);
-
+// IMPORTANT: Don't reinitialize session here - already started above
+// We're using standard PHP sessions for auth flow
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -74,7 +77,7 @@ $session = SessionHandler::getInstance($pdo);
                 <form action="verify_otp_process.php" method="POST" class="space-y-4">
                     <div>
                         <label for="otp" class="block text-sm font-medium text-gray-700">OTP Code</label>
-                        <input type="text" id="otp" name="otp" 
+                        <input type="text" id="otp" name="otp" placeholder="Enter 6-digit code"
                                class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration:300" 
                                required>
                     </div>

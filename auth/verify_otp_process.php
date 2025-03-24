@@ -1,31 +1,21 @@
 <?php
-// Use standard PHP session 
+// Use standard PHP session
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once '../config/app_config.php';
 require_once '../config/db_connect.php';
-require_once '../config/session_handler.php';
-
-use CustomSession\SessionHandler;
-use function CustomSession\initSession;
 
 // Get database connection
 $pdo = getPDO();
 
-// Initialize session with our custom handler
-initSession($pdo);
-
-// Get session handler instance
-$session = SessionHandler::getInstance($pdo);
-
 // Debug session data
-error_log("SESSION in verify_otp_process.php: " . print_r($_SESSION, true));
+error_log("verify_otp_process.php - Session ID: " . session_id() . ", temp_user_id: " . ($_SESSION['temp_user_id'] ?? 'not set'));
 
 // Check if temp_user_id exists
 if (!isset($_SESSION['temp_user_id'])) {
-    $_SESSION['error'] = "Session expired. Please login again.";
+    $_SESSION['error'] = "Your session has expired. Please log in again.";
     header('Location: ../index.php');
     exit();
 }
@@ -76,10 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $_SESSION['fname'] = $user['fname'];
         $_SESSION['lname'] = $user['lname'];
         $_SESSION['role'] = $user['role'];
-        $_SESSION['branch_id'] = $user['branch_id'];
+        $_SESSION['branch_id'] = $user['branch_id'] ?? null;
         
         // Clear temp data
         unset($_SESSION['temp_user_id']);
+        unset($_SESSION['temp_email']);
         
         // Log session after user data is set
         error_log("SESSION after user login: " . print_r($_SESSION, true));

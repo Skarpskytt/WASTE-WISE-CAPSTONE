@@ -1,6 +1,7 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+session_start();
 
 // Include necessary files
 require_once '../config/app_config.php';
@@ -30,11 +31,10 @@ error_log("Current time: " . $now);
 // Check if token exists and is valid
 $tokenIsValid = false;
 $userEmail = '';
+$userName = '';
 
 if (!empty($token)) {
     try {
-        // MODIFIED: Just check if token exists and hasn't been used
-        // Don't check expiry date since they're all in 2025
         $stmt = $pdo->prepare("
             SELECT pr.*, u.email, u.fname 
             FROM password_resets pr
@@ -44,54 +44,19 @@ if (!empty($token)) {
         $stmt->execute([$token]);
         $reset = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // Add debugging
-        error_log("Query results: " . ($reset ? "Token found" : "Token not found"));
-        if ($reset) {
-            error_log("Token expiry: " . $reset['expiry_date']);
-            error_log("Token used status: " . $reset['used']);
-        }
-        
-        $tokenIsValid = ($reset !== false);
-        
-        if ($tokenIsValid) {
+        // Simple validation for now
+        if ($reset && strtotime($reset['expiry_date']) >= time()) {
+            $tokenIsValid = true;
             $userEmail = $reset['email'];
             $userName = $reset['fname'];
+        } else if ($reset && strtotime($reset['expiry_date']) < time()) {
+            $_SESSION['error'] = "This password reset link has expired. Please request a new one.";
         } else {
-            error_log("Token not found or invalid: " . $token);
-            // Check if token exists at all (regardless of expiry)
-            $stmt = $pdo->prepare("
-                SELECT pr.*, u.email, u.fname 
-                FROM password_resets pr
-                JOIN users u ON pr.user_id = u.id
-                WHERE pr.token = ?
-            ");
-            $stmt->execute([$token]);
-            $anyReset = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($anyReset) {
-                if ($anyReset['used'] == 1) {
-                    error_log("Token has already been used");
-                    $_SESSION['error'] = "This reset link has already been used.";
-                } else {
-                    // NOTE: Skip expiry check since they're all in 2025
-                    /*
-                    if (strtotime($anyReset['expiry_date']) < time()) {
-                        error_log("Token is expired. Expired at: " . $anyReset['expiry_date']);
-                        $_SESSION['error'] = "This reset link has expired. Please request a new one.";
-                    }
-                    */
-                    $tokenIsValid = true;
-                    $userEmail = $anyReset['email'];
-                    $userName = $anyReset['fname'];
-                }
-            } else {
-                error_log("Token does not exist in database at all");
-                $_SESSION['error'] = "This reset link is invalid.";
-            }
+            $_SESSION['error'] = "This password reset link is invalid.";
         }
     } catch (Exception $e) {
-        error_log("Reset password error: " . $e->getMessage());
-        $_SESSION['error'] = "An error occurred while processing your request.";
+        $_SESSION['error'] = "An error occurred. Please try again.";
+        error_log("Reset validation error: " . $e->getMessage());
     }
 }
 ?>

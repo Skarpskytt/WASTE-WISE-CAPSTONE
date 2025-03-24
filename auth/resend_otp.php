@@ -1,27 +1,23 @@
 <?php
-require_once '../config/db_connect.php';
-require_once '../config/session_handler.php';
-require_once '../vendor/autoload.php';
+session_start();
 require_once '../config/app_config.php';
+require_once '../config/db_connect.php';
+require_once '../includes/mail/EmailService.php';
 
 use App\Mail\EmailService;
-use CustomSession\SessionHandler;
-use function CustomSession\initSession;
 
 // Get database connection
 $pdo = getPDO();
-
-// Initialize session with our custom handler
-initSession($pdo);
-
-// Get session handler instance
-$session = SessionHandler::getInstance($pdo);
 
 // Enable error reporting
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Debug
+error_log("resend_otp.php - Session ID: " . session_id() . ", temp_user_id: " . ($_SESSION['temp_user_id'] ?? 'not set'));
+
 if (!isset($_SESSION['temp_user_id'])) {
+    $_SESSION['error'] = "Your session has expired. Please log in again.";
     header('Location: ../index.php');
     exit();
 }

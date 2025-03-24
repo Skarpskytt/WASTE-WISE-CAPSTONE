@@ -442,7 +442,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             </label>
                                             <input type="date"
                                                 name="waste_date"
-                                                required
+                                                disabled
                                                 value="<?= date('Y-m-d') ?>"
                                                 class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                         </div>
@@ -469,7 +469,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             </label>
                                             <select name="waste_reason"
                                                 required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                                class="waste-reason-select w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                                 <option value="">Select Reason</option>
                                                 <option value="overproduction">Overproduction</option>
                                                 <option value="expired">Expired</option>
@@ -488,7 +488,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             </label>
                                             <select name="disposal_method"
                                                 required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                                class="disposal-method-select w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
                                                 <option value="">Select Method</option>
                                                 <option value="donation">Donation</option>
                                                 <option value="compost">Compost</option>
@@ -498,6 +498,31 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                                 <option value="other">Other</option>
                                             </select>
                                         </div>
+
+                                        <script>
+                                            document.querySelectorAll('.waste-reason-select').forEach(function(select) {
+                                                select.addEventListener('change', function() {
+                                                    const disposalMethod = this.closest('form').querySelector('.disposal-method-select');
+                                                    
+                                                    // Map waste reasons to disposal methods
+                                                    const disposalMap = {
+                                                        'burnt': 'trash',
+                                                        'damaged': 'trash',
+                                                        'expired': 'trash',
+                                                        'quality_issues': 'trash',
+                                                        'spoiled': 'compost',
+                                                        'overproduction': 'donation',
+                                                        'unsold': 'donation'
+                                                    };
+                                                    
+                                                    if (disposalMap[this.value]) {
+                                                        disposalMethod.value = disposalMap[this.value];
+                                                    } else {
+                                                        disposalMethod.value = '';
+                                                    }
+                                                });
+                                            });
+                                        </script>
                                         
                                         <div class="col-span-2">
                                             <label class="block text-sm font-medium text-gray-700 mb-1">

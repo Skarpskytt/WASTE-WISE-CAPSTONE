@@ -89,8 +89,8 @@ if (isset($_GET['mark_all_read'])) {
         <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
             <div class="mb-3">
                 <a href="admindashboard.php" class="flex ms-2 md:me-24">
-                <img src="../../assets/images/Logo.png" class="h-8 me-3" alt="WasteWise"/>
-                    <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">LGU</span>
+                <img src="../../assets/images/LGU.png" class="h-8 me-3" alt="WasteWise"/>
+                    <span class="self-center text-lg font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Admin Panel</span>
                 </a>
             </div>
             <li>

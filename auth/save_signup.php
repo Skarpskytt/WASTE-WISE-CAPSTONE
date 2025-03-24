@@ -1,4 +1,5 @@
 <?php
+session_start();
 // Include necessary files
 require_once '../config/app_config.php';
 require_once '../config/db_connect.php';
@@ -43,6 +44,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Password validation
         if ($password !== $conpassword) {
             throw new Exception('Passwords do not match.');
+        }
+
+        // Add this password validation:
+        if (strlen($password) < 8) {
+            throw new Exception('Password must be at least 8 characters long.');
+        }
+
+        // Check for complexity
+        if (!preg_match('/[A-Z]/', $password) || 
+            !preg_match('/[a-z]/', $password) || 
+            !preg_match('/[0-9]/', $password) || 
+            !preg_match('/[^A-Za-z0-9]/', $password)) {
+            throw new Exception('Password must include uppercase, lowercase, number, and special character.');
         }
 
         // Email validation

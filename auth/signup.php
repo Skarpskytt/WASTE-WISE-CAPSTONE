@@ -1,4 +1,5 @@
 <?php
+session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -217,6 +218,7 @@ $session = SessionHandler::getInstance($pdo);
     </div>
   </div>
   <script>
+    // Use this toggle function across all your forms
     function togglePassword(inputId, iconId) {
       const input = document.getElementById(inputId);
       const icon = document.getElementById(iconId);
