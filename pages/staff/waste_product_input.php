@@ -37,7 +37,7 @@ if (isset($_POST['submitwaste'])) {
     // Extract form data with better validation
     $productId = isset($_POST['product_id']) && !empty($_POST['product_id']) ? $_POST['product_id'] : null;
     $wasteDate = isset($_POST['waste_date']) && !empty($_POST['waste_date']) ? $_POST['waste_date'] : null;
-    $wasteQuantity = isset($_POST['waste_quantity']) && is_numeric($_POST['waste_quantity']) ? (float)$_POST['waste_quantity'] : null;
+    $wasteQuantity = isset($_POST['waste_quantity']) && is_numeric($_POST['waste_quantity']) && $_POST['waste_quantity'] > 0 ? (float)$_POST['waste_quantity'] : null;
     $wasteReason = isset($_POST['waste_reason']) && !empty($_POST['waste_reason']) ? $_POST['waste_reason'] : null;
     $disposalMethod = isset($_POST['disposal_method']) && !empty($_POST['disposal_method']) ? $_POST['disposal_method'] : null;
     $productionStage = isset($_POST['production_stage']) && !empty($_POST['production_stage']) ? $_POST['production_stage'] : null;
@@ -57,8 +57,15 @@ if (isset($_POST['submitwaste'])) {
     if (!$disposalMethod) $errors[] = "Disposal method is required";
     if (!$productionStage) $errors[] = "Production stage is required";
     
+    // Debug information - add this temporarily
     if (!empty($errors)) {
         $errorMessage = "Please fill in all required fields: " . implode(", ", $errors);
+        $errorMessage .= "<br>Debug: productId=" . (isset($_POST['product_id']) ? $_POST['product_id'] : 'not set') . 
+                        ", wasteDate=" . (isset($_POST['waste_date']) ? $_POST['waste_date'] : 'not set') .
+                        ", wasteQuantity=" . (isset($_POST['waste_quantity']) ? $_POST['waste_quantity'] : 'not set') .
+                        ", wasteReason=" . (isset($_POST['waste_reason']) ? $_POST['waste_reason'] : 'not set') .
+                        ", disposalMethod=" . (isset($_POST['disposal_method']) ? $_POST['disposal_method'] : 'not set') .
+                        ", productionStage=" . (isset($_POST['production_stage']) ? $_POST['production_stage'] : 'not set');
     } else {
         try {
             $pdo->beginTransaction();
