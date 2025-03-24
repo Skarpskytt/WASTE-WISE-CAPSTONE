@@ -204,6 +204,7 @@ JOIN
     users u ON dr.staff_id = u.id
 WHERE 
     dr.status = 'prepared'
+    AND dr.id > 0  /* Add this condition to exclude ID=0 */
     AND p.expiry_date > NOW()
     AND dr.id NOT IN (
         /* Exclude donations that are already approved for this NGO */
@@ -381,81 +382,89 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <?php if (count($donations) > 0): ?>
-                    <?php 
-                    // Update the logic for determining if an item has been requested
-                    $checkRequestStmt = $pdo->prepare("
-                        SELECT status FROM ngo_donation_requests 
-                        WHERE ngo_id = ? AND donation_request_id = ?
-                    ");
-
-                    foreach ($donations as $item): 
-                        $checkRequestStmt->execute([$ngoId, $item['id']]);
-                        $requestStatus = $checkRequestStmt->fetchColumn();
-                        $alreadyRequested = ($requestStatus === 'pending');
-                        $alreadyApproved = ($requestStatus === 'approved');
+                    <!-- Add this right after your foreach statement for $donations -->
+                    <?php foreach ($donations as $item): 
+                        // Debug the donation ID
+                        error_log("Rendering donation item with ID: " . $item['id'] . " (type: " . gettype($item['id']) . ")");
                         
-                        // Skip this item if it's already approved - belt and suspenders approach
-                        if ($alreadyApproved) continue;
+                        // Rest of your loop...
                     ?>
-                        <div class="bg-white border <?= $alreadyRequested ? 'border-yellow-400' : 'border-gray-200' ?> p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-                            <!-- If already requested, show a badge -->
-                            <?php if ($alreadyRequested): ?>
-                                <div class="mb-2">
-                                    <span class="inline-block bg-yellow-400 text-white text-xs px-2 py-1 rounded-full ml-1">
-                                        Pending Approval
-                                    </span>
-                                </div>
-                            <?php endif; ?>
-                            <div class="flex flex-col h-full">
-                                <div class="mb-2">
-                                    <span class="inline-block bg-primarycol text-white text-xs px-2 py-1 rounded-full">
-                                        <?= htmlspecialchars($item['category']) ?>
-                                    </span>
-                                    <?php if (isset($item['expiry_date'])): 
-                                        $expiryDate = new DateTime($item['expiry_date']);
-                                        $today = new DateTime();
-                                        $daysUntilExpiry = $today->diff($expiryDate)->days;
-                                        
-                                        $expiryClass = 'bg-green-500';
-                                        if ($daysUntilExpiry < 3) {
-                                            $expiryClass = 'bg-red-500';
-                                        } elseif ($daysUntilExpiry < 7) {
-                                            $expiryClass = 'bg-yellow-500';
-                                        }
-                                    ?>
-                                    <span class="inline-block <?= $expiryClass ?> text-white text-xs px-2 py-1 rounded-full ml-1">
-                                        Expires in <?= $daysUntilExpiry ?> days
-                                    </span>
+                        <?php 
+                        // Update the logic for determining if an item has been requested
+                        $checkRequestStmt = $pdo->prepare("
+                            SELECT status FROM ngo_donation_requests 
+                            WHERE ngo_id = ? AND donation_request_id = ?
+                        ");
+
+                        foreach ($donations as $item): 
+                            $checkRequestStmt->execute([$ngoId, $item['id']]);
+                            $requestStatus = $checkRequestStmt->fetchColumn();
+                            $alreadyRequested = ($requestStatus === 'pending');
+                            $alreadyApproved = ($requestStatus === 'approved');
+                            
+                            // Skip this item if it's already approved - belt and suspenders approach
+                            if ($alreadyApproved) continue;
+                        ?>
+                            <div class="bg-white border <?= $alreadyRequested ? 'border-yellow-400' : 'border-gray-200' ?> p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+                                <!-- If already requested, show a badge -->
+                                <?php if ($alreadyRequested): ?>
+                                    <div class="mb-2">
+                                        <span class="inline-block bg-yellow-400 text-white text-xs px-2 py-1 rounded-full ml-1">
+                                            Pending Approval
+                                        </span>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="flex flex-col h-full">
+                                    <div class="mb-2">
+                                        <span class="inline-block bg-primarycol text-white text-xs px-2 py-1 rounded-full">
+                                            <?= htmlspecialchars($item['category']) ?>
+                                        </span>
+                                        <?php if (isset($item['expiry_date'])): 
+                                            $expiryDate = new DateTime($item['expiry_date']);
+                                            $today = new DateTime();
+                                            $daysUntilExpiry = $today->diff($expiryDate)->days;
+                                            
+                                            $expiryClass = 'bg-green-500';
+                                            if ($daysUntilExpiry < 3) {
+                                                $expiryClass = 'bg-red-500';
+                                            } elseif ($daysUntilExpiry < 7) {
+                                                $expiryClass = 'bg-yellow-500';
+                                            }
+                                        ?>
+                                        <span class="inline-block <?= $expiryClass ?> text-white text-xs px-2 py-1 rounded-full ml-1">
+                                            Expires in <?= $daysUntilExpiry ?> days
+                                        </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <h3 class="text-lg font-semibold text-primarycol"><?= htmlspecialchars($item['product_name']) ?></h3>
+                                    <p class="text-sm text-gray-600 mb-2">From: <?= htmlspecialchars($item['branch_name']) ?></p>
+                                    <p class="text-sm text-gray-600 mb-2">Donor: <?= htmlspecialchars($item['donor_name']) ?></p>
+                                    
+                                    <?php if (!empty($item['notes'])): ?>
+                                    <p class="text-sm text-gray-600 mb-4">
+                                        <?= htmlspecialchars(substr($item['notes'], 0, 100)) ?>
+                                        <?= strlen($item['notes']) > 100 ? '...' : '' ?>
+                                    </p>
                                     <?php endif; ?>
-                                </div>
-                                <h3 class="text-lg font-semibold text-primarycol"><?= htmlspecialchars($item['product_name']) ?></h3>
-                                <p class="text-sm text-gray-600 mb-2">From: <?= htmlspecialchars($item['branch_name']) ?></p>
-                                <p class="text-sm text-gray-600 mb-2">Donor: <?= htmlspecialchars($item['donor_name']) ?></p>
-                                
-                                <?php if (!empty($item['notes'])): ?>
-                                <p class="text-sm text-gray-600 mb-4">
-                                    <?= htmlspecialchars(substr($item['notes'], 0, 100)) ?>
-                                    <?= strlen($item['notes']) > 100 ? '...' : '' ?>
-                                </p>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($item['waste_reason'])): ?>
-                                <p class="text-sm text-gray-600 mb-4">
-                                    Reason: <?= htmlspecialchars(ucfirst($item['waste_reason'])) ?>
-                                </p>
-                                <?php endif; ?>
-                                
-                                <div class="mt-auto pt-4 flex justify-between items-center">
-                                    <div class="font-bold"><?= htmlspecialchars($item['available_quantity']) ?> items</div>
-                                    <button class="btn btn-primary btn-sm request-btn" 
-                                            data-id="<?= $item['id'] ?>"
-                                            data-name="<?= htmlspecialchars($item['product_name']) ?>"
-                                            data-branch="<?= $item['branch_id'] ?>">
-                                        Request
-                                    </button>
+                                    
+                                    <?php if (!empty($item['waste_reason'])): ?>
+                                    <p class="text-sm text-gray-600 mb-4">
+                                        Reason: <?= htmlspecialchars(ucfirst($item['waste_reason'])) ?>
+                                    </p>
+                                    <?php endif; ?>
+                                    
+                                    <div class="mt-auto pt-4 flex justify-between items-center">
+                                        <div class="font-bold"><?= htmlspecialchars($item['available_quantity']) ?> items</div>
+                                        <button class="btn btn-primary btn-sm request-btn" 
+                                                data-id="<?= $item['id'] ?>"
+                                                data-name="<?= htmlspecialchars($item['product_name']) ?>"
+                                                data-branch="<?= $item['branch_id'] ?>">
+                                            Request
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        <?php endforeach; ?>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <!-- No donations found message -->
@@ -544,6 +553,14 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
                 button.addEventListener('click', function() {
                     // Get all attributes
                     const id = this.getAttribute('data-id');
+                    
+                    // Validate the ID immediately
+                    if (!id || id === '0' || id === 0) {
+                        console.error("Invalid donation ID detected:", id);
+                        alert("Error: This donation has an invalid ID. Please contact support.");
+                        return; // Stop execution
+                    }
+                    
                     const name = this.getAttribute('data-name');
                     const branchId = this.getAttribute('data-branch');
                     
@@ -608,28 +625,23 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
             if (form) {
                 form.addEventListener('submit', function(e) {
                     // Get donation ID from the hidden field
-                    const donationId = document.getElementById('donationId').value;
+                    let donationId = document.getElementById('donationId').value;
+                    
+                    // Parse as integer to handle string values
+                    donationId = parseInt(donationId, 10);
                     
                     console.log("Form submitting with donation ID:", donationId);
                     
-                    // Check if donation ID is valid
-                    if (!donationId || donationId <= 0) {
+                    // Comprehensive validation
+                    if (isNaN(donationId) || donationId <= 0) {
                         e.preventDefault();
-                        
-                        // Try to get ID from data attribute as backup
-                        const formId = this.getAttribute('data-donation-id');
-                        if (formId && formId > 0) {
-                            // Set the field and let the form submit
-                            document.getElementById('donationId').value = formId;
-                            console.log("Using backup donation ID from data attribute:", formId);
-                            return true;
-                        }
-                        
-                        // If we still don't have a valid ID, show error
-                        alert("Error: Missing donation ID. Please try again.");
-                        console.error("Form submission prevented - missing donation ID");
+                        alert("Error: Invalid donation ID detected (" + donationId + "). Please try again or contact support.");
+                        console.error("Form submission prevented - invalid donation ID:", donationId);
                         return false;
                     }
+                    
+                    // Set the value back as a clean integer
+                    document.getElementById('donationId').value = donationId;
                     
                     console.log("Form submission proceeding with donation ID:", donationId);
                     return true;
