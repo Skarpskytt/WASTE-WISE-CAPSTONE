@@ -29,7 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
     $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
     $pickupDate = isset($_POST['pickup_date']) ? $_POST['pickup_date'] : '';
     $pickupTime = isset($_POST['pickup_time']) ? $_POST['pickup_time'] : '';
-    
+
+    // Debugging: Log form data
+    error_log("Form Data: donation_id={$donationRequestId}, quantity={$quantity}, pickup_date={$pickupDate}, pickup_time={$pickupTime}");
+
     // Validate input
     $errors = [];
     if ($donationRequestId <= 0) {
@@ -47,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
     if (empty($pickupTime)) {
         $errors[] = "Please select a pickup time.";
     }
-    
+
     // Check if the donation exists and has enough quantity
     try {
         $checkStmt = $pdo->prepare("
@@ -69,20 +72,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
         ");
         $checkStmt->execute([$donationRequestId, $quantity]);
         $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
-        
+
+        // Debugging: Log SQL query result
+        error_log("SQL Query Result: " . print_r($donation, true));
+
         if (!$donation) {
             $errors[] = "The requested donation is not available or has insufficient quantity.";
         }
     } catch (PDOException $e) {
         $errors[] = "Database error: " . $e->getMessage();
     }
-    
+
     // If no errors, process the request
     if (empty($errors)) {
         try {
             // Start a transaction
             $pdo->beginTransaction();
-            
+
             // Create a pending request in the NGO donation requests table
             $insertStmt = $pdo->prepare("
                 INSERT INTO ngo_donation_requests (
@@ -98,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
                     ngo_notes
                 ) VALUES (?, ?, ?, ?, NOW(), ?, ?, 'pending', ?, ?)
             ");
-            
+
             $insertStmt->execute([
                 $donation['product_id'],
                 $ngoId,
@@ -109,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
                 $quantity,
                 $notes
             ]);
-            
+
             // Create notification for admin
             $notifyAdminStmt = $pdo->prepare("
                 INSERT INTO notifications (
@@ -126,17 +132,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
                     0
                 )
             ");
-            
+
             $orgName = $ngoInfo['organization_name'] ?: $ngoInfo['full_name'];
             $notifyMessage = "New donation request from {$orgName} for {$donation['product_name']}";
             $notifyAdminStmt->execute([$notifyMessage]);
-            
+
             // Commit transaction
             $pdo->commit();
-            
+
             // Set success message
             $successMessage = "Your donation request has been submitted and is awaiting approval.";
-            
+
         } catch (PDOException $e) {
             // Rollback on error
             $pdo->rollBack();
