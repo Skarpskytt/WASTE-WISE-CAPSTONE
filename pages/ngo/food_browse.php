@@ -498,62 +498,60 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
     <script>
     // Modal functionality
     function showModal(id, productName, quantity, expiryDate, branchName) {
-      // Set hidden fields
-      document.getElementById('donationId').value = id;
-      document.getElementById('productName').value = productName;
-      
-      // Get branch id from the button that was clicked
-      const branchId = document.querySelector(`.request-btn[data-id="${id}"]`).getAttribute('data-branch');
-      document.getElementById('branchId').value = branchId;
-      
-      // Display item details
-      document.getElementById('itemDetails').innerHTML = `
-        <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
-        <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
-        <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
-        <div><span class="font-semibold">Branch:</span> ${branchName}</div>
-      `;
-      
-      // Set max quantity hint
-      document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
-      
-      // Set max quantity attribute
-      const maxQuantity = Math.min(30, parseFloat(quantity));
-      const quantityInput = document.querySelector('input[name="quantity"]');
-      quantityInput.setAttribute('max', maxQuantity);
-      // If available is less than 20, disable the form
-      if (parseFloat(quantity) < 20) {
-        quantityInput.setAttribute('disabled', true);
-        document.querySelector('button[type="submit"]').setAttribute('disabled', true);
-        document.querySelector('button[type="submit"]').classList.add('opacity-50');
-        // Add a notice
-        const notice = document.createElement('p');
-        notice.className = 'text-red-500 text-sm mt-1';
-        notice.textContent = 'Not enough quantity available to meet minimum request requirement.';
-        quantityInput.parentNode.appendChild(notice);
-      } else {
-        // Set default value to 20 or max available if less than 30
-        quantityInput.value = Math.min(20, maxQuantity);
-      }
-      
-      // Show the modal
-      document.getElementById('requestModal').classList.add('modal-open');
+        // Set hidden fields
+        document.getElementById('donationId').value = id;
+        document.getElementById('productName').value = productName;
+        
+        // Get branch id from the button that was clicked
+        const branchId = document.querySelector(`.request-btn[data-id="${id}"]`).getAttribute('data-branch');
+        document.getElementById('branchId').value = branchId;
+        
+        // Display item details
+        document.getElementById('itemDetails').innerHTML = `
+            <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
+            <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
+            <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
+            <div><span class="font-semibold">Branch:</span> ${branchName}</div>
+        `;
+        
+        // Set max quantity hint
+        document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
+        
+        // Set max quantity attribute
+        const maxQuantity = Math.min(30, parseFloat(quantity));
+        const quantityInput = document.querySelector('input[name="quantity"]');
+        quantityInput.setAttribute('max', maxQuantity);
+        // If available is less than 20, disable the form
+        if (parseFloat(quantity) < 20) {
+            quantityInput.setAttribute('disabled', true);
+            document.querySelector('button[type="submit"]').setAttribute('disabled', true);
+            document.querySelector('button[type="submit"]').classList.add('opacity-50');
+            // Add a notice
+            const notice = document.createElement('p');
+            notice.className = 'text-red-500 text-sm mt-1';
+            notice.textContent = 'Not enough quantity available to meet minimum request requirement.';
+            quantityInput.parentNode.appendChild(notice);
+        } else {
+            // Set default value to 20 or max available if less than 30
+            quantityInput.value = Math.min(20, maxQuantity);
+        }
+        
+        // Show the modal
+        document.getElementById('requestModal').classList.add('modal-open');
     }
 
     function closeModal() {
-      document.getElementById('requestModal').classList.remove('modal-open');
+        document.getElementById('requestModal').classList.remove('modal-open');
     }
 
     // Close modal when clicking outside
     window.addEventListener('click', function(event) {
-      const modal = document.getElementById('requestModal');
-      if (event.target === modal) {
-        closeModal();
-      }
+        const modal = document.getElementById('requestModal');
+        if (event.target === modal) {
+            closeModal();
+        }
     });
-    </script>
 
-    <script>
     // Attach event listeners to all request buttons
     document.addEventListener('DOMContentLoaded', function() {
         const requestButtons = document.querySelectorAll('.request-btn');
