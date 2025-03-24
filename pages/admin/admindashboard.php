@@ -479,7 +479,7 @@ foreach ($monthlyDonations as $donation) {
                 
                 <div class="p-3 bg-green-50 rounded-lg">
                     <div class="flex items-center justify-between">
-                        <p class="text-sm text-gray-500">Ingredient Waste</p>
+                        <p class="text-sm text-gray-500">Excess Ingredients</p>
                         <span class="text-xs text-white bg-green-600 rounded-full px-2 py-0.5">
                             <?= $branchTotals[$branchId]['ingredient_waste_count'] ?> Records
                         </span>

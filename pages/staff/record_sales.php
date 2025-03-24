@@ -30,6 +30,9 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Debug incoming data
+    error_log("Sales data: " . json_encode($_POST));
+    
     try {
         $salesDate = $_POST['sales_date'];
         $productSales = $_POST['sales'] ?? [];
@@ -38,6 +41,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         
         $salesRecorded = false;
+        
+        // Before processing, check if there's at least one valid entry
+        $validSalesExist = false;
+        foreach ($productSales as $productId => $quantity) {
+            if (!empty($quantity) && $quantity > 0) {
+                $validSalesExist = true;
+                break;
+            }
+        }
+
+        if (!$validSalesExist) {
+            throw new Exception("No valid sales quantities entered. Please enter at least one quantity greater than zero.");
+        }
         
         // Insert each product sale
         foreach ($productSales as $productId => $quantity) {
