@@ -23,6 +23,16 @@ $errorMessage = null;
 
 // Process donation request form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['donation_id'])) {
+    // Debug information - add this at the beginning of your form processing
+    // Log all POST data
+    error_log("POST data: " . print_r($_POST, true));
+    
+    // Get form data with additional validation
+    $donationRequestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
+    error_log("Parsed donation_id: $donationRequestId");
+    
+    // Rest of your code...
+
     // Get form data
     $donationRequestId = isset($_POST['donation_id']) ? (int)$_POST['donation_id'] : 0;
     $quantity = isset($_POST['quantity']) ? (float)$_POST['quantity'] : 0;
@@ -503,16 +513,26 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 
     <script>
     // Modal functionality
-    function showModal(id, productName, quantity, expiryDate, branchName) {
-        // Set hidden fields
-        document.getElementById('donationId').value = id;
-        document.getElementById('productName').value = productName;
+    function showModal(id, productName, quantity, expiryDate, branchName, branchId) {
+        console.log("Showing modal for donation ID:", id, "Branch ID:", branchId);
         
-        // Get branch id from the button that was clicked
-        const branchId = document.querySelector(`.request-btn[data-id="${id}"]`).getAttribute('data-branch');
-        document.getElementById('branchId').value = branchId;
+        // Set hidden field values - with validation checks
+        const donationIdField = document.getElementById('donationId');
+        const productNameField = document.getElementById('productName');
+        const branchIdField = document.getElementById('branchId');
         
-        // Display item details
+        if (donationIdField) donationIdField.value = id;
+        if (productNameField) productNameField.value = productName;
+        if (branchIdField) branchIdField.value = branchId;
+        
+        // Add validation to check if values were set properly
+        console.log("Form values set:", {
+            donationId: donationIdField ? donationIdField.value : 'field not found',
+            productName: productNameField ? productNameField.value : 'field not found',
+            branchId: branchIdField ? branchIdField.value : 'field not found'
+        });
+        
+        // Update the rest of your modal as before
         document.getElementById('itemDetails').innerHTML = `
             <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
             <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
@@ -522,25 +542,6 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
         
         // Set max quantity hint
         document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
-        
-        // Set max quantity attribute
-        const maxQuantity = Math.min(30, parseFloat(quantity));
-        const quantityInput = document.querySelector('input[name="quantity"]');
-        quantityInput.setAttribute('max', maxQuantity);
-        // If available is less than 20, disable the form
-        if (parseFloat(quantity) < 20) {
-            quantityInput.setAttribute('disabled', true);
-            document.querySelector('button[type="submit"]').setAttribute('disabled', true);
-            document.querySelector('button[type="submit"]').classList.add('opacity-50');
-            // Add a notice
-            const notice = document.createElement('p');
-            notice.className = 'text-red-500 text-sm mt-1';
-            notice.textContent = 'Not enough quantity available to meet minimum request requirement.';
-            quantityInput.parentNode.appendChild(notice);
-        } else {
-            // Set default value to 20 or max available if less than 30
-            quantityInput.value = Math.min(20, maxQuantity);
-        }
         
         // Show the modal
         document.getElementById('requestModal').classList.add('modal-open');
@@ -566,6 +567,7 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
             button.addEventListener('click', function() {
                 const id = this.getAttribute('data-id');
                 const name = this.getAttribute('data-name');
+                const branchId = this.getAttribute('data-branch');
                 
                 // Find the parent card to extract additional information
                 const card = this.closest('.bg-white.border');
@@ -582,8 +584,8 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
                 const branchElement = card.querySelector('p.text-sm.text-gray-600');
                 const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
                 
-                // Now show the modal with this information
-                showModal(id, name, quantity, expiryDate, branchName);
+                // Now show the modal with this information - pass branchId directly
+                showModal(id, name, quantity, expiryDate, branchName, branchId);
             });
         });
     });
