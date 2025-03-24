@@ -366,7 +366,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id']) && !isset
                 INSERT INTO users (fname, lname, email, role, password, branch_id, is_active) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
-            
             $stmt->execute([$fname, $lname, $email, $role, $hashedPassword, $branch_id, $is_active]);
             $user_id = $pdo->lastInsertId();
             

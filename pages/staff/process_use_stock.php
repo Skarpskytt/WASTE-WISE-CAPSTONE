@@ -9,6 +9,9 @@ $pdo = getPDO();
 
 // Check if the form was submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Debugging code to log the received ingredient_id
+    error_log("Received ingredient_id: " . filter_input(INPUT_POST, 'ingredient_id', FILTER_VALIDATE_INT));
+
     try {
         // Get form data
         $ingredientId = filter_input(INPUT_POST, 'ingredient_id', FILTER_VALIDATE_INT);

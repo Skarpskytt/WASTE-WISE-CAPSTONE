@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }).showToast();
         <?php unset($_SESSION['pending_message']); ?>
     <?php endif; ?>
-}); // <--- This closing bracket was missing or misplaced
+});
 </script>
 
 <!-- Add this CSS for better toast styling -->
