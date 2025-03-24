@@ -51,8 +51,8 @@ if (isset($_POST['submitwaste'])) {
     // Validate required fields
     $errors = [];
     if (!$productId) $errors[] = "Product must be selected";
-    if (!$wasteDate) $errors[] = "Waste date is required";
-    if (!$wasteQuantity) $errors[] = "Waste quantity is required";
+    if (!$wasteDate) $errors[] = "Excess date is required";
+    if (!$wasteQuantity) $errors[] = "Excess quantity is required";
     if (!$wasteReason) $errors[] = "Waste reason is required";
     if (!$disposalMethod) $errors[] = "Disposal method is required";
     if (!$productionStage) $errors[] = "Production stage is required";
@@ -118,7 +118,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Waste Tracking - WasteWise</title>
+    <title>Product Excess Tracking - WasteWise</title>
     <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -229,8 +229,8 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                     <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
                 </ol>
             </nav>
-            <h1 class="text-3xl font-bold mb-2 text-primarycol">Bakery Product Waste Tracking</h1>
-            <p class="text-gray-500 mb-6">Track product waste to reduce losses and improve production efficiency</p>
+            <h1 class="text-3xl font-bold mb-2 text-primarycol">Bakery Product Excess Tracking</h1>
+            <p class="text-gray-500 mb-6">Track product Excess to reduce losses and improve production efficiency</p>
         </div>
 
         <!-- Notification Messages -->
@@ -242,7 +242,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
         
         <?php if ($showSuccessMessage): ?>
             <div class="notification notification-success">
-                Product waste entry submitted successfully.
+                Product Excess entry submitted successfully.
             </div>
         <?php endif; ?>
 
@@ -250,26 +250,26 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             <!-- Left sidebar - Statistics -->
             <div class="lg:col-span-1">
                 <div class="bg-white p-5 rounded-lg shadow mb-6">
-                    <h2 class="text-xl font-bold mb-4 text-gray-800">Product Waste Tracking Tips</h2>
+                    <h2 class="text-xl font-bold mb-4 text-gray-800">Product Excess Tracking Tips</h2>
                     
                     <div class="mb-4">
-                        <h3 class="font-semibold text-gray-700">Why track product waste?</h3>
+                        <h3 class="font-semibold text-gray-700">Why track product Excess?</h3>
                         <ul class="list-disc pl-5 mt-2 text-gray-600 text-sm">
-                            <li>Identify products with high waste rates</li>
-                            <li>Calculate the financial impact of product waste</li>
+                            <li>Identify products with high excess rates</li>
+                            <li>Calculate the financial impact of product excess</li>
                             <li>Analyze patterns in overproduction or spoilage</li>
-                            <li>Improve production planning to reduce waste</li>
+                            <li>Improve production planning to reduce excess</li>
                         </ul>
                     </div>
                     
                     <div class="mb-4">
                         <h3 class="font-semibold text-gray-700">Best practices:</h3>
                         <ul class="list-disc pl-5 mt-2 text-gray-600 text-sm">
-                            <li>Record waste immediately after it occurs</li>
+                            <li>Record excess immediately after it occurs</li>
                             <li>Track both product quantity and value lost</li>
-                            <li>Document specific reasons for waste</li>
+                            <li>Document specific reasons for excess</li>
                             <li>Consider sustainable disposal methods</li>
-                            <li>Track all waste, even small amounts</li>
+                            <li>Track all excess, even small amounts</li>
                         </ul>
                     </div>
                 </div>
@@ -321,15 +321,15 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                     
                     <?php if (!empty($topWaste)): ?>
                     <div class="stat-box bg-gray-50 p-3 rounded mb-3">
-                        <p class="text-sm text-gray-500">Most wasted product:</p>
+                        <p class="text-sm text-gray-500">Most Excess product:</p>
                         <p class="font-bold"><?= htmlspecialchars($topWaste['name']) ?></p>
-                        <p class="text-sm"><?= number_format($topWaste['total_waste'], 2) ?> units wasted</p>
+                        <p class="text-sm"><?= number_format($topWaste['total_waste'], 2) ?> units excess</p>
                     </div>
                     <?php endif; ?>
                     
                     <?php if (!empty($topReason)): ?>
                     <div class="stat-box bg-gray-50 p-3 rounded mb-3">
-                        <p class="text-sm text-gray-500">Most common waste reason:</p>
+                        <p class="text-sm text-gray-500">Most common excess reason:</p>
                         <p class="font-bold"><?= ucfirst(htmlspecialchars($topReason['waste_reason'])) ?></p>
                         <p class="text-sm"><?= $topReason['count'] ?> occurrences</p>
                     </div>
@@ -337,7 +337,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                     
                     <?php if (!empty($topStage)): ?>
                     <div class="stat-box bg-gray-50 p-3 rounded">
-                        <p class="text-sm text-gray-500">Most wasteful production stage:</p>
+                        <p class="text-sm text-gray-500">Most excess production stage:</p>
                         <p class="font-bold"><?= ucfirst(htmlspecialchars($topStage['production_stage'])) ?></p>
                         <p class="text-sm"><?= $topStage['count'] ?> occurrences</p>
                     </div>
@@ -347,7 +347,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             
             <!-- Right section - Product cards with waste forms -->
             <div class="lg:col-span-2">
-                <h2 class="text-xl font-bold mb-4 text-gray-800">Record Product Waste</h2>
+                <h2 class="text-xl font-bold mb-4 text-gray-800">Record Product Excess</h2>
                 
                 <div class="grid grid-cols-1 gap-6">
                     <?php foreach ($products as $product):
@@ -414,7 +414,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                             
                             <!-- Waste form -->
                             <div class="md:w-2/3 p-4">
-                                <h3 class="font-bold text-primarycol mb-3">Record Waste</h3>
+                                <h3 class="font-bold text-primarycol mb-3">Record Excess</h3>
                                 
                                 <form method="POST" class="waste-form">
                                     <input type="hidden" name="product_id" value="<?= htmlspecialchars($productId) ?>">
@@ -425,7 +425,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                         <!-- Basic waste info -->
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                Quantity to Waste
+                                                Excess Quantity
                                             </label>
                                             <input type="number"
                                                 name="waste_quantity"
@@ -441,7 +441,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                         
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                Date of Waste
+                                                Date of Record
                                             </label>
                                             <input type="date" 
                                                 id="waste_date" 
@@ -468,7 +468,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                         
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                Waste Reason
+                                                Excess Reason
                                             </label>
                                             <select name="waste_reason"
                                                 required
@@ -542,7 +542,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     
                                     <div class="mt-4">
                                         <button type="submit" name="submitwaste" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition-colors">
-                                            Record Waste Entry
+                                            Record Excess Entry
                                         </button>
                                     </div>
                                 </form>

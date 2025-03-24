@@ -29,7 +29,7 @@ $stmt->execute([$_SESSION['branch_id']]);
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_sales']) && !isset($_POST['archive_sales'])) {
     // Debug incoming data
     error_log("Sales data: " . json_encode($_POST));
     
@@ -129,38 +129,148 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Count total sales records for pagination
-$countStmt = $pdo->prepare("
+// Handle edit/update sales record action
+if (isset($_POST['update_sales'])) {
+    try {
+        $salesId = $_POST['sales_id'];
+        $newQuantity = $_POST['quantity_sold'];
+        $salesDate = $_POST['sales_date'];
+        
+        // Start transaction
+        $pdo->beginTransaction();
+        
+        // Get current sales record to calculate quantity difference
+        $currentSalesStmt = $pdo->prepare("
+            SELECT s.quantity_sold, s.product_id 
+            FROM sales s 
+            WHERE s.id = ? AND s.branch_id = ?
+        ");
+        $currentSalesStmt->execute([$salesId, $_SESSION['branch_id']]);
+        $currentSales = $currentSalesStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$currentSales) {
+            throw new Exception("Sales record not found.");
+        }
+        
+        // Calculate quantity difference
+        $quantityDifference = $newQuantity - $currentSales['quantity_sold'];
+        
+        // Check if there's enough stock if we're increasing the quantity
+        if ($quantityDifference > 0) {
+            $stockCheckStmt = $pdo->prepare("
+                SELECT stock_quantity FROM products 
+                WHERE id = ? AND branch_id = ?
+            ");
+            $stockCheckStmt->execute([$currentSales['product_id'], $_SESSION['branch_id']]);
+            $stockCheck = $stockCheckStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($stockCheck['stock_quantity'] < $quantityDifference) {
+                throw new Exception("Not enough stock available to update this sales record.");
+            }
+        }
+        
+        // Update sales record
+        $updateSalesStmt = $pdo->prepare("
+            UPDATE sales 
+            SET quantity_sold = ?, sales_date = ?
+            WHERE id = ? AND branch_id = ?
+        ");
+        $updateSalesStmt->execute([
+            $newQuantity,
+            $salesDate,
+            $salesId,
+            $_SESSION['branch_id']
+        ]);
+        
+        // Update product stock
+        $updateStockStmt = $pdo->prepare("
+            UPDATE products 
+            SET stock_quantity = stock_quantity - ?
+            WHERE id = ? AND branch_id = ?
+        ");
+        $updateStockStmt->execute([
+            $quantityDifference,
+            $currentSales['product_id'],
+            $_SESSION['branch_id']
+        ]);
+        
+        $pdo->commit();
+        
+        $message = "Sales record updated successfully!";
+        $messageType = "success";
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $message = "Error: " . $e->getMessage();
+        $messageType = "error";
+    }
+}
+
+// Handle archive sales record action
+if (isset($_POST['archive_sales'])) {
+    try {
+        $salesId = $_POST['sales_id'];
+        
+        // Update archive status
+        $archiveStmt = $pdo->prepare("
+            UPDATE sales 
+            SET archived = 1
+            WHERE id = ? AND branch_id = ?
+        ");
+        $archiveStmt->execute([
+            $salesId,
+            $_SESSION['branch_id']
+        ]);
+        
+        $message = "Sales record archived successfully!";
+        $messageType = "success";
+        
+    } catch (Exception $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "error";
+    }
+}
+
+// Add archived filter to query
+$showArchived = isset($_GET['show_archived']) && $_GET['show_archived'] == 1;
+
+// Update the count query with archived filter
+$countSql = "
     SELECT COUNT(*) 
     FROM sales 
     WHERE branch_id = ?
-");
+";
+
+if (!$showArchived) {
+    $countSql .= " AND (archived = 0 OR archived IS NULL)";
+}
+
+$countStmt = $pdo->prepare($countSql);
 $countStmt->execute([$_SESSION['branch_id']]);
 $totalSales = $countStmt->fetchColumn();
 $totalPages = ceil($totalSales / $itemsPerPage);
 
-// Fetch recent sales for this branch with pagination - removed staff_id since we don't need it
-$recentSalesStmt = $pdo->prepare("
+// Update recent sales query with archived filter
+$recentSalesSql = "
     SELECT s.id, s.product_id, p.name as product_name, s.quantity_sold, 
-           s.sales_date, p.price_per_unit
+           s.sales_date, p.price_per_unit, s.archived
     FROM sales s
     JOIN products p ON s.product_id = p.id
     WHERE s.branch_id = ?
-    ORDER BY s.created_at DESC
-    LIMIT ? OFFSET ?
-");
+";
+
+if (!$showArchived) {
+    $recentSalesSql .= " AND (s.archived = 0 OR s.archived IS NULL)";
+}
+
+$recentSalesSql .= " ORDER BY s.created_at DESC LIMIT ? OFFSET ?";
+
+$recentSalesStmt = $pdo->prepare($recentSalesSql);
 $recentSalesStmt->bindValue(1, $_SESSION['branch_id'], PDO::PARAM_INT);
 $recentSalesStmt->bindValue(2, $itemsPerPage, PDO::PARAM_INT);
 $recentSalesStmt->bindValue(3, $offset, PDO::PARAM_INT);
 $recentSalesStmt->execute();
 $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// No need for this code since we're not displaying staff names anymore
-// $userNames = [];
-// if (!empty($recentSales)) {
-//     $staffIds = array_unique(array_column($recentSales, 'staff_id'));
-//     ...
-// }
 ?>
 
 <!DOCTYPE html>
@@ -220,6 +330,101 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
             }
         });
     </script>
+    <!-- Add this print CSS -->
+    <style>
+        @media print {
+            /* Hide elements not needed when printing */
+            nav, button, .btn, form, .modal, .no-print {
+                display: none !important;
+            }
+            
+            /* Hide the left sidebar */
+            #sidebar, #toggleSidebar, #closeSidebar {
+                display: none !important;
+            }
+            
+            /* Reset layout for printing */
+            body {
+                display: block !important;
+                width: 100% !important;
+                min-height: auto !important;
+                overflow: visible !important;
+                background: white !important;
+            }
+            
+            /* Expand main content */
+            .p-7 {
+                padding: 0 !important;
+                width: 100% !important;
+            }
+            
+            /* Make sure tables expand properly */
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            
+            th, td {
+                border: 1px solid #ddd !important;
+                padding: 8px !important;
+                text-align: left !important;
+            }
+            
+            /* Add print title */
+            .print-title {
+                display: block !important;
+                text-align: center;
+                font-size: 18pt;
+                font-weight: bold;
+                margin-bottom: 20px;
+            }
+            
+            /* Format grid for printing */
+            .grid {
+                display: block !important;
+            }
+            
+            .grid > div:first-child {
+                display: none !important; /* Hide the sales entry form */
+            }
+            
+            .grid > div:last-child {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                background: none !important;
+            }
+            
+            /* Hide action buttons in table */
+            table th:last-child, 
+            table td:last-child {
+                display: none !important;
+            }
+            
+            /* Hide pagination */
+            .join {
+                display: none !important;
+            }
+            
+            /* Add page break inside avoid */
+            tr {
+                page-break-inside: avoid !important;
+            }
+        }
+        .summary-row {
+            display: none;
+            background-color: #f0f0f0;
+        }
+
+        @media print {
+            .summary-row {
+                display: table-row !important;
+                font-weight: bold !important;
+                background-color: #f0f0f0 !important;
+            }
+        }
+    </style>
 </head>
 
 <body class="flex h-screen">
@@ -235,10 +440,10 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
                     <li class="text-gray-400">/</li>
                     <li><a href="product_stocks.php" class="hover:text-primarycol">Product Stocks</a></li>
                     <li class="text-gray-400">/</li>
-                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Excess</a></li>
                     <li class="text-gray-400">/</li>
                     
-                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Excess Records</a></li>
                 </ol>
             </nav>
             <h1 class="text-3xl font-bold mb-6 text-primarycol">Record Daily Sales</h1>
@@ -343,7 +548,25 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
             
             <!-- Recent Sales Records -->
             <div class="bg-white p-6 rounded-lg shadow-md">
-                <h2 class="text-xl font-semibold mb-4 text-primarycol">Recent Sales Records</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-primarycol">Recent Sales Records</h2>
+                    
+                    <!-- Controls -->
+                    <div class="flex items-center space-x-2">
+                        <!-- Print button -->
+                        <button id="print-sales-btn" class="btn btn-sm bg-primarycol text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Print
+                        </button>
+                        
+                        <!-- Archive toggle -->
+                        <a href="?<?= $showArchived ? '' : 'show_archived=1' ?>" class="btn btn-sm <?= $showArchived ? 'btn-outline' : 'bg-primarycol text-white' ?>">
+                            <?= $showArchived ? 'Hide Archived' : 'Show Archived' ?>
+                        </a>
+                    </div>
+                </div>
                 
                 <?php if (empty($recentSales)): ?>
                     <div class="flex flex-col items-center justify-center py-8 text-gray-500">
@@ -362,20 +585,68 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
                                     <th>Unit Price</th>
                                     <th>Total</th>
                                     <th>Date</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($recentSales as $sale): 
                                     $total = $sale['quantity_sold'] * $sale['price_per_unit'];
+                                    $formattedDate = date('F j, Y', strtotime($sale['sales_date']));
                                 ?>
-                                    <tr>
+                                    <tr<?= $sale['archived'] ? ' class="bg-gray-100 text-gray-500"' : '' ?>>
                                         <td><?= htmlspecialchars($sale['product_name']) ?></td>
                                         <td><?= htmlspecialchars($sale['quantity_sold']) ?></td>
                                         <td>₱<?= number_format($sale['price_per_unit'], 2) ?></td>
                                         <td>₱<?= number_format($total, 2) ?></td>
-                                        <td><?= htmlspecialchars($sale['sales_date']) ?></td>
+                                        <td><?= htmlspecialchars($formattedDate) ?></td>
+                                        <td>
+                                            <?php if (!$sale['archived']): ?>
+                                            <div class="flex justify-center space-x-2">
+                                                <button 
+                                                    class="edit-sales-btn btn btn-sm btn-outline btn-success"
+                                                    data-id="<?= $sale['id'] ?>"
+                                                    data-product-id="<?= $sale['product_id'] ?>"
+                                                    data-product-name="<?= htmlspecialchars($sale['product_name']) ?>"
+                                                    data-quantity="<?= $sale['quantity_sold'] ?>"
+                                                    data-date="<?= $sale['sales_date'] ?>">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13" />
+                                                    </svg>
+                                                    Edit
+                                                </button>
+                                                
+                                                <button 
+                                                    class="archive-sales-btn btn btn-sm btn-outline btn-warning"
+                                                    data-id="<?= $sale['id'] ?>">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                                    </svg>
+                                                    Archive
+                                                </button>
+                                            </div>
+                                            <?php else: ?>
+                                            <span class="badge badge-ghost">Archived</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <?php 
+                                $totalQuantity = 0;
+                                $totalValue = 0;
+                                ?>
+                                <?php foreach ($recentSales as $sale): 
+                                    $total = $sale['quantity_sold'] * $sale['price_per_unit'];
+                                    $totalQuantity += $sale['quantity_sold'];
+                                    $totalValue += $total;
+                                endforeach; ?>
+
+                                <tr class="font-bold summary-row">
+                                    <td colspan="1">TOTAL</td>
+                                    <td><?= $totalQuantity ?></td>
+                                    <td>-</td>
+                                    <td>₱<?= number_format($totalValue, 2) ?></td>
+                                    <td colspan="2"></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -420,5 +691,120 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
     </div>
+
+    <!-- Edit Sales Modal -->
+    <dialog id="edit_sales_modal" class="modal">
+        <div class="modal-box w-11/12 max-w-3xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-primarycol">Edit Sales Record</h3>
+                <form method="dialog">
+                    <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+                </form>
+            </div>
+            <form method="POST">
+                <input type="hidden" id="edit_sales_id" name="sales_id">
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                    <input type="text" id="edit_product_name" class="input input-bordered w-full" readonly>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Quantity Sold</label>
+                        <input type="number" id="edit_quantity" name="quantity_sold" min="1" step="1" required class="input input-bordered w-full">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Sales Date</label>
+                        <input type="date" id="edit_sales_date" name="sales_date" required class="input input-bordered w-full">
+                    </div>
+                </div>
+                
+                <div class="modal-action">
+                    <button type="button" onclick="document.getElementById('edit_sales_modal').close();" class="btn">Cancel</button>
+                    <button type="submit" name="update_sales" class="btn bg-primarycol text-white hover:bg-fourth">Update Record</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Archive Sales Modal -->
+    <dialog id="archive_sales_modal" class="modal">
+        <div class="modal-box">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-primarycol">Archive Sales Record</h3>
+                <form method="dialog">
+                    <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+                </form>
+            </div>
+            <form method="POST">
+                <input type="hidden" id="archive_sales_id" name="sales_id">
+                
+                <p class="py-4">Are you sure you want to archive this sales record? This action can't be undone.</p>
+                
+                <div class="modal-action">
+                    <button type="button" onclick="document.getElementById('archive_sales_modal').close();" class="btn">Cancel</button>
+                    <button type="submit" name="archive_sales" class="btn bg-orange-500 text-white hover:bg-orange-600">Archive Record</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <script>
+        $(document).ready(function() {
+            // Edit sales button
+            $('.edit-sales-btn').on('click', function() {
+                const salesId = $(this).data('id');
+                const productName = $(this).data('product-name');
+                const quantity = $(this).data('quantity');
+                const date = $(this).data('date');
+                
+                // Set the values in the edit form
+                $('#edit_sales_id').val(salesId);
+                $('#edit_product_name').val(productName);
+                $('#edit_quantity').val(quantity);
+                $('#edit_sales_date').val(date);
+                
+                // Open the modal
+                document.getElementById('edit_sales_modal').showModal();
+            });
+            
+            // Archive sales button
+            $('.archive-sales-btn').on('click', function() {
+                const salesId = $(this).data('id');
+                
+                // Set the sales ID in the archive form
+                $('#archive_sales_id').val(salesId);
+                
+                // Open the modal
+                document.getElementById('archive_sales_modal').showModal();
+            });
+        });
+    </script>
+    <script>
+        $(document).ready(function() {
+            // Existing code...
+            
+            // Print button functionality
+            $('#print-sales-btn').on('click', function() {
+                // Add a temporary title that will only show when printing
+                const $title = $('<div class="print-title" style="display:none;">Sales Records Report</div>');
+                const $subtitle = $('<div class="print-title" style="display:none; font-size:14pt;">Generated on: ' + new Date().toLocaleDateString() + '</div>');
+                
+                $('body').prepend($title);
+                $('body').prepend($subtitle);
+                
+                // Print the page
+                window.print();
+                
+                // Remove the temporary title after printing
+                setTimeout(function() {
+                    $title.remove();
+                    $subtitle.remove();
+                }, 100);
+            });
+        });
+    </script>
 </body>
 </html>

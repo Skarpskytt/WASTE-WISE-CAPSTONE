@@ -199,6 +199,55 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 input.value = generateBatchNumber();
             });
         });
+
+        // Add this function to your existing script tag after the generateBatchNumber function
+
+        function setupWasteReasonListeners() {
+            // Get all waste reason dropdowns
+            const wasteReasonDropdowns = document.querySelectorAll('select[name="waste_reason"]');
+            
+            // Define mapping of waste reasons to disposal methods
+            const disposalMapping = {
+                'expired': 'trash',
+                'spoiled': 'compost',
+                'over-measured': 'repurposed',
+                'failed_batch': 'compost',
+                'spilled': 'trash',
+                'quality_control': 'repurposed',
+                'contaminated': 'trash',
+                'other': 'other'
+            };
+            
+            // Add change event listener to each dropdown
+            wasteReasonDropdowns.forEach(dropdown => {
+                dropdown.addEventListener('change', function() {
+                    // Find the corresponding disposal method dropdown in the same form
+                    const form = this.closest('form');
+                    const disposalDropdown = form.querySelector('select[name="disposal_method"]');
+                    
+                    // Get the recommended disposal method based on waste reason
+                    const wasteReason = this.value;
+                    const recommendedDisposal = disposalMapping[wasteReason] || '';
+                    
+                    // Set the disposal method
+                    if (recommendedDisposal && disposalDropdown) {
+                        disposalDropdown.value = recommendedDisposal;
+                    }
+                });
+            });
+        }
+
+        // Call the setup function when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Call existing function for batch numbers
+            const batchInputs = document.querySelectorAll('input[name="batch_number"]');
+            batchInputs.forEach(input => {
+                input.value = generateBatchNumber();
+            });
+            
+            // Setup waste reason listeners
+            setupWasteReasonListeners();
+        });
     </script>
 
     <style>

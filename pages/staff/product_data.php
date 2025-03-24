@@ -175,10 +175,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
                     <li class="text-gray-400">/</li>
                     <li><a href="product_stocks.php" class="hover:text-primarycol">Product Stocks</a></li>
                     <li class="text-gray-400">/</li>
-                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Excess</a></li>
                     <li class="text-gray-400">/</li>
                     
-                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Excess Records</a></li>
                 </ol>
             </nav>
          

@@ -5,6 +5,10 @@ require_once '../../config/db_connect.php';
 checkAuth(['staff']);
 
 $pdo = getPDO();
+$branchId = $_SESSION['branch_id'];
+
+// Get show_expiring parameter from URL
+$show_expiring = isset($_GET['show_expiring']) ? (int)$_GET['show_expiring'] : 0;
 
 // Handle delete action
 if (isset($_POST['delete_product'])) {
@@ -59,34 +63,56 @@ if (isset($_POST['update_product'])) {
     }
 }
 
+// Build the SQL query
+$countSql = "
+    SELECT COUNT(*) 
+    FROM products 
+    WHERE branch_id = ? 
+";
+
+// Apply expiring filter (7 days)
+if ($show_expiring) {
+    $countSql .= " AND expiry_date > CURRENT_DATE AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 7 DAY)";
+} else {
+    $countSql .= " AND expiry_date > CURRENT_DATE AND stock_quantity > 0";
+}
+
+$countStmt = $pdo->prepare($countSql);
+$countStmt->execute([$branchId]);
+$totalProducts = $countStmt->fetchColumn();
+
 // Pagination setup
 $itemsPerPage = 10;
 $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $offset = ($page - 1) * $itemsPerPage;
-
-// Count total active products for pagination (not expired only)
-$countStmt = $pdo->prepare("
-    SELECT COUNT(*) 
-    FROM products 
-    WHERE branch_id = ? 
-    AND expiry_date > CURRENT_DATE
-    AND stock_quantity > 0
-");
-$countStmt->execute([$_SESSION['branch_id']]);
-$totalProducts = $countStmt->fetchColumn();
 $totalPages = ceil($totalProducts / $itemsPerPage);
 
-// Fetch active products with pagination
-$stmt = $pdo->prepare("
-    SELECT * 
+// Build the SQL query to get products
+$sql = "
+    SELECT *, 
+    DATEDIFF(expiry_date, CURRENT_DATE()) AS days_until_expiry
     FROM products 
     WHERE branch_id = ? 
-    AND expiry_date > CURRENT_DATE
-    AND stock_quantity > 0
-    ORDER BY id DESC 
-    LIMIT ? OFFSET ?
-");
-$stmt->bindValue(1, $_SESSION['branch_id'], PDO::PARAM_INT);
+";
+
+// Apply expiring filter
+if ($show_expiring) {
+    $sql .= " AND expiry_date > CURRENT_DATE AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 7 DAY)";
+} else {
+    $sql .= " AND expiry_date > CURRENT_DATE AND stock_quantity > 0";
+}
+
+// Order by expiry date if showing expiring products, otherwise by ID
+if ($show_expiring) {
+    $sql .= " ORDER BY expiry_date ASC, name ASC";
+} else {
+    $sql .= " ORDER BY id DESC";
+}
+
+$sql .= " LIMIT ? OFFSET ?";
+
+$stmt = $pdo->prepare($sql);
+$stmt->bindValue(1, $branchId, PDO::PARAM_INT);
 $stmt->bindValue(2, $itemsPerPage, PDO::PARAM_INT);
 $stmt->bindValue(3, $offset, PDO::PARAM_INT);
 $stmt->execute();
@@ -134,7 +160,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 const stockDate = $(this).data('stock-date');
                 const expiryDate = $(this).data('expiry-date');
                 const pricePerUnit = $(this).data('price');
-                const quantityProduced = $(this).data('quantity-produced');
                 const stockQuantity = $(this).data('stock-quantity');
                 
                 // Set the values in the edit form
@@ -162,10 +187,30 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             });
         });
     </script>
+    <style>
+        .expiry-urgent {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            animation: pulse 2s infinite;
+        }
+        .expiry-warning {
+            background-color: #ffedd5;
+            color: #c2410c;
+        }
+        .expiry-normal {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    </style>
 </head>
 
 <body class="flex h-screen">
-        <?php include ('../layout/staff_nav.php'); ?>
+    <?php include ('../layout/staff_nav.php'); ?>
 
     <div class="p-7 w-full">
         <div>
@@ -177,13 +222,13 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <li class="text-gray-400">/</li>
                     <li><a href="product_stocks.php" class="hover:text-primarycol">Product Stocks</a></li>
                     <li class="text-gray-400">/</li>
-                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Excess</a></li>
                     <li class="text-gray-400">/</li>
-                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Excess Records</a></li>
                 </ol>
             </nav>
             <h1 class="text-3xl font-bold mb-6 text-primarycol">Product Stocks</h1>
-            <p class="text-gray-500 mt-2">Active products in your inventory</p>
+            <p class="text-gray-500 mt-2"><?= $show_expiring ? 'Products expiring within 7 days' : 'Active products in your inventory' ?></p>
         </div>
         
         <!-- Display success or error messages -->
@@ -211,6 +256,19 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         <?php endif; ?>
 
+        <!-- Filter buttons -->
+        <div class="flex justify-end mb-4">
+            <div class="btn-group">
+                <a href="?show_expiring=0" class="btn <?= !$show_expiring ? 'btn-active bg-primarycol text-white' : '' ?>">All Products</a>
+                <a href="?show_expiring=1" class="btn <?= $show_expiring ? 'btn-active bg-primarycol text-white' : '' ?>">
+                    Expiring Soon
+                    <?php if ($show_expiring): ?>
+                        <span class="badge badge-warning ml-1"><?= $totalProducts ?></span>
+                    <?php endif; ?>
+                </a>
+            </div>
+        </div>
+
         <!-- Product Stock Table -->
         <div class="w-full bg-slate-100 shadow-xl text-lg rounded-sm border border-gray-200 mt-4">
             <div class="overflow-x-auto p-4">
@@ -225,12 +283,29 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <th>Expiry Date</th>
                             <th>Price/Unit</th>
                             <th>Available Qty</th>
+                            <th>Status</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($products as $index => $product): 
                             $imgPath = !empty($product['image']) ? $product['image'] : '../../assets/images/default-product.jpg';
+                            
+                            // Determine expiry status
+                            $expiryStatus = '';
+                            $expiryClass = '';
+                            $daysLeft = $product['days_until_expiry'];
+                            
+                            if ($daysLeft <= 2) {
+                                $expiryStatus = 'Critical';
+                                $expiryClass = 'expiry-urgent';
+                            } elseif ($daysLeft <= 7) {
+                                $expiryStatus = 'Warning';
+                                $expiryClass = 'expiry-warning';
+                            } else {
+                                $expiryStatus = 'Good';
+                                $expiryClass = 'expiry-normal';
+                            }
                         ?>
                             <tr>
                                 <td><?= $index + 1 ?></td>
@@ -239,10 +314,20 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </td>
                                 <td><?= htmlspecialchars($product['name']) ?></td>
                                 <td><?= htmlspecialchars($product['category']) ?></td>
-                                <td><?= htmlspecialchars($product['stock_date']) ?></td>
-                                <td><?= htmlspecialchars($product['expiry_date']) ?></td>
+                                <td><?= date('F j, Y', strtotime($product['stock_date'])) ?></td>
+                                <td>
+                                    <?= date('F j, Y', strtotime($product['expiry_date'])) ?>
+                                    <span class="block text-xs text-gray-500">
+                                        <?= $daysLeft ?> day<?= $daysLeft != 1 ? 's' : '' ?> left
+                                    </span>
+                                </td>
                                 <td>₱<?= number_format($product['price_per_unit'], 2) ?></td>
                                 <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
+                                <td>
+                                    <span class="px-2 py-1 rounded text-xs <?= $expiryClass ?>">
+                                        <?= $expiryStatus ?>
+                                    </span>
+                                </td>
                                 <td class="p-2">
                                     <div class="flex justify-center space-x-2">
                                         <button 
@@ -279,11 +364,15 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                                         </svg>
-                                        <p class="font-medium text-gray-500">No active products found.</p>
-                                        <p class="text-sm text-gray-400 mt-1">Add products or check expired items.</p>
-                                        <a href="product_data.php" class="mt-3 px-4 py-2 bg-primarycol text-white rounded hover:bg-green-700 text-sm">
-                                            Add New Product
-                                        </a>
+                                        <p class="font-medium text-gray-500">
+                                            <?= $show_expiring ? 'No products expiring within the next 7 days.' : 'No active products found.' ?>
+                                        </p>
+                                        <?php if (!$show_expiring): ?>
+                                            <p class="text-sm text-gray-400 mt-1">Add products or check expired items.</p>
+                                            <a href="product_data.php" class="mt-3 px-4 py-2 bg-primarycol text-white rounded hover:bg-green-700 text-sm">
+                                                Add New Product
+                                            </a>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -296,17 +385,17 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="flex justify-center mt-4">
                         <div class="join">
                             <?php if ($page > 1): ?>
-                                <a href="?page=<?= ($page - 1) ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+                                <a href="?page=<?= ($page - 1) ?>&show_expiring=<?= $show_expiring ?>" class="join-item btn bg-sec hover:bg-third">«</a>
                             <?php endif; ?>
                             
                             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                                <a href="?page=<?= $i ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                                <a href="?page=<?= $i ?>&show_expiring=<?= $show_expiring ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
                                     <?= $i ?>
                                 </a>
                             <?php endfor; ?>
                             
                             <?php if ($page < $totalPages): ?>
-                                <a href="?page=<?= ($page + 1) ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+                                <a href="?page=<?= ($page + 1) ?>&show_expiring=<?= $show_expiring ?>" class="join-item btn bg-sec hover:bg-third">»</a>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -385,8 +474,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             required
                             class="input input-bordered w-full">
                     </div>
-                    
-                   
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">

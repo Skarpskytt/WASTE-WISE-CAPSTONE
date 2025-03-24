@@ -23,6 +23,20 @@ if (isset($_POST['delete_waste'])) {
     }
 }
 
+// Change delete action to archive action
+if (isset($_POST['archive_waste'])) {
+    $wasteId = $_POST['waste_id'] ?? 0;
+    
+    try {
+        $archiveStmt = $pdo->prepare("UPDATE ingredients_waste SET archived = 1 WHERE id = ? AND branch_id = ?");
+        $archiveStmt->execute([$wasteId, $branchId]);
+        
+        $archiveSuccess = "Ingredient waste record archived successfully!";
+    } catch (PDOException $e) {
+        $archiveError = "Error archiving waste record: " . $e->getMessage();
+    }
+}
+
 // Handle edit/update action
 if (isset($_POST['update_waste'])) {
     $wasteId = $_POST['waste_id'] ?? 0;
@@ -71,6 +85,9 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
 $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
 
+// Get show_archived parameter from URL
+$show_archived = isset($_GET['show_archived']) ? true : false;
+
 // Pagination setup
 $itemsPerPage = 10;
 $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
@@ -81,7 +98,7 @@ $countSql = "
     SELECT COUNT(*) 
     FROM ingredients_waste w
     JOIN ingredients i ON w.ingredient_id = i.id
-    WHERE w.branch_id = ?
+    WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "
 ";
 
 $countParams = [$branchId];
@@ -122,7 +139,7 @@ $sql = "
     FROM ingredients_waste w
     JOIN ingredients i ON w.ingredient_id = i.id
     JOIN users u ON w.staff_id = u.id  
-    WHERE w.branch_id = ?
+    WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "
 ";
 
 $params = [$branchId];
@@ -146,7 +163,7 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-$sql .= " ORDER BY w.waste_date DESC LIMIT " . (int)$itemsPerPage . " OFFSET " . (int)$offset;
+$sql .= " ORDER BY w.waste_date DESC, w.id DESC LIMIT " . (int)$itemsPerPage . " OFFSET " . (int)$offset;
 
 try {
     $stmt = $pdo->prepare($sql);
@@ -224,6 +241,31 @@ try {
                 // Open the modal using DaisyUI's modal API
                 document.getElementById('delete_modal').showModal();
             });
+
+            $('#show_archived').on('change', function() {
+                if (this.checked) {
+                    // Add show_archived parameter and reload
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('show_archived', '1');
+                    window.location.href = url.toString();
+                } else {
+                    // Remove show_archived parameter and reload
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('show_archived');
+                    window.location.href = url.toString();
+                }
+            });
+
+            // Change delete-waste-btn to archive-waste-btn
+            $('.archive-waste-btn').on('click', function() {
+                const wasteId = $(this).data('id');
+                
+                // Set the waste ID in the archive form
+                $('#archive_waste_id').val(wasteId);
+                
+                // Open the modal using DaisyUI's modal API
+                document.getElementById('archive_modal').showModal();
+            });
         });
     </script>
 </head>
@@ -259,6 +301,12 @@ try {
             </div>
         <?php endif; ?>
         
+        <?php if (!empty($archiveSuccess)): ?>
+            <div class="bg-green-100 text-green-800 p-3 rounded mb-4">
+                <?= htmlspecialchars($archiveSuccess) ?>
+            </div>
+        <?php endif; ?>
+        
         <?php if (!empty($updateError)): ?>
             <div class="bg-red-100 text-red-800 p-3 rounded mb-4">
                 <?= htmlspecialchars($updateError) ?>
@@ -268,6 +316,12 @@ try {
         <?php if (!empty($deleteError)): ?>
             <div class="bg-red-100 text-red-800 p-3 rounded mb-4">
                 <?= htmlspecialchars($deleteError) ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if (!empty($archiveError)): ?>
+            <div class="bg-red-100 text-red-800 p-3 rounded mb-4">
+                <?= htmlspecialchars($archiveError) ?>
             </div>
         <?php endif; ?>
         
@@ -310,6 +364,12 @@ try {
                 </a>
             </div>
         </form>
+
+        <div class="flex items-center mb-4">
+            <input type="checkbox" id="show_archived" name="show_archived" class="mr-2" 
+                   <?= isset($_GET['show_archived']) ? 'checked' : '' ?>>
+            <label for="show_archived">Show archived records</label>
+        </div>
 
         <div class="overflow-x-auto w-full">
             <div class="bg-slate-100 shadow-xl text-lg rounded-sm border border-gray-200">
@@ -368,12 +428,12 @@ try {
         </button>
         
         <button 
-            class='delete-waste-btn btn btn-sm btn-outline btn-error'
+            class='archive-waste-btn btn btn-sm btn-outline btn-warning'
             data-id='" . $record['id'] . "'>
             <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+                <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' />
             </svg>
-            Delete
+            Archive
         </button>
     </div>
 </td>";
@@ -391,17 +451,17 @@ try {
                 <div class="flex justify-center mt-4">
                   <div class="join">
                     <?php if ($page > 1): ?>
-                      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+                      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?><?= $show_archived ? '&show_archived=1' : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
                     <?php endif; ?>
                     
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?><?= $show_archived ? '&show_archived=1' : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
                         <?= $i ?>
                       </a>
                     <?php endfor; ?>
                     
                     <?php if ($page < $totalPages): ?>
-                      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+                      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?><?= $show_archived ? '&show_archived=1' : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -547,6 +607,23 @@ try {
   </button>
 </div>
 
+        </form>
+    </div>
+</dialog>
+
+<!-- Archive Modal -->
+<dialog id="archive_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-amber-600">Archive Waste Record</h3>
+        <p class="py-4">Are you sure you want to archive this ingredient waste record? Archived records will no longer appear in the main list.</p>
+        <form method="POST">
+            <input type="hidden" id="archive_waste_id" name="waste_id">
+            <div class="modal-action">
+                <button type="button" onclick="document.getElementById('archive_modal').close();" class="btn">Cancel</button>
+                <button type="submit" name="archive_waste" class="btn btn-warning text-white">
+                    Archive Record
+                </button>
+            </div>
         </form>
     </div>
 </dialog>

@@ -10,17 +10,17 @@ $pdo = getPDO();
 // Get branch ID from session
 $branchId = $_SESSION['branch_id'];
 
-// Handle delete action
-if (isset($_POST['delete_waste'])) {
+// Change delete action to archive action
+if (isset($_POST['archive_waste'])) {
     $wasteId = $_POST['waste_id'] ?? 0;
     
     try {
-        $deleteStmt = $pdo->prepare("DELETE FROM product_waste WHERE id = ? AND branch_id = ?");
-        $deleteStmt->execute([$wasteId, $branchId]);
+        $archiveStmt = $pdo->prepare("UPDATE product_waste SET archived = 1 WHERE id = ? AND branch_id = ?");
+        $archiveStmt->execute([$wasteId, $branchId]);
         
-        $deleteSuccess = "Waste record deleted successfully!";
+        $archiveSuccess = "Waste record archived successfully!";
     } catch (PDOException $e) {
-        $deleteError = "Error deleting waste record: " . $e->getMessage();
+        $archiveError = "Error archiving waste record: " . $e->getMessage();
     }
 }
 
@@ -71,6 +71,7 @@ if (isset($_POST['update_waste'])) {
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
 $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
+$show_archived = isset($_GET['show_archived']) ? true : false;
 
 // Pagination setup
 $itemsPerPage = 10;
@@ -82,7 +83,7 @@ $countSql = "
     SELECT COUNT(*) 
     FROM product_waste w
     JOIN products p ON w.product_id = p.id
-    WHERE w.branch_id = ?
+    WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "  /* Add this condition */
 ";
 
 $countParams = [$branchId];
@@ -123,7 +124,7 @@ $sql = "
     FROM product_waste w
     JOIN products p ON w.product_id = p.id
     JOIN users u ON w.staff_id = u.id
-    WHERE w.branch_id = ?
+    WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "  /* Add this condition */
 ";
 
 $params = [$branchId];
@@ -147,7 +148,7 @@ if (!empty($end_date)) {
     $params[] = $end_date;
 }
 
-$sql .= " ORDER BY w.waste_date DESC LIMIT " . (int)$itemsPerPage . " OFFSET " . (int)$offset;
+$sql .= " ORDER BY w.waste_date DESC, w.id DESC LIMIT " . (int)$itemsPerPage . " OFFSET " . (int)$offset;
 
 try {
     $stmt = $pdo->prepare($sql);
@@ -163,7 +164,7 @@ try {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-    <title>Product Waste Records - WasteWise</title>
+    <title>Product Excess Records - WasteWise</title>
     <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -215,15 +216,30 @@ try {
                 document.getElementById('edit_modal').showModal();
             });
             
-            // Open delete confirmation modal
-            $('.delete-waste-btn').on('click', function() {
+            // Open archive confirmation modal
+            $('.archive-waste-btn').on('click', function() {
                 const wasteId = $(this).data('id');
                 
-                // Set the waste ID in the delete form
-                $('#delete_waste_id').val(wasteId);
+                // Set the waste ID in the archive form
+                $('#archive_waste_id').val(wasteId);
                 
                 // Open the modal using DaisyUI's modal API
-                document.getElementById('delete_modal').showModal();
+                document.getElementById('archive_modal').showModal();
+            });
+
+            // Add to existing JavaScript
+            $('#show_archived').on('change', function() {
+                if (this.checked) {
+                    // Add show_archived parameter and reload
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('show_archived', '1');
+                    window.location.href = url.toString();
+                } else {
+                    // Remove show_archived parameter and reload
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('show_archived');
+                    window.location.href = url.toString();
+                }
             });
         });
     </script>
@@ -242,14 +258,14 @@ try {
                     <li class="text-gray-400">/</li>
                     <li><a href="product_stocks.php" class="hover:text-primarycol">Product Stocks</a></li>
                     <li class="text-gray-400">/</li>
-                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Waste</a></li>
+                    <li><a href="waste_product_input.php" class="hover:text-primarycol">Record Excess</a></li>
                     <li class="text-gray-400">/</li>
                     
-                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Waste Records</a></li>
+                    <li><a href="waste_product_record.php" class="hover:text-primarycol">View Product Excess Records</a></li>
                 </ol>
             </nav>
-            <h1 class="text-3xl font-bold mb-2 text-primarycol">Product Waste Records</h1>
-            <p class="text-gray-500">View and manage all waste records for bakery products</p>
+            <h1 class="text-3xl font-bold mb-2 text-primarycol">Product Excess Records</h1>
+            <p class="text-gray-500">View and manage all excess records for bakery products</p>
         </div>
 
         <!-- Display success or error messages -->
@@ -259,9 +275,9 @@ try {
             </div>
         <?php endif; ?>
         
-        <?php if (!empty($deleteSuccess)): ?>
+        <?php if (!empty($archiveSuccess)): ?>
             <div class="bg-green-100 text-green-800 p-3 rounded mb-4">
-                <?= htmlspecialchars($deleteSuccess) ?>
+                <?= htmlspecialchars($archiveSuccess) ?>
             </div>
         <?php endif; ?>
         
@@ -271,9 +287,9 @@ try {
             </div>
         <?php endif; ?>
         
-        <?php if (!empty($deleteError)): ?>
+        <?php if (!empty($archiveError)): ?>
             <div class="bg-red-100 text-red-800 p-3 rounded mb-4">
-                <?= htmlspecialchars($deleteError) ?>
+                <?= htmlspecialchars($archiveError) ?>
             </div>
         <?php endif; ?>
         
@@ -312,10 +328,16 @@ try {
             
             <div class="ml-auto">
                 <a href="waste_product_input.php" class="inline-block bg-primarycol text-white px-4 py-2 rounded hover:bg-fourth">
-                    + Add New Waste Entry
+                    + Add New Excess Entry
                 </a>
             </div>
         </form>
+
+        <div class="flex items-center mb-4">
+            <input type="checkbox" id="show_archived" name="show_archived" class="mr-2" 
+                   <?= isset($_GET['show_archived']) ? 'checked' : '' ?>>
+            <label for="show_archived">Show archived records</label>
+        </div>
 
         <div class="overflow-x-auto w-full">
             <div class="bg-slate-100 shadow-xl text-lg rounded-sm border border-gray-200">
@@ -326,8 +348,8 @@ try {
                                 <th>#</th>
                                 <th>Product</th>
                                 <th>Category</th>
-                                <th>Waste Date</th>
-                                <th>Wasted</th>
+                                <th>Record Date</th>
+                                <th>Excess</th>
                                 <th>Production Stage</th>
                                 <th>Reason</th>
                                 <th>Disposal Method</th>
@@ -372,19 +394,19 @@ try {
                                                 </button>
                                                 
                                                 <button 
-                                                    class='delete-waste-btn btn btn-sm btn-outline btn-error'
+                                                    class='archive-waste-btn btn btn-sm btn-outline btn-warning'
                                                     data-id='" . $record['id'] . "'>
                                                     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                                                        <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+                                                        <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' />
                                                     </svg>
-                                                    Delete
+                                                    Archive
                                                 </button>
                                             </div>
                                         </td>";
                                     echo "</tr>";
                                 }
                             } else {
-                                echo "<tr><td colspan='11' class='text-center py-4'>No waste records found.</td></tr>";
+                                echo "<tr><td colspan='11' class='text-center py-4'>No excess records found.</td></tr>";
                             }
                             ?>
                         </tbody>
@@ -394,17 +416,17 @@ try {
                 <div class="flex justify-center mt-4">
                   <div class="join">
                     <?php if ($page > 1): ?>
-                      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
+                      <a href="?page=<?= ($page - 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?><?= $show_archived ? '&show_archived=1' : '' ?>" class="join-item btn bg-sec hover:bg-third">«</a>
                     <?php endif; ?>
                     
                     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
+                      <a href="?page=<?= $i ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?><?= $show_archived ? '&show_archived=1' : '' ?>" class="join-item btn <?= ($i == $page) ? 'bg-primarycol text-white' : 'bg-sec hover:bg-third' ?>">
                         <?= $i ?>
                       </a>
                     <?php endfor; ?>
                     
                     <?php if ($page < $totalPages): ?>
-                      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
+                      <a href="?page=<?= ($page + 1) ?><?= !empty($search) ? '&search='.urlencode($search) : '' ?><?= !empty($start_date) ? '&start_date='.urlencode($start_date) : '' ?><?= !empty($end_date) ? '&end_date='.urlencode($end_date) : '' ?><?= $show_archived ? '&show_archived=1' : '' ?>" class="join-item btn bg-sec hover:bg-third">»</a>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -417,7 +439,7 @@ try {
     <dialog id="edit_modal" class="modal">
         <div class="modal-box w-11/12 max-w-3xl">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-lg text-primarycol">Edit Product Waste Record</h3>
+                <h3 class="font-bold text-lg text-primarycol">Edit Product Excess Record</h3>
                 <form method="dialog">
                     <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
                 </form>
@@ -430,7 +452,7 @@ try {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Quantity Wasted
+                            Quantity Excessed
                         </label>
                         <input type="number"
                             id="edit_waste_quantity"
@@ -443,7 +465,7 @@ try {
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Date of Waste
+                            Record Date
                         </label>
                         <input type="date"
                             id="edit_waste_date"
@@ -472,7 +494,7 @@ try {
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Waste Reason
+                            Excess Reason
                         </label>
                         <select 
                             id="edit_waste_reason"
@@ -534,17 +556,17 @@ try {
         </div>
     </dialog>
 
-    <!-- Delete Confirmation Modal -->
-    <dialog id="delete_modal" class="modal">
+    <!-- Archive Confirmation Modal -->
+    <dialog id="archive_modal" class="modal">
         <div class="modal-box">
-            <h3 class="font-bold text-lg text-red-600">Delete Waste Record</h3>
-            <p class="py-4">Are you sure you want to delete this waste record? This action cannot be undone.</p>
+            <h3 class="font-bold text-lg text-amber-600">Archive Excess Record</h3>
+            <p class="py-4">Are you sure you want to archive this excess record? Archived records will no longer appear in the main list.</p>
             <form method="POST">
-                <input type="hidden" id="delete_waste_id" name="waste_id">
+                <input type="hidden" id="archive_waste_id" name="waste_id">
                 <div class="modal-action">
-                    <button type="button" onclick="document.getElementById('delete_modal').close();" class="btn">Cancel</button>
-                    <button type="submit" name="delete_waste" class="btn btn-error text-white">
-                        Delete Record
+                    <button type="button" onclick="document.getElementById('archive_modal').close();" class="btn">Cancel</button>
+                    <button type="submit" name="archive_waste" class="btn btn-warning text-white">
+                        Archive Record
                     </button>
                 </div>
             </form>

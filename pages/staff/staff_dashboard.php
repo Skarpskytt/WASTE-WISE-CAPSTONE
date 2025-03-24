@@ -60,6 +60,44 @@ try {
     $totalIngredientWaste = 0;
 }
 
+// Get total sales for the week
+try {
+    $weekStartDate = date('Y-m-d', strtotime('monday this week'));
+    $weekEndDate = date('Y-m-d', strtotime('sunday this week'));
+    
+    $weekSalesStmt = $pdo->prepare("
+        SELECT SUM(s.quantity_sold * p.price_per_unit) as total_sales
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.branch_id = ? 
+        AND DATE(s.sales_date) BETWEEN ? AND ?
+    ");
+    $weekSalesStmt->execute([$branchId, $weekStartDate, $weekEndDate]);
+    $weekSalesData = $weekSalesStmt->fetch(PDO::FETCH_ASSOC);
+    $totalWeekSales = $weekSalesData['total_sales'] ?? 0;
+} catch (PDOException $e) {
+    $totalWeekSales = 0;
+}
+
+// Get top selling products this week
+try {
+    $topProductsStmt = $pdo->prepare("
+        SELECT p.name, p.category, SUM(s.quantity_sold) as total_sold,
+               SUM(s.quantity_sold * p.price_per_unit) as total_revenue
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.branch_id = ? 
+        AND s.sales_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+        GROUP BY s.product_id
+        ORDER BY total_sold DESC
+        LIMIT 5
+    ");
+    $topProductsStmt->execute([$branchId]);
+    $topSellingProducts = $topProductsStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $topSellingProducts = [];
+}
+
 // Get top 3 wasted products this week
 try {
     $topProductsStmt = $pdo->prepare("
@@ -127,6 +165,53 @@ try {
 } catch (PDOException $e) {
     $productionStages = [];
 }
+
+// Get sales data by day for the last 7 days
+try {
+    $salesByDayStmt = $pdo->prepare("
+        SELECT DATE(s.sales_date) as sale_day, 
+               SUM(s.quantity_sold) as items_sold,
+               SUM(s.quantity_sold * p.price_per_unit) as day_revenue
+        FROM sales s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.branch_id = ? 
+        AND s.sales_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(s.sales_date)
+        ORDER BY sale_day ASC
+    ");
+    $salesByDayStmt->execute([$branchId]);
+    $salesByDay = $salesByDayStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $salesByDay = [];
+}
+
+// Get products expiring soon (within 7 days)
+try {
+    $expiringStmt = $pdo->prepare("
+        SELECT 
+            id, 
+            name, 
+            category, 
+            expiry_date, 
+            stock_quantity,
+            DATEDIFF(expiry_date, CURRENT_DATE()) AS days_until_expiry
+        FROM 
+            products
+        WHERE 
+            branch_id = ?
+            AND expiry_date > CURRENT_DATE() 
+            AND expiry_date <= DATE_ADD(CURRENT_DATE(), INTERVAL 7 DAY)
+            AND stock_quantity > 0
+        ORDER BY
+            expiry_date ASC
+        LIMIT 5
+    ");
+    
+    $expiringStmt->execute([$branchId]);
+    $expiringProducts = $expiringStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $expiringProducts = [];
+}
 ?>
 
 <!DOCTYPE html>
@@ -162,11 +247,6 @@ try {
         $('#sidebar').addClass('-translate-x-full');
     });
 });
-    function markTaskDone(button) {
-      button.parentElement.style.textDecoration = 'line-through';
-      button.disabled = true;
-    }
-
  </script>
    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
@@ -187,7 +267,7 @@ try {
             <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
           </svg>
         </div>
-        <div class="stat-title">Products Wasted Today</div>
+        <div class="stat-title">Products Excess Today</div>
         <div class="stat-value text-primarycol"><?= number_format($totalProductWaste) ?></div>
         <div class="stat-desc">Finished products</div>
       </div>
@@ -210,145 +290,63 @@ try {
       <div class="stat">
         <div class="stat-figure text-black">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m9 14.25 6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0c1.1.128 1.907 1.077 1.907 2.185ZM9.75 9h.008v.008H9.75V9Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 4.5h.008v.008h-.008V13.5Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
         </div>
-        <div class="stat-title">Current Waste Goal</div>
-        <div class="stat-value text-primarycol">-10%</div>
-        <div class="stat-desc">From last month</div>
+        <div class="stat-title">Total Sales This Week</div>
+        <div class="stat-value text-primarycol">₱<?= number_format($totalWeekSales, 2) ?></div>
+        <div class="stat-desc"><?= date('M d', strtotime($weekStartDate)) ?> - <?= date('M d', strtotime($weekEndDate)) ?></div>
       </div>
     </div>
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-    <!-- Daily Tasks -->
- 
-    <!-- Enhanced Task Management Section -->
+    <!-- Product Trends Section -->
     <div class="bg-white p-6 rounded-lg shadow-md">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="text-xl font-semibold">Daily Waste Management Tasks</h3>
-        <button class="text-xs px-2 py-1 bg-primarycol text-white rounded hover:bg-fourth" 
-          onclick="document.getElementById('addTaskModal').classList.remove('hidden')">
-          + New Task
-        </button>
+        <h3 class="text-xl font-semibold">Product Sales Trends</h3>
+        <a href="record_sales.php" class="text-xs px-2 py-1 bg-primarycol text-white rounded hover:bg-fourth">
+          View All Sales
+        </a>
       </div>
       
-      <div class="mb-3">
-        <div class="flex gap-2 mb-2">
-          <span class="inline-block w-3 h-3 rounded-full bg-red-500"></span>
-          <span class="text-sm font-medium">High Priority</span>
-          <span class="inline-block w-3 h-3 rounded-full bg-yellow-500 ml-3"></span>
-          <span class="text-sm font-medium">Medium Priority</span>
-          <span class="inline-block w-3 h-3 rounded-full bg-blue-500 ml-3"></span>
-          <span class="text-sm font-medium">Low Priority</span>
-        </div>
-      </div>
-      
-      <div class="space-y-2 max-h-64 overflow-y-auto pr-2">
-        <!-- High Priority Task -->
-        <div class="task-item border-l-4 border-red-500 bg-gray-50 p-3 rounded-r flex justify-between items-center">
-          <div>
-            <div class="flex items-center">
-              <input type="checkbox" class="task-checkbox mr-2" onchange="toggleTask(this)">
-              <span class="font-medium">Record Today's Product Waste</span>
-            </div>
-            <div class="text-xs text-gray-500 mt-1 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Due today by 5:00 PM
-            </div>
-          </div>
-          <a href="waste_product_input.php" class="text-xs bg-primarycol hover:bg-fourth text-white py-1 px-2 rounded">
-            Go to Form
-          </a>
-        </div>
+      <div class="space-y-4">
+        <div id="daily-sales-chart" class="h-40 mb-4"></div>
         
-        <!-- Medium Priority Task -->
-        <div class="task-item border-l-4 border-yellow-500 bg-gray-50 p-3 rounded-r flex justify-between items-center">
-          <div>
-            <div class="flex items-center">
-              <input type="checkbox" class="task-checkbox mr-2" onchange="toggleTask(this)">
-              <span class="font-medium">Track Flour & Sugar Usage</span>
-            </div>
-            <div class="text-xs text-gray-500 mt-1 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Due today by 3:00 PM
-            </div>
-          </div>
-          <a href="waste_ingredients_input.php" class="text-xs bg-primarycol hover:bg-fourth text-white py-1 px-2 rounded">
-            Go to Form
-          </a>
-        </div>
+        <h4 class="font-semibold text-sm text-gray-700 mt-4 border-b pb-1">Top Selling Products</h4>
+        <ul class="divide-y">
+          <?php foreach ($topSellingProducts as $index => $product): ?>
+            <li class="py-2 flex justify-between items-center">
+              <div class="flex items-center">
+                <span class="text-sm font-medium w-6 text-center"><?= $index + 1 ?></span>
+                <span class="ml-2 <?= $index === 0 ? 'font-bold' : '' ?>"><?= htmlspecialchars($product['name']) ?></span>
+                <span class="ml-2 text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded-full">
+                  <?= htmlspecialchars($product['category']) ?>
+                </span>
+              </div>
+              <div class="text-right">
+                <span class="block font-semibold"><?= number_format($product['total_sold']) ?> units</span>
+                <span class="text-xs text-gray-500">₱<?= number_format($product['total_revenue'], 2) ?></span>
+              </div>
+            </li>
+          <?php endforeach; ?>
+          
+          <?php if (empty($topSellingProducts)): ?>
+            <li class="py-3 text-center text-gray-500">No sales recorded in the past week</li>
+          <?php endif; ?>
+        </ul>
         
-        <!-- Medium Priority Task -->
-        <div class="task-item border-l-4 border-yellow-500 bg-gray-50 p-3 rounded-r flex justify-between items-center">
-          <div>
-            <div class="flex items-center">
-              <input type="checkbox" class="task-checkbox mr-2" onchange="toggleTask(this)">
-              <span class="font-medium">Check Expiring Ingredients</span>
-            </div>
-            <div class="text-xs text-gray-500 mt-1 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Due today by 12:00 PM
-            </div>
-          </div>
-          <a href="ingredients.php" class="text-xs bg-primarycol hover:bg-fourth text-white py-1 px-2 rounded">
-            Check Stock
-          </a>
+        <div class="pt-3 border-t text-sm text-gray-500 flex justify-center">
+          <a href="record_sales.php" class="text-primarycol hover:underline">Add new sales record</a>
         </div>
-        
-        <!-- Low Priority Task -->
-        <div class="task-item border-l-4 border-blue-500 bg-gray-50 p-3 rounded-r flex justify-between items-center">
-          <div>
-            <div class="flex items-center">
-              <input type="checkbox" class="task-checkbox mr-2" onchange="toggleTask(this)">
-              <span class="font-medium">Review Weekly Waste Reports</span>
-            </div>
-            <div class="text-xs text-gray-500 mt-1 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Due tomorrow
-            </div>
-          </div>
-          <a href="#" class="text-xs bg-primarycol hover:bg-fourth text-white py-1 px-2 rounded">
-            View Reports
-          </a>
-        </div>
-        
-        <!-- Completed Task Example -->
-        <div class="task-item border-l-4 border-green-500 bg-gray-50 p-3 rounded-r flex justify-between items-center opacity-70">
-          <div>
-            <div class="flex items-center">
-              <input type="checkbox" class="task-checkbox mr-2" checked onchange="toggleTask(this)">
-              <span class="font-medium line-through">Morning Inventory Check</span>
-            </div>
-            <div class="text-xs text-gray-500 mt-1 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Completed at 9:15 AM
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="mt-4 pt-3 border-t text-sm text-gray-500 flex justify-between">
-        <span>4 tasks remaining</span>
-        <a href="#" class="text-primarycol hover:underline">View all tasks</a>
       </div>
     </div>
 
     <!-- Top Wasted Products -->
     <div class="bg-white p-6 rounded-lg shadow-md">
-      <h3 class="text-xl font-semibold mb-4">Top Wasted Products (This Week)</h3>
+      <h3 class="text-xl font-semibold mb-4">Top Excessed Products (This Week)</h3>
       <?php if (empty($topWastedProducts)): ?>
-        <p class="text-gray-500">No product waste recorded this week.</p>
+        <p class="text-gray-500">No product excess recorded this week.</p>
       <?php else: ?>
         <ul class="divide-y">
           <?php foreach ($topWastedProducts as $product): ?>
@@ -399,113 +397,143 @@ try {
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    <!-- Waste by Reason -->
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <h3 class="text-xl font-semibold mb-4">Waste by Reason (Last 30 Days)</h3>
-      <?php if (empty($wasteReasons)): ?>
-        <p class="text-gray-500">No waste reasons data available.</p>
-      <?php else: ?>
-        <div class="space-y-4">
-          <?php foreach ($wasteReasons as $reason): 
-            $percentage = min(100, max(5, ($reason['count'] / array_sum(array_column($wasteReasons, 'count'))) * 100));
-          ?>
-          <div>
-            <div class="flex justify-between mb-1">
-              <span class="font-medium"><?= ucfirst(htmlspecialchars($reason['waste_reason'])) ?></span>
-              <span><?= htmlspecialchars($reason['count']) ?> records</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2.5">
-              <div class="bg-primarycol h-2.5 rounded-full" style="width: <?= $percentage ?>%"></div>
-            </div>
-          </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    </div>
-
-    <!-- Ingredient Waste by Production Stage -->
-    <div class="bg-white p-6 rounded-lg shadow-md">
-      <h3 class="text-xl font-semibold mb-4">Ingredient Waste by Production Stage (Last 30 Days)</h3>
-      <?php if (empty($productionStages)): ?>
-        <p class="text-gray-500">No production stage data available.</p>
-      <?php else: ?>
-        <div class="space-y-4">
-          <?php foreach ($productionStages as $stage): 
-            $percentage = min(100, max(5, ($stage['count'] / array_sum(array_column($productionStages, 'count'))) * 100));
-          ?>
-          <div>
-            <div class="flex justify-between mb-1">
-              <span class="font-medium"><?= ucfirst(htmlspecialchars($stage['production_stage'])) ?></span>
-              <span><?= htmlspecialchars($stage['count']) ?> records</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2.5">
-              <div class="bg-primarycol h-2.5 rounded-full" style="width: <?= $percentage ?>%"></div>
-            </div>
-          </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    </div>
-  </div>
-
-  <!-- Product Trend -->
+  <!-- Expiring Products -->
   <div class="bg-white p-6 rounded-lg shadow-md">
-    <h2 class="font-extrabold text-2xl text-primarycol mb-6">Product Trend</h2>
-    <?php include '../../charts/linechart.php'?>
-    <div class="overflow-x-auto mt-4">
-      <table class="table">
-        <thead>
-          <tr class="bg-primarycol text-white">
-            <th></th>
-            <th>Name</th>
-            <th>Daily</th>
-            <th>Weeks</th>
-            <th>Monthly</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th>1</th>
-            <td>Ensaymada</td>
-            <td>80</td>
-            <td>30</td>
-            <td>21</td>
-          </tr>
-          <tr>
-            <th>2</th>
-            <td>Pandesal</td>
-            <td>100</td>
-            <td>300</td>
-            <td>800</td>
-          </tr> 
-          <tr>
-            <th>3</th>
-            <td>Muffin</td>
-            <td>40</td>
-            <td>200</td>
-            <td>520</td>
-          </tr> 
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- Add Task Modal -->
-<div id="addTaskModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-  <div class="bg-white rounded-lg p-6 max-w-md w-full">
     <div class="flex justify-between items-center mb-4">
-      <h3 class="text-xl font-semibold">Add New Task</h3>
-      <button onclick="document.getElementById('addTaskModal').classList.add('hidden')">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      <h3 class="text-xl font-semibold">Expiring Soon</h3>
+      <a href="product_stocks.php?show_expiring=1" class="text-xs px-2 py-1 bg-primarycol text-white rounded hover:bg-fourth">
+        View All
+      </a>
     </div>
-    <form>
-      <div class="mb-4">
-        <label class="block text-gray-700 text-sm font-bold mb-2" for="task-title">
-          Task Title
-        </label>
-        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="task-title" type="text" placeholder="Enter task
+    
+    <?php if (empty($expiringProducts)): ?>
+      <p class="text-gray-500">No products expiring within the next 7 days.</p>
+    <?php else: ?>
+      <ul class="divide-y">
+        <?php foreach ($expiringProducts as $product): 
+          // Determine urgency level based on days until expiry
+          $urgencyClass = $product['days_until_expiry'] <= 2 
+            ? 'bg-red-100 text-red-800' 
+            : 'bg-amber-100 text-amber-800';
+        ?>
+        <li class="py-2">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="font-medium"><?= htmlspecialchars($product['name']) ?></span>
+              <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-2">
+                <?= htmlspecialchars($product['category']) ?>
+              </span>
+            </div>
+            <div class="text-right">
+              <span class="text-sm font-semibold <?= $urgencyClass ?> px-2 py-1 rounded">
+                <?= $product['days_until_expiry'] ?> day<?= $product['days_until_expiry'] != 1 ? 's' : '' ?> left
+              </span>
+              <span class="text-xs text-gray-500 block"><?= date('M d, Y', strtotime($product['expiry_date'])) ?></span>
+            </div>
+          </div>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      
+      <div class="mt-4 pt-3 border-t">
+        <a href="product_stocks.php?show_expiring=1" class="text-primarycol hover:underline text-sm font-medium flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          Manage expiring products
+        </a>
+      </div>
+    <?php endif; ?>
+  </div>
+
+  <script>
+    // Daily sales chart
+    document.addEventListener('DOMContentLoaded', function() {
+      // Format the sales by day data for the chart
+      const salesData = [
+        <?php 
+        $days = [];
+        $salesValues = [];
+        
+        foreach ($salesByDay as $day) {
+          $dayName = date('D', strtotime($day['sale_day']));
+          $days[] = "'$dayName'";
+          $salesValues[] = round($day['day_revenue'], 2);
+        }
+        
+        // If no data, add placeholder
+        if (empty($days)) {
+          $days = ["'Mon'", "'Tue'", "'Wed'", "'Thu'", "'Fri'", "'Sat'", "'Sun'"];
+          $salesValues = [0, 0, 0, 0, 0, 0, 0];
+        }
+        ?>
+        
+        {
+          x: [<?= implode(',', $days) ?>],
+          y: [<?= implode(',', $salesValues) ?>],
+          type: 'bar',
+          marker: { color: '#47663B' }
+        }
+      ];
+      
+      const chartLayout = {
+        height: 160,
+        margin: { t: 0, r: 10, l: 40, b: 20 },
+        xaxis: {
+          title: { text: 'Day' }
+        },
+        yaxis: {
+          title: { text: 'Sales (₱)' }
+        }
+      };
+      
+      const options = {
+        series: [{
+          name: 'Daily Sales',
+          data: [<?= implode(',', $salesValues) ?>]
+        }],
+        chart: {
+          height: 160,
+          type: 'bar',
+          toolbar: {
+            show: false
+          }
+        },
+        plotOptions: {
+          bar: {
+            borderRadius: 3,
+            dataLabels: {
+              position: 'top',
+            },
+          }
+        },
+        dataLabels: {
+          enabled: false
+        },
+        colors: ['#47663B'],
+        xaxis: {
+          categories: [<?= implode(',', $days) ?>],
+          position: 'bottom',
+          axisBorder: {
+            show: false
+          },
+          axisTicks: {
+            show: false
+          }
+        },
+        yaxis: {
+          labels: {
+            formatter: function (val) {
+              return '₱' + val.toFixed(0);
+            }
+          }
+        }
+      };
+
+      const chart = new ApexCharts(document.querySelector("#daily-sales-chart"), options);
+      chart.render();
+    });
+  </script>
+</div>
+</body>
+</html>

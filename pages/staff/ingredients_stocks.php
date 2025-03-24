@@ -235,7 +235,7 @@ $ingredients = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             // Format the expiry date for display
             $expiryDateFormatted = !empty($ingredient['expiry_date']) 
-                ? date('Y-m-d', strtotime($ingredient['expiry_date'])) 
+                ? date('F j, Y', strtotime($ingredient['expiry_date'])) 
                 : 'N/A';
           ?>
             <tr>

@@ -120,7 +120,7 @@ if (isset($_GET['mark_all_read'])) {
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              <span class="flex-1 ms-3 whitespace-nowrap">Record Waste</span>
+              <span class="flex-1 ms-3 whitespace-nowrap">Record Excess</span>
             </a>
             </li>
 
@@ -129,7 +129,7 @@ if (isset($_GET['mark_all_read'])) {
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 0 0 2.25 2.25h.75m0-3H12m-.75 3h.008v.008h-.008v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
               </svg>
-              <span class="flex-1 ms-3 whitespace-nowrap">View Waste Records</span>
+              <span class="flex-1 ms-3 whitespace-nowrap">View Excess Records</span>
             </a>
             </li>
 
@@ -247,17 +247,41 @@ if (isset($_GET['mark_all_read'])) {
         
         <div class="max-h-[70vh] overflow-y-auto">
             <?php if (!empty($notifications)): ?>
-                <?php foreach ($notifications as $notification): ?>
-                    <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-blue-50/30 dark:bg-blue-800/10' ?>">
+                <?php foreach ($notifications as $notification): 
+                    // Determine notification styling based on type
+                    $notifIcon = 'info';
+                    $bgColorClass = 'bg-green-100 text-green-800';
+                    $isExpiryNotification = false;
+                    
+                    // Check for expiry notification types
+                    if (isset($notification['notification_type'])) {
+                        if ($notification['notification_type'] === 'product_expiry_urgent') {
+                            $notifIcon = 'warning';
+                            $bgColorClass = 'bg-red-100 text-red-800 animate-pulse';
+                            $isExpiryNotification = true;
+                        } elseif ($notification['notification_type'] === 'product_expiry_warning') {
+                            $notifIcon = 'warning';
+                            $bgColorClass = 'bg-amber-100 text-amber-800';
+                            $isExpiryNotification = true;
+                        }
+                    }
+                ?>
+                    <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-blue-50/30 dark:bg-blue-800/10' ?> <?= $isExpiryNotification && !$notification['is_read'] ? 'bg-amber-50' : '' ?>">
                         <a href="<?= $notification['link'] ?>" class="block px-4 py-3 relative">
                             <?php if (!$notification['is_read']): ?>
                                 <span class="absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-blue-500 rounded-full"></span>
                             <?php endif; ?>
                             <div class="flex items-start">
-                                <div class="mr-3 bg-green-100 text-green-800 rounded-full p-2 flex-shrink-0">
+                                <div class="mr-3 <?= $bgColorClass ?> rounded-full p-2 flex-shrink-0">
+                                    <?php if ($notifIcon === 'warning'): ?>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <?php else: ?>
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="flex-1">
                                     <p class="text-sm font-medium mb-0.5 <?= $notification['is_read'] ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white' ?>">
@@ -268,7 +292,7 @@ if (isset($_GET['mark_all_read'])) {
                                     </p>
                                 </div>
                                 <?php if (!$notification['is_read']): ?>
-                                    <button onclick="markAsRead(<?= $notification['id'] ?>)" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
+                                    <button onclick="event.stopPropagation(); markAsRead(<?= $notification['id'] ?>)" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
                                         Mark read
                                     </button>
                                 <?php endif; ?>
