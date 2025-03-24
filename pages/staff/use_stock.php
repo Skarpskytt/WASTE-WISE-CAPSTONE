@@ -10,6 +10,9 @@ $pdo = getPDO();
 // Get ingredient ID
 $ingredientId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
+// Debugging output
+error_log("Received ingredient_id: " . $ingredientId);
+
 if (!$ingredientId) {
     header("Location: ingredients_stocks.php?error=1&message=" . urlencode("Invalid ingredient ID"));
     exit;
@@ -69,7 +72,7 @@ if (!empty($ingredient['item_image'])) {
 </head>
 <body class="bg-gray-100 flex h-screen">
 
-<?php include (__DIR__ . '/../layout/staff_nav.php'); ?>
+<?php include ('../layout/staff_nav.php'); ?>
 <div class="flex-1 p-8 bg-gray-50">
 <div class="container mx-auto max-w-8xl">
     <!-- Header Section -->

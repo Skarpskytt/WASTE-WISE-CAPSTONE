@@ -1,5 +1,10 @@
 <?php
-// filepath: c:\xampp\htdocs\capstone\WASTE-WISE-CAPSTONE\pages\staff\donation_request.php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/../../logs/error.log'); // Update the path to a writable location
+
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
@@ -36,6 +41,9 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$_SESSION['branch_id']]);
 $pendingRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Debugging output
+error_log("Pending requests: " . print_r($pendingRequests, true));
 
 // Handle form submission (updating status)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST['action'])) {
