@@ -66,6 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "New donation request for {$product['name']} ({$quantity} units)";
         $staffNotifStmt->execute([$message]);
         
+        // Test error logging
+        error_log("Test error logging: Donation request processed successfully.");
+        
         $pdo->commit();
         
         $_SESSION['success'] = "Donation request submitted successfully!";
@@ -74,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
     } catch (Exception $e) {
         $pdo->rollBack();
+        error_log("Error processing donation request: " . $e->getMessage());
         $_SESSION['error'] = "Error: " . $e->getMessage();
         header("Location: product_stocks_branch{$branchId}.php");
         exit;
