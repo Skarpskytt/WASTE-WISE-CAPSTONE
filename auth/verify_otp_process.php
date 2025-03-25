@@ -44,6 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->execute([$user_id, $otp, $current_time]);
         $otp_record = $stmt->fetch(PDO::FETCH_ASSOC);
         
+        // Log OTP verification result
+        error_log("OTP verification result: " . ($otp_record ? 'Valid OTP found' : 'No valid OTP found'));
+        
         if (!$otp_record) {
             throw new Exception('Invalid or expired OTP code.');
         }
@@ -62,11 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         
         // Set session variables for user
+        $_SESSION['authenticated'] = true; // Add this line
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['fname'] = $user['fname'];
         $_SESSION['lname'] = $user['lname'];
+        $_SESSION['email'] = $user['email']; // Add email
         $_SESSION['role'] = $user['role'];
         $_SESSION['branch_id'] = $user['branch_id'] ?? null;
+        $_SESSION['organization_name'] = $user['organization_name'] ?? null; // Add organization name
         
         // Clear temp data
         unset($_SESSION['temp_user_id']);
@@ -75,6 +81,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Log session after user data is set
         error_log("SESSION after user login: " . print_r($_SESSION, true));
         error_log("Redirecting user with role: " . $user['role']);
+        
+        // Add session checking
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            error_log("ERROR: Session became inactive during OTP verification!");
+            session_start(); // Try to restart the session
+        }
+        
+        // Ensure session is written before redirect
+        session_write_close();
         
         // Redirect based on role
         switch($user['role']) {
@@ -89,7 +104,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 header('Location: ../pages/ngo/ngo_dashboard.php');
                 break;
             default:
-                throw new Exception('Invalid role configuration.');
+                header('Location: ../index.php');
+                break;
         }
         exit();
         
