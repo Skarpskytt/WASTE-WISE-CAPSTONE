@@ -1,7 +1,14 @@
 <?php
+// Enable full error reporting (add at the very top, before other code)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // Keep only auth middleware and DB connection
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
+
+// Debugging: Log session data
+error_log("Admin Dashboard - Session data: " . print_r($_SESSION, true));
 
 $pdo = getPDO();
 
