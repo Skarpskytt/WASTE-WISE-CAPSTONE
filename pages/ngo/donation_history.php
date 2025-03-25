@@ -142,7 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
         $checkStmt = $pdo->prepare("
             SELECT 
                 ndr.id, ndr.ngo_id, ndr.product_id, ndr.quantity_requested,
-                ndr.branch_id, p.name as product_name, b.name as branch_name
+                ndr.branch_id, ndr.donation_request_id, 
+                p.name as product_name, b.name as branch_name
             FROM ngo_donation_requests ndr
             JOIN products p ON ndr.product_id = p.id
             JOIN branches b ON ndr.branch_id = b.id
@@ -164,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
         ");
         $insertStmt->execute([
             $_SESSION['user_id'],
-            $requestId,
+            $requestDetails['donation_request_id'], // Use the donation_request_id field instead of the ngo_donation_request id
             $receivedBy,
             $receivedQuantity,
             $remarks
