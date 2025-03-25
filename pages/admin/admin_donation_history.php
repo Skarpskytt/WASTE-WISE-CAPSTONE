@@ -412,33 +412,44 @@ $uniqueNgos = $uniqueNgosStmt->fetch(PDO::FETCH_ASSOC)['unique_ngos'] ?? 0;
         </div>
         <?php endif; ?>
         
-        <table class="min-w-full">
+        <table class="table w-full">
           <thead>
             <tr>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">ID</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">NGO Name</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Received By</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Request ID</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Product</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Branch</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Received Date</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Quantity</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700 hidden-print">Actions</th>
+              <th>ID</th>
+              <th>NGO Name</th>
+              <th>Received By</th>
+              <th>Product</th>
+              <th>Branch</th>
+              <th>Date</th>
+              <th>Quantity</th>
+              <th class="hidden-print">Actions</th>
             </tr>
           </thead>
           <tbody>
             <?php if (count($donationData) > 0): ?>
               <?php foreach ($donationData as $donation): ?>
-                <tr class="hover:bg-gray-100">
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($donation['id']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm font-medium text-gray-700"><?= htmlspecialchars($donation['ngo_name']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($donation['received_by']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">#<?= htmlspecialchars($donation['donation_request_id']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($donation['product_name']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($donation['branch_name']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= date('M d, Y', strtotime($donation['received_date'])) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm font-medium text-gray-700"><?= htmlspecialchars($donation['received_quantity']) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700 hidden-print">
+                <tr class="hover">
+                  <td class="font-medium">#<?= htmlspecialchars($donation['id']) ?></td>
+                  <td>
+                    <div class="font-bold"><?= htmlspecialchars($donation['ngo_name']) ?></div>
+                    <div class="text-sm opacity-50">Request #<?= htmlspecialchars($donation['donation_request_id']) ?></div>
+                  </td>
+                  <td><?= htmlspecialchars($donation['received_by']) ?></td>
+                  <td>
+                    <div class="font-medium"><?= htmlspecialchars($donation['product_name']) ?></div>
+                  </td>
+                  <td><?= htmlspecialchars($donation['branch_name']) ?></td>
+                  <td>
+                    <?= date('M d, Y', strtotime($donation['received_date'])) ?>
+                    <br/>
+                    <span class="text-xs text-gray-500">
+                      <?= date('h:i A', strtotime($donation['received_date'])) ?>
+                    </span>
+                  </td>
+                  <td>
+                    <span class="font-medium"><?= htmlspecialchars($donation['received_quantity']) ?></span>
+                  </td>
+                  <td class="hidden-print">
                     <button class="view-details-btn btn btn-sm bg-primarycol text-white" data-id="<?= $donation['id'] ?>">
                       View Details
                     </button>
@@ -447,16 +458,19 @@ $uniqueNgos = $uniqueNgosStmt->fetch(PDO::FETCH_ASSOC)['unique_ngos'] ?? 0;
               <?php endforeach; ?>
             <?php else: ?>
               <tr>
-                <td colspan="9" class="py-4 px-6 text-center text-gray-500">No donation records found matching your criteria.</td>
+                <td colspan="8" class="text-center py-4 text-gray-500">
+                  No donation records found matching your criteria.
+                </td>
               </tr>
             <?php endif; ?>
           </tbody>
         </table>
       </div>
       
-      <!-- Pagination -->
+      <!-- Pagination (Keep your existing pagination code) -->
       <?php if ($total_pages > 1): ?>
       <div class="flex justify-center mt-4 hidden-print">
+        <!-- Your existing pagination code -->
         <nav class="inline-flex shadow-sm">
           <?php if ($page > 1): ?>
             <a href="<?= getPaginationUrl($page - 1) ?>" class="px-3 py-2 bg-white border border-gray-300 text-gray-700">Prev</a>
