@@ -364,7 +364,8 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                         <?php if ($donation['status'] === 'approved' && !$donation['is_received']): ?>
                                             <button data-id="<?= $donation['id'] ?>" 
                                                     data-product="<?= htmlspecialchars($donation['product_name']) ?>"
-                                                    class="confirm-receipt-btn btn btn-sm btn-success">
+                                                    data-quantity="<?= $donation['quantity_requested'] ?>"
+                                                    class="confirm-pickup-btn btn btn-sm btn-success">
                                                 Confirm Pickup
                                             </button>
                                         <?php endif; ?>
@@ -418,6 +419,60 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
             </form>
         </div>
     </dialog>
+    
+    <!-- Pickup Confirmation Modal - Add this after your receipt_modal -->
+<dialog id="pickup_modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Confirm Donation Pickup</h3>
+        <form method="POST" action="">
+            <input type="hidden" name="request_id" id="pickup_request_id">
+            
+            <p class="mb-4">
+                You are confirming pickup of: <span id="pickup_product_name" class="font-semibold"></span>
+            </p>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Received By (Name of person who picked up)</span>
+                </label>
+                <input type="text" name="received_by" class="input input-bordered" 
+                       value="<?= htmlspecialchars($ngoInfo['full_name']) ?>" required>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Quantity Received</span>
+                </label>
+                <input type="number" name="received_quantity" id="pickup_quantity" class="input input-bordered" 
+                       step="0.01" min="0.01" required>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Remarks (Optional)</span>
+                </label>
+                <textarea name="remarks" class="textarea textarea-bordered h-24" 
+                          placeholder="Any notes about the pickup, condition, etc."></textarea>
+            </div>
+            
+            <div class="alert alert-info mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>A receipt confirmation will be sent to your email (<?= htmlspecialchars($userEmail) ?>). This will also appear in the admin donation history.</span>
+            </div>
+            
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="document.getElementById('pickup_modal').close()">
+                    Cancel
+                </button>
+                <button type="submit" name="confirm_pickup" class="btn btn-primary bg-primarycol">
+                    Confirm Pickup
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
     
     <!-- Details Modal -->
     <?php foreach ($donations as $donation): ?>
@@ -496,14 +551,18 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
             });
         });
 
-        // Make sure this code is present in the page
-        $('.confirm-receipt-btn').on('click', function() {
-            const requestId = $(this).data('id');
-            const productName = $(this).data('product');
-            
-            $('#modal_request_id').val(requestId);
-            $('#modal_product_name').textContent = productName;
-            document.getElementById('receipt_modal').showModal();
+        // Show pickup confirmation modal (new code)
+        document.querySelectorAll('.confirm-pickup-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const requestId = this.getAttribute('data-id');
+                const productName = this.getAttribute('data-product');
+                const quantity = this.getAttribute('data-quantity');
+                
+                document.getElementById('pickup_request_id').value = requestId;
+                document.getElementById('pickup_product_name').textContent = productName;
+                document.getElementById('pickup_quantity').value = quantity;
+                document.getElementById('pickup_modal').showModal();
+            });
         });
     </script>
 </body>
