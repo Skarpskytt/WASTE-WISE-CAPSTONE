@@ -6,6 +6,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         date('Y-m-d H:i:s') . ' POST DATA: ' . print_r($_POST, true) . "\n", 
         FILE_APPEND
     );
+
+    // Enhanced debugging for donation_id
+    if (isset($_POST['donation_id'])) {
+        $debugDonationId = $_POST['donation_id'];
+        error_log("DONATION DEBUG: Received donation_id: " . $debugDonationId . " (type: " . gettype($debugDonationId) . ")");
+        
+        // Validate donation_id format more strictly
+        if (!is_numeric($debugDonationId) || intval($debugDonationId) <= 0) {
+            error_log("DONATION ERROR: Invalid donation_id format: " . $debugDonationId);
+            $errorMessage = "Invalid donation ID format. Please try again.";
+            // Exit early from the processing
+            $_POST = array(); // Clear post data to prevent processing
+        } else {
+            // Force the donation_id to be an integer
+            $_POST['donation_id'] = intval($debugDonationId);
+            error_log("DONATION DEBUG: Sanitized donation_id to: " . $_POST['donation_id']);
+        }
+    } else {
+        error_log("DONATION ERROR: No donation_id found in POST data");
+        $errorMessage = "No donation ID provided. Please try again.";
+        // Exit early from the processing
+        $_POST = array(); // Clear post data to prevent processing
+    }
 }
 
 require_once '../../config/auth_middleware.php';
@@ -19,7 +42,85 @@ $pdo = getPDO();
 // Add this near the top of your file, right after checkAuth(['ngo']);
 $ngoId = $_SESSION['user_id']; // Make sure $ngoId is defined
 
+// Check for 200 item total limit per NGO
+function getNgoTotalRequestedItems($pdo, $ngoId) {
+    $stmt = $pdo->prepare("
+        SELECT SUM(quantity_requested) as total 
+        FROM ngo_donation_requests 
+        WHERE ngo_id = ? AND status IN ('pending', 'approved')
+    ");
+    $stmt->execute([$ngoId]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['total'] ?? 0;
+}
 
+// Add this function to check daily quota
+function getNgoDailyRequestedItems($pdo, $ngoId) {
+    $today = date('Y-m-d');
+    $stmt = $pdo->prepare("
+        SELECT SUM(quantity_requested) as total 
+        FROM ngo_donation_requests 
+        WHERE ngo_id = ? 
+        AND DATE(request_date) = ?
+        AND status IN ('pending', 'approved')
+    ");
+    $stmt->execute([$ngoId, $today]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['total'] ?? 0;
+}
+
+$totalRequestedItems = getNgoTotalRequestedItems($pdo, $ngoId);
+$remainingItemsQuota = 200 - $totalRequestedItems;
+
+// Then use this to check daily limit
+$dailyRequestedItems = getNgoDailyRequestedItems($pdo, $ngoId);
+$remainingDailyQuota = 200 - $dailyRequestedItems;
+
+// Modify the query to exclude products already requested by this NGO, even if stock remains
+$query = "
+    SELECT 
+        pw.id as waste_id,
+        p.id as product_id,
+        p.name as product_name,
+        p.category as product_category,
+        p.image as product_image,
+        p.expiry_date,
+        pw.waste_date,
+        pw.waste_quantity,
+        pw.waste_value,
+        pw.waste_reason,
+        pw.notes,
+        b.name as branch_name,
+        b.id as branch_id,
+        b.address as branch_address,
+        CONCAT(u.fname, ' ', u.lname) as staff_name
+    FROM product_waste pw
+    JOIN products p ON pw.product_id = p.id
+    JOIN branches b ON pw.branch_id = b.id
+    JOIN users u ON pw.staff_id = u.id
+    WHERE 
+        pw.disposal_method = 'donation' 
+        AND pw.waste_quantity >= 20
+        AND pw.donation_status IN ('pending', 'in-progress')
+        AND p.expiry_date > NOW()
+        AND NOT EXISTS (
+            SELECT 1 
+            FROM ngo_donation_requests ndr 
+            WHERE ndr.ngo_id = ?
+            AND ndr.product_id = p.id
+            AND ndr.branch_id = b.id
+        )
+    ORDER BY p.expiry_date ASC
+";
+
+try {
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$ngoId]);
+    $availableDonations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $errorMessage = "Database error: " . $e->getMessage();
+    $availableDonations = [];
+}
 
 // Get NGO name for greeting - MOVE THIS TO THE TOP
 $ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organization_name FROM users WHERE id = ?");
@@ -61,6 +162,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($quantity > 30) {
             $errors[] = "Maximum request limit is 30 items.";
         }
+        
+        // Check if this would exceed the 200 item quota
+        if ($quantity > $remainingItemsQuota) {
+            $errors[] = "This request would exceed your total limit of 200 items. You can request up to {$remainingItemsQuota} more items.";
+        }
+
+        // Add validation in form submission
+        if ($quantity > $remainingDailyQuota) {
+            $errors[] = "This request would exceed your daily limit of 200 items. You can request up to {$remainingDailyQuota} more items today.";
+        }
+
         if (empty($pickupDate)) {
             $errors[] = "Please select a pickup date.";
         }
@@ -72,26 +184,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $checkStmt = $pdo->prepare("
                 SELECT 
-                    dr.id,
-                    dr.product_id,
-                    dr.branch_id,
-                    dr.quantity,
+                    pw.id,
+                    pw.product_id,
+                    p.id as product_id,
+                    pw.branch_id,
+                    b.id as branch_id,
+                    pw.waste_quantity as quantity,
                     p.name as product_name,
                     b.name as branch_name
                 FROM 
-                    donation_requests dr
+                    product_waste pw
                 JOIN 
-                    products p ON dr.product_id = p.id
+                    products p ON pw.product_id = p.id
                 JOIN 
-                    branches b ON dr.branch_id = b.id
+                    branches b ON pw.branch_id = b.id
                 WHERE 
-                    dr.id = ? AND dr.status = 'prepared' AND dr.quantity >= ?
+                    pw.id = ? AND 
+                    pw.disposal_method = 'donation' AND 
+                    pw.donation_status IN ('pending', 'in-progress') AND
+                    pw.waste_quantity >= ?
             ");
             $checkStmt->execute([$donationRequestId, $quantity]);
             $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-            // Debugging: Log SQL query result
-            error_log("SQL Query Result: " . print_r($donation, true));
 
             if (!$donation) {
                 $errors[] = "The requested donation is not available or has insufficient quantity.";
@@ -126,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $donation['product_id'],
                     $ngoId,
                     $donation['branch_id'],
-                    $donationRequestId,
+                    $donationRequestId,  // This should be from product_waste.id
                     $pickupDate,
                     $pickupTime,
                     $quantity,
@@ -159,6 +273,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Set success message
                 $successMessage = "Your donation request has been submitted and is awaiting approval.";
+                // Add JavaScript to clear form data after submission
+                echo "<script>
+                    if (window.history.replaceState) {
+                        window.history.replaceState(null, null, window.location.href);
+                    }
+                </script>";
 
             } catch (PDOException $e) {
                 // Rollback on error
@@ -184,34 +304,34 @@ $params = [$ngoId]; // Initialize the params array
 // Replace your current SQL query with this one:
 
 $sql = "SELECT 
-    dr.id, 
+    pw.id,
     p.id as product_id,
     p.name as product_name,
     p.category,
-    dr.quantity as available_quantity,
+    pw.waste_quantity as available_quantity,
     p.expiry_date,
     b.id as branch_id,
     b.name as branch_name,
-    dr.notes,
+    pw.notes,
     CONCAT(u.fname, ' ', u.lname) as donor_name
 FROM 
-    donation_requests dr
+    product_waste pw
 JOIN 
-    products p ON dr.product_id = p.id
+    products p ON pw.product_id = p.id
 JOIN 
-    branches b ON dr.branch_id = b.id
+    branches b ON pw.branch_id = b.id
 JOIN 
-    users u ON dr.staff_id = u.id
+    users u ON pw.staff_id = u.id
 WHERE 
-    dr.status = 'prepared'
-    AND dr.id > 0  /* Add this condition to exclude ID=0 */
+    pw.disposal_method = 'donation'
+    AND pw.donation_status IN ('pending', 'in-progress')
     AND p.expiry_date > NOW()
-    AND dr.id NOT IN (
-        /* Exclude donations that are already approved for this NGO */
-        SELECT ndr.donation_request_id 
-        FROM ngo_donation_requests ndr 
+    AND NOT EXISTS (
+        SELECT 1 FROM ngo_donation_requests ndr 
         WHERE ndr.ngo_id = ? 
-        AND (ndr.status = 'approved' OR ndr.status = 'completed')
+        AND ndr.product_id = p.id
+        AND ndr.branch_id = b.id
+        AND (ndr.status = 'pending' OR ndr.status = 'approved')
     )
 ";
 
@@ -222,7 +342,7 @@ if (!empty($typeFilter) && $typeFilter !== 'All') {
 }
 
 if ($quantityFilter > 0) {
-    $sql .= " AND dr.quantity >= ?";
+    $sql .= " AND pw.waste_quantity >= ?";
     $params[] = $quantityFilter;
 }
 
@@ -299,8 +419,12 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
                 <div class="text-2xl font-bold text-primarycol">Browse Available Donations</div>
                 <div class="text-sm text-gray-500">Welcome, <?= htmlspecialchars($ngoInfo['organization_name'] ?? $ngoInfo['full_name']) ?></div>
             </div>
-            <div>
-                <a href="donation_history.php" class="btn btn-sm bg-primarycol text-white">View My Requests</a>
+            <div class="flex flex-col items-end">
+                <a href="donation_history.php" class="btn btn-sm bg-primarycol text-white mb-2">View My Requests</a>
+                <div class="text-sm text-gray-600">
+                    Item Quota: <span class="font-bold"><?= $totalRequestedItems ?>/200</span> 
+                    (<?= $remainingItemsQuota ?> remaining)
+                </div>
             </div>
         </div>
 
@@ -504,10 +628,19 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
           </div>
           
           <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Pickup Time</label>
-            <input type="time" name="pickup_time" required
+            <label class="block text-gray-700 font-medium mb-1">Pickup Time Slot</label>
+            <select name="pickup_time" required
                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-            <p class="text-xs text-gray-500 mt-1">Please choose a time during operating hours (8 AM - 5 PM)</p>
+              <option value="">Select a time slot...</option>
+              <option value="09:00:00">9:00 AM - 10:00 AM</option>
+              <option value="10:00:00">10:00 AM - 11:00 AM</option>
+              <option value="11:00:00">11:00 AM - 12:00 PM</option>
+              <option value="13:00:00">1:00 PM - 2:00 PM</option>
+              <option value="14:00:00">2:00 PM - 3:00 PM</option>
+              <option value="15:00:00">3:00 PM - 4:00 PM</option>
+              <option value="16:00:00">4:00 PM - 5:00 PM</option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Please select a time slot during branch operating hours</p>
           </div>
           
           <div class="mb-4">
@@ -526,138 +659,188 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
     </div>
 
     <script>
-        // Replace ALL of your JavaScript code with this cleaner version
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded, initializing...");
+        
+        // Set up request buttons
+        setupRequestButtons();
+        
+        // Set up form submission handler
+        setupFormHandler();
+    });
 
-        // Wait for DOM to be fully loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM loaded, initializing...");
-            
-            // Set up request buttons
-            setupRequestButtons();
-            
-            // Set up form submission handler (only one)
-            setupFormHandler();
-        });
-
-        // Function to set up request buttons
-        function setupRequestButtons() {
-            const requestButtons = document.querySelectorAll('.request-btn');
-            console.log("Found " + requestButtons.length + " request buttons");
-            
-            requestButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    // Get all attributes
-                    const id = this.getAttribute('data-id');
-                    
-                    // Validate the ID immediately
-                    if (!id || id === '0' || id === 0) {
-                        console.error("Invalid donation ID detected:", id);
-                        alert("Error: This donation has an invalid ID. Please contact support.");
-                        return; // Stop execution
-                    }
-                    
-                    const name = this.getAttribute('data-name');
-                    const branchId = this.getAttribute('data-branch');
-                    
-                    console.log("Button clicked with donation ID:", id);
-                    
-                    // Find the parent card
-                    const card = this.closest('.bg-white.border');
-                    
-                    // Get details from card
-                    const quantityElement = card.querySelector('.font-bold');
-                    const quantity = quantityElement ? quantityElement.textContent.split(' ')[0] : 'N/A';
-                    
-                    const expiryElement = card.querySelector('[class*="bg-"][class*="-500"]');
-                    const expiryDate = expiryElement ? expiryElement.textContent.replace('Expires in ', '').replace(' days', '') : 'N/A';
-                    
-                    const branchElement = card.querySelector('p.text-sm.text-gray-600');
-                    const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
-                    
-                    // Show modal and pass all parameters
-                    openModalWithData(id, name, quantity, expiryDate, branchName, branchId);
-                });
+    // Function to set up request buttons
+    function setupRequestButtons() {
+        const requestButtons = document.querySelectorAll('.request-btn');
+        console.log("Found " + requestButtons.length + " request buttons");
+        
+        requestButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // Clear any previous values from the form first
+                clearModalForm();
+                
+                // Get all attributes
+                const id = this.getAttribute('data-id');
+                
+                // Debug the donation ID value
+                console.log("Button clicked with donation ID:", id, "Type:", typeof id);
+                
+                // Validate the ID immediately
+                if (!id || id === '0' || id === 0) {
+                    console.error("Invalid donation ID detected:", id);
+                    alert("Error: This donation has an invalid ID. Please contact support.");
+                    return; // Stop execution
+                }
+                
+                const name = this.getAttribute('data-name');
+                const branchId = this.getAttribute('data-branch');
+                
+                // Find the parent card
+                const card = this.closest('.bg-white.border');
+                
+                // Get details from card
+                const quantityElement = card.querySelector('.font-bold');
+                const quantity = quantityElement ? quantityElement.textContent.split(' ')[0] : 'N/A';
+                
+                const expiryElement = card.querySelector('[class*="bg-"][class*="-500"]');
+                const expiryDate = expiryElement ? expiryElement.textContent.replace('Expires in ', '').replace(' days', '') : 'N/A';
+                
+                const branchElement = card.querySelector('p.text-sm.text-gray-600');
+                const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
+                
+                // Show modal and pass all parameters
+                openModalWithData(id, name, quantity, expiryDate, branchName, branchId);
             });
-        }
-
-        // Function to open modal with data
-        function openModalWithData(id, productName, quantity, expiryDate, branchName, branchId) {
-            console.log("Opening modal with donation ID:", id);
-            
-            // IMPORTANT: Set hidden fields immediately and directly
-            document.getElementById('donationId').value = id;
-            document.getElementById('productName').value = productName;
-            document.getElementById('branchId').value = branchId;
-            
-            // Add data attribute to form as backup
-            const form = document.getElementById('requestForm');
-            if (form) {
-                form.setAttribute('data-donation-id', id);
-            }
-            
-            // Verify the values were set
-            console.log("Values set - donation ID:", document.getElementById('donationId').value);
-            
-            // Update the modal content
-            document.getElementById('itemDetails').innerHTML = `
-                <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
-                <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
-                <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
-                <div><span class="font-semibold">Branch:</span> ${branchName}</div>
-            `;
-            
-            // Set max quantity hint
-            document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-30)`;
-            
-            // Show the modal
-            document.getElementById('requestModal').classList.add('modal-open');
-        }
-
-        // Function to set up form handler
-        function setupFormHandler() {
-            const form = document.getElementById('requestForm');
-            
-            if (form) {
-                form.addEventListener('submit', function(e) {
-                    // Get donation ID from the hidden field
-                    let donationId = document.getElementById('donationId').value;
-                    
-                    // Parse as integer to handle string values
-                    donationId = parseInt(donationId, 10);
-                    
-                    console.log("Form submitting with donation ID:", donationId);
-                    
-                    // Comprehensive validation
-                    if (isNaN(donationId) || donationId <= 0) {
-                        e.preventDefault();
-                        alert("Error: Invalid donation ID detected (" + donationId + "). Please try again or contact support.");
-                        console.error("Form submission prevented - invalid donation ID:", donationId);
-                        return false;
-                    }
-                    
-                    // Set the value back as a clean integer
-                    document.getElementById('donationId').value = donationId;
-                    
-                    console.log("Form submission proceeding with donation ID:", donationId);
-                    return true;
-                });
-            } else {
-                console.error("Could not find requestForm element");
-            }
-        }
-
-        // Modal close function
-        function closeModal() {
-            document.getElementById('requestModal').classList.remove('modal-open');
-        }
-
-        // Close modal when clicking outside
-        window.addEventListener('click', function(event) {
-            const modal = document.getElementById('requestModal');
-            if (event.target === modal) {
-                closeModal();
-            }
         });
-    </script>
+    }
+
+    // Function to clear the modal form
+    function clearModalForm() {
+        // Reset all form fields
+        document.getElementById('donationId').value = "";
+        document.getElementById('productName').value = "";
+        document.getElementById('branchId').value = "";
+        
+        // Reset quantity input
+        const quantityInput = document.querySelector('input[name="quantity"]');
+        if (quantityInput) {
+            quantityInput.value = 20;
+        }
+        
+        // Reset other form fields
+        const dateInput = document.querySelector('input[name="pickup_date"]');
+        if (dateInput) {
+            dateInput.value = "";
+        }
+        
+        const timeInput = document.querySelector('select[name="pickup_time"]');
+        if (timeInput) {
+            timeInput.selectedIndex = 0;
+        }
+        
+        const notesInput = document.querySelector('textarea[name="notes"]');
+        if (notesInput) {
+            notesInput.value = "";
+        }
+    }
+
+    // Function to open modal with data
+    function openModalWithData(id, productName, quantity, expiryDate, branchName, branchId) {
+        console.log("Opening modal with donation ID:", id);
+        
+        // IMPORTANT: Set hidden fields directly
+        document.getElementById('donationId').value = id;
+        document.getElementById('productName').value = productName;
+        document.getElementById('branchId').value = branchId;
+        
+        // Verify the values were set with console logging
+        console.log("Values set - donation ID:", document.getElementById('donationId').value);
+        console.log("Values set - product name:", document.getElementById('productName').value);
+        console.log("Values set - branch ID:", document.getElementById('branchId').value);
+        
+        // Update the modal content
+        document.getElementById('itemDetails').innerHTML = `
+            <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
+            <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
+            <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
+            <div class="mb-1"><span class="font-semibold">Branch:</span> ${branchName}</div>
+            <div class="mt-2 text-sm text-primarycol">Your remaining quota: <?= $remainingItemsQuota ?> of 200 items</div>
+            <div class="mt-1 text-xs text-red-500">Donation ID: ${id}</div>
+        `;
+        
+        // Set max quantity hint with realistic maximum
+        const maxToRequest = Math.min(quantity, 30, <?= $remainingItemsQuota ?>);
+        document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-${maxToRequest})`;
+        
+        // Update the quantity input max value
+        const quantityInput = document.querySelector('input[name="quantity"]');
+        if (quantityInput) {
+            quantityInput.max = maxToRequest;
+        }
+        
+        // Show the modal
+        document.getElementById('requestModal').classList.add('modal-open');
+    }
+
+    // Function to set up form handler
+    function setupFormHandler() {
+        const form = document.getElementById('requestForm');
+        
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                // Prevent default initially to validate
+                e.preventDefault();
+                
+                // Get donation ID from the hidden field
+                let donationId = document.getElementById('donationId').value;
+                
+                // Parse as integer to handle string values
+                donationId = parseInt(donationId, 10);
+                
+                console.log("Form submitting with donation ID:", donationId);
+                
+                // Comprehensive validation
+                if (isNaN(donationId) || donationId <= 0) {
+                    alert("Error: Invalid donation ID detected (" + donationId + "). Please try again or contact support.");
+                    console.error("Form submission prevented - invalid donation ID:", donationId);
+                    return false;
+                }
+                
+                // Set the value back as a clean integer
+                document.getElementById('donationId').value = donationId;
+                
+                // Log all form data for debugging
+                const formData = new FormData(form);
+                let debugData = {};
+                for (let [key, value] of formData.entries()) {
+                    debugData[key] = value;
+                }
+                console.log("Form data being submitted:", debugData);
+                
+                // If everything is valid, manually submit the form
+                console.log("Form submission proceeding with donation ID:", donationId);
+                form.submit();
+            });
+        } else {
+            console.error("Could not find requestForm element");
+        }
+    }
+
+    // Modal close function
+    function closeModal() {
+        document.getElementById('requestModal').classList.remove('modal-open');
+        // Also clear the form when closing
+        clearModalForm();
+    }
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('requestModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+</script>
 </body>
 </html>

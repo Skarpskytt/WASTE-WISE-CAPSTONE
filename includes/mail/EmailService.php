@@ -232,6 +232,114 @@ class EmailService {
         }
     }
 
+    public function sendBatchDonationStatusEmail($data) {
+        $status = $data['status'];
+        $name = $data['name'];
+        $email = $data['email'];
+        $notes = isset($data['notes']) ? $data['notes'] : '';
+        
+        if ($status === 'batch_approved') {
+            $subject = "Your Food Donation Requests have been Approved";
+            
+            $approvedItems = $data['approved_items'];
+            $itemsList = '';
+            
+            foreach ($approvedItems as $item) {
+                $itemsList .= "<li style='margin-bottom: 10px;'>";
+                $itemsList .= "<strong>{$item['product_name']}</strong> - {$item['quantity']} items<br>";
+                $itemsList .= "Pickup from: {$item['branch_name']}<br>";
+                $itemsList .= "Pickup on: " . date('M d, Y', strtotime($item['pickup_date'])) . " at " . 
+                             date('h:i A', strtotime($item['pickup_time']));
+                $itemsList .= "</li>";
+            }
+            
+            $htmlBody = "
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+                    <h2 style='color: #47663B;'>Donation Requests Approved</h2>
+                    <p>Dear {$name},</p>
+                    <p>We're pleased to inform you that your food donation requests have been <strong style='color: #47663B;'>approved</strong>.</p>
+                    
+                    <div style='background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;'>
+                        <h3 style='margin-top: 0; color: #47663B;'>Approved Items:</h3>
+                        <ul style='padding-left: 20px;'>
+                            {$itemsList}
+                        </ul>
+                    </div>
+                    
+                    " . (!empty($notes) ? "<p><strong>Admin Notes:</strong> {$notes}</p>" : "") . "
+                    
+                    <p>Please arrive on time for your pickup. The staff will have your items prepared.</p>
+                    <p>Thank you for your contribution to reducing food waste and helping those in need!</p>
+                    
+                    <p style='margin-top: 30px;'>Best regards,<br>WasteWise Team</p>
+                </div>
+            ";
+            
+        } elseif ($status === 'batch_rejected') {
+            $subject = "Your Food Donation Requests have been Declined";
+            
+            $rejectedItems = $data['rejected_items'];
+            $itemsList = '';
+            
+            foreach ($rejectedItems as $item) {
+                $itemsList .= "<li><strong>{$item['product_name']}</strong> - {$item['quantity']} items</li>";
+            }
+            
+            $htmlBody = "
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+                    <h2 style='color: #e53e3e;'>Donation Requests Declined</h2>
+                    <p>Dear {$name},</p>
+                    <p>We regret to inform you that your food donation requests have been <strong style='color: #e53e3e;'>declined</strong>.</p>
+                    
+                    <div style='background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;'>
+                        <h3 style='margin-top: 0; color: #e53e3e;'>Declined Items:</h3>
+                        <ul style='padding-left: 20px;'>
+                            {$itemsList}
+                        </ul>
+                    </div>
+                    
+                    " . (!empty($notes) ? "<p><strong>Reason:</strong> {$notes}</p>" : "") . "
+                    
+                    <p>We invite you to browse other available food donations or submit new requests.</p>
+                    <p>Thank you for your understanding and continued support in our mission to reduce food waste.</p>
+                    
+                    <p style='margin-top: 30px;'>Best regards,<br>WasteWise Team</p>
+                </div>
+            ";
+        } else {
+            return false;
+        }
+        
+        return $this->sendEmail($email, $subject, $htmlBody);
+    }
+
+    /**
+     * Send a generic email with HTML content
+     *
+     * @param string $email Recipient email address
+     * @param string $subject Email subject
+     * @param string $htmlBody HTML content for the email
+     * @return bool True if email sent successfully, false otherwise
+     */
+    private function sendEmail($email, $subject, $htmlBody) {
+        try {
+            $this->mailer->clearAddresses();
+            $this->mailer->addAddress($email);
+            $this->mailer->isHTML(true);
+            $this->mailer->Subject = $subject;
+            $this->mailer->Body = $htmlBody;
+            
+            $sent = $this->mailer->send();
+            if (!$sent) {
+                throw new Exception($this->mailer->ErrorInfo);
+            }
+            return true;
+        } catch (Exception $e) {
+            error_log("Failed to send email: " . $e->getMessage());
+            return false;
+        }
+    }
+
     private function getNGOApprovalTemplate($data) {
         return "
         <h2>Welcome to WasteWise Management!</h2>

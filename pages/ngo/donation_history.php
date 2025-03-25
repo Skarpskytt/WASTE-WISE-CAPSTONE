@@ -87,177 +87,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
         $updateStmt = $pdo->prepare("
             UPDATE ngo_donation_requests
             SET is_received = 1, 
-                received_at = NOW(),
-                status = 'completed',
-                ngo_notes = CONCAT(IFNULL(ngo_notes, ''), '\n\nReceipt Notes: ', ?)
+                received_at = NOW(), 
+                ngo_notes = CONCAT(IFNULL(ngo_notes, ''), '\n\nReceipt notes: ', ?)
             WHERE id = ? AND ngo_id = ?
         ");
         $updateStmt->execute([$receiptNotes, $requestId, $ngoId]);
         
-        if ($updateStmt->rowCount() > 0) {
-            // Get donation details FIRST before using it
-            $detailsStmt = $pdo->prepare("
-                SELECT 
-                    ndr.product_id,
-                    ndr.donation_request_id,
-                    ndr.branch_id,
-                    ndr.quantity_requested,
-                    p.name as product_name,
-                    p.price_per_unit,
-                    b.name as branch_name,
-                    b.address as branch_address,
-                    u.fname,
-                    u.lname,
-                    u.email,
-                    (SELECT quantity FROM donation_requests WHERE id = ndr.donation_request_id) as available_quantity
-                FROM 
-                    ngo_donation_requests ndr
-                JOIN 
-                    products p ON ndr.product_id = p.id
-                JOIN 
-                    branches b ON ndr.branch_id = b.id
-                JOIN 
-                    users u ON ndr.ngo_id = u.id
-                WHERE 
-                    ndr.id = ?
-            ");
-            $detailsStmt->execute([$requestId]);
-            $donationDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
-            
-            // Add this right after fetching donation details
-            if (!$donationDetails) {
-                throw new Exception("Failed to retrieve donation details for request #$requestId");
-            }
-
-            if (!isset($donationDetails['donation_request_id']) || !$donationDetails['donation_request_id']) {
-                throw new Exception("Missing donation request reference for request #$requestId");
-            }
-
-            // Add validation check
-            if ($donationDetails['available_quantity'] < $donationDetails['quantity_requested']) {
-                throw new Exception("Cannot complete this request. The available quantity (" . 
-                                    $donationDetails['available_quantity'] . 
-                                    ") is less than what was requested (" . 
-                                    $donationDetails['quantity_requested'] . ")");
-            }
-
-            // Update product quantity - FIXED VERSION
-            $updateProductStmt = $pdo->prepare("
-                UPDATE donation_requests 
-                SET quantity = quantity - ?,
-                    status = CASE 
-                        WHEN quantity - ? <= 0 THEN 'completed' 
-                        ELSE status 
-                    END
-                WHERE id = ?
-            ");
-            $updateProductStmt->execute([
-                $donationDetails['quantity_requested'], 
-                $donationDetails['quantity_requested'],
-                $donationDetails['donation_request_id']
-            ]);
-            
-            // Get the staff who created the original donation request
-            $staffQuery = $pdo->prepare("
-                SELECT dr.staff_id, dr.id as donation_request_id
-                FROM donation_requests dr
-                JOIN ngo_donation_requests ndr ON dr.id = ndr.donation_request_id
-                WHERE ndr.id = ?
-            ");
-            $staffQuery->execute([$requestId]);
-            $donationData = $staffQuery->fetch(PDO::FETCH_ASSOC);
-
-            if ($donationData && $donationDetails) {
-                // Create waste record with donation as disposal method
-                $wasteStmt = $pdo->prepare("
-                    INSERT INTO product_waste (
-                        product_id,
-                        branch_id,
-                        staff_id,
-                        waste_quantity,
-                        waste_date,
-                        waste_value,
-                        waste_reason,
-                        production_stage,
-                        disposal_method,
-                        notes
-                    ) VALUES (?, ?, ?, ?, NOW(), ?, 'unsold', 'storage', 'donation', ?)
-                ");
-                
-                // Calculate waste value based on quantity and product price
-                $wasteValue = $donationDetails['quantity_requested'] * ($donationDetails['price_per_unit'] ?? 0);
-                
-                $wasteStmt->execute([
-                    $donationDetails['product_id'],
-                    $donationDetails['branch_id'],
-                    $donationData['staff_id'] ?? $_SESSION['user_id'], // Fallback to current user if needed
-                    $donationDetails['quantity_requested'],
-                    $wasteValue,
-                    "Donated to NGO: " . $ngoInfo['organization_name'] . " (Request #" . $requestId . ")"
-                ]);
-            }
-            
-            // Create admin notification
-            $notifyAdminStmt = $pdo->prepare("
-                INSERT INTO notifications (
-                    target_role,
-                    message,
-                    notification_type,
-                    link,
-                    is_read
-                ) VALUES (
-                    'admin',
-                    ?,
-                    'donation_completed',
-                    '/capstone/WASTE-WISE-CAPSTONE/pages/admin/ngo.php',
-                    0
-                )
-            ");
-            
-            $ngoName = $donationDetails['fname'] . ' ' . $donationDetails['lname'];
-            $notifyMessage = "{$ngoName} has confirmed receipt of {$donationDetails['product_name']}.";
-            $notifyAdminStmt->execute([$notifyMessage]);
-            
-            // Send email confirmation
-            if (isset($donationDetails['email'])) {
-                sendReceiptEmail(
-                    $donationDetails['email'],
-                    $ngoName,
-                    $donationDetails,
-                    $receiptNotes,
-                    $requestId
-                );
-            }
-
-            // Insert into donated_products
-            $donatedStmt = $pdo->prepare("
-                INSERT INTO donated_products (
-                    donation_request_id, 
-                    ngo_id, 
-                    received_by, 
-                    received_date,
-                    received_quantity, 
-                    remarks
-                ) VALUES (?, ?, ?, NOW(), ?, ?)
-            ");
-            
-            $donatedStmt->execute([
-                $donationDetails['donation_request_id'],
-                $ngoId,
-                $ngoInfo['full_name'],
-                $donationDetails['quantity_requested'],
-                $receiptNotes
-            ]);
-            
-            $successMessage = "Successfully confirmed receipt of donation.";
-        } else {
-            throw new Exception("Failed to update donation status. Please try again.");
-        }
+        // Get donation details for the email
+        $detailsStmt = $pdo->prepare("
+            SELECT 
+                p.name as product_name,
+                ndr.quantity_requested,
+                b.name as branch_name,
+                b.address as branch_address,
+                CONCAT(u.fname, ' ', u.lname) as ngo_name
+            FROM ngo_donation_requests ndr
+            JOIN products p ON ndr.product_id = p.id
+            JOIN branches b ON ndr.branch_id = b.id
+            JOIN users u ON ndr.ngo_id = u.id
+            WHERE ndr.id = ?
+        ");
+        $detailsStmt->execute([$requestId]);
+        $donationDetails = $detailsStmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Send confirmation email
+        sendReceiptEmail(
+            $userEmail, 
+            $ngoInfo['full_name'], 
+            $donationDetails, 
+            $receiptNotes,
+            $requestId
+        );
         
         $pdo->commit();
+        $successMessage = "Receipt confirmed successfully. Thank you for your contribution!";
+        
     } catch (Exception $e) {
         $pdo->rollBack();
-        $errorMessage = "Error: " . $e->getMessage();
+        $errorMessage = "Error confirming receipt: " . $e->getMessage();
+    }
+}
+
+// Add pickup confirmation feature
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
+    $requestId = (int)$_POST['request_id'];
+    $receivedBy = $_POST['received_by'];
+    $receivedQuantity = (float)$_POST['received_quantity'];
+    $remarks = $_POST['remarks'] ?? '';
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // First check if request exists and is approved
+        $checkStmt = $pdo->prepare("
+            SELECT 
+                ndr.id, ndr.ngo_id, ndr.product_id, ndr.quantity_requested,
+                ndr.branch_id, p.name as product_name, b.name as branch_name
+            FROM ngo_donation_requests ndr
+            JOIN products p ON ndr.product_id = p.id
+            JOIN branches b ON ndr.branch_id = b.id
+            WHERE ndr.id = ? AND ndr.ngo_id = ? AND ndr.status = 'approved'
+        ");
+        $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+        $requestDetails = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$requestDetails) {
+            throw new Exception("Request not found or not approved.");
+        }
+        
+        // Record donation receipt
+        $insertStmt = $pdo->prepare("
+            INSERT INTO donated_products (
+                ngo_id, donation_request_id, received_by, received_date,
+                received_quantity, remarks
+            ) VALUES (?, ?, ?, NOW(), ?, ?)
+        ");
+        $insertStmt->execute([
+            $_SESSION['user_id'],
+            $requestId,
+            $receivedBy,
+            $receivedQuantity,
+            $remarks
+        ]);
+        
+        // Update request status
+        $updateStmt = $pdo->prepare("
+            UPDATE ngo_donation_requests 
+            SET is_received = 1, received_at = NOW()
+            WHERE id = ?
+        ");
+        $updateStmt->execute([$requestId]);
+        
+        // Notify admin
+        $notifyStmt = $pdo->prepare("
+            INSERT INTO notifications (
+                target_role, message, notification_type, link, is_read
+            ) VALUES (
+                'admin',
+                ?,
+                'donation_received',
+                '/capstone/WASTE-WISE-CAPSTONE/pages/admin/donation_history.php',
+                0
+            )
+        ");
+        $ngoName = $_SESSION['organization_name'] ?: ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
+        $message = "NGO '{$ngoName}' has confirmed pickup of {$receivedQuantity} {$requestDetails['product_name']} items.";
+        $notifyStmt->execute([$message]);
+        
+        // Send receipt email
+        $emailService = new EmailService();
+        $emailData = [
+            'ngo_name' => $ngoName,
+            'ngo_email' => $_SESSION['email'],
+            'id' => $requestId,
+            'product_name' => $requestDetails['product_name'],
+            'branch_name' => $requestDetails['branch_name'],
+            'branch_address' => $requestDetails['branch_address'] ?? 'Address not available', // Added fallback
+            'received_by' => $receivedBy,
+            'received_quantity' => $receivedQuantity,
+            'received_date' => date('Y-m-d H:i:s'),
+            'remarks' => $remarks
+        ];
+        $emailService->sendDonationReceiptEmail($emailData);
+        
+        $pdo->commit();
+        $successMessage = "Pickup confirmed successfully! A receipt has been sent to your email.";
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $errorMessage = "Error confirming pickup: " . $e->getMessage();
     }
 }
 
@@ -272,7 +230,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
             'ngo_email' => $recipientEmail,
             'ngo_name' => $recipientName,
             'branch_name' => $donationDetails['branch_name'],
-            'branch_address' => $donationDetails['branch_address'],
+            'branch_address' => $donationDetails['branch_address'] ?? 'Address not available', // Add fallback
             'product_name' => $donationDetails['product_name'],
             'quantity_requested' => $donationDetails['quantity_requested'],
             'notes' => $notes

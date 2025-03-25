@@ -166,6 +166,17 @@ if (isset($_GET['mark_all_read'])) {
                     <span class="flex-1 ms-3 whitespace-nowrap">NGO Partnerships</span>
                 </a>
             </li>
+            <li>
+                <a href="../admin/foods.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                        <!-- Pastry icon -->
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25q1.5 0 2.625 1.125T15.75 12q0 1.5-1.125 2.625T12 15.75q-1.5 0-2.625-1.125T8.25 12q0-1.5 1.125-2.625T12 8.25Z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 12m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0"/>
+                    </svg>
+                    <span class="flex-1 ms-3 whitespace-nowrap">Foods</span>
+                </a>
+            </li>
 
             <li>
                 <a href="../admin/donation_history.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">

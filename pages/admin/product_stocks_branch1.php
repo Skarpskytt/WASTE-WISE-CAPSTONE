@@ -94,6 +94,24 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
         
         document.getElementById('donation_modal').showModal();
     });
+    
+    // View product details
+    $('.view-product-btn').on('click', function() {
+        const productId = $(this).data('id');
+        const productName = $(this).data('name');
+        const stockQuantity = $(this).data('stock');
+        const expiryDate = $(this).data('expiry');
+        const category = $(this).data('category');
+        const price = $(this).data('price');
+        
+        $('#product_name_display').text(productName);
+        $('#product_category_display').text(category);
+        $('#stock_quantity_display').text(stockQuantity);
+        $('#expiry_date_display').text(expiryDate);
+        $('#price_display').text('₱' + price);
+        
+        document.getElementById('product_detail_modal').showModal();
+    });
    });
   </script>
 </head>
@@ -152,12 +170,14 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
                             <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
                             <td>
                                 <button 
-                                    class="request-donation-btn btn btn-sm bg-green-600 text-white hover:bg-green-700"
+                                    class="view-product-btn btn btn-sm bg-primarycol text-white hover:bg-fourth"
                                     data-id="<?= $product['id'] ?>"
                                     data-name="<?= htmlspecialchars($product['name']) ?>"
                                     data-stock="<?= htmlspecialchars($product['stock_quantity']) ?>"
-                                    data-expiry="<?= htmlspecialchars($product['expiry_date']) ?>">
-                                    Request Donation
+                                    data-expiry="<?= htmlspecialchars($product['expiry_date']) ?>"
+                                    data-category="<?= htmlspecialchars($product['category']) ?>"
+                                    data-price="<?= number_format($product['price_per_unit'], 2) ?>">
+                                    View Details
                                 </button>
                             </td>
                         </tr>
@@ -272,36 +292,33 @@ $branchName = $branchStmt->fetchColumn() ?: 'Branch 1';
     </div>
 </div>
 
-<!-- Donation Request Modal -->
-<dialog id="donation_modal" class="modal">
+<!-- Product Detail Modal -->
+<dialog id="product_detail_modal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg text-primarycol">Request Product Donation</h3>
-        <p class="py-2">Request donation for <span id="product_name_display" class="font-semibold"></span></p>
+        <h3 class="font-bold text-lg text-primarycol">Product Details</h3>
         
-        <form method="POST" action="process_donation_request.php">
-            <input type="hidden" id="product_id" name="product_id">
-            <input type="hidden" name="branch_id" value="<?= $branchId ?>">
-            
-            <div class="form-control mb-4">
-                <label class="label">
-                    <span class="label-text">Quantity to Donate</span>
-                </label>
-                <input type="number" name="quantity" id="donation_quantity" class="input input-bordered" min="1" required>
-                <span class="text-xs text-gray-500">Available: <span id="stock_quantity_display"></span></span>
+        <div class="py-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="text-gray-500">Product Name:</div>
+                <div class="font-semibold" id="product_name_display"></div>
+                
+                <div class="text-gray-500">Category:</div>
+                <div class="font-semibold" id="product_category_display"></div>
+                
+                <div class="text-gray-500">Stock Quantity:</div>
+                <div class="font-semibold" id="stock_quantity_display"></div>
+                
+                <div class="text-gray-500">Expiry Date:</div>
+                <div class="font-semibold" id="expiry_date_display"></div>
+                
+                <div class="text-gray-500">Price per Unit:</div>
+                <div class="font-semibold" id="price_display"></div>
             </div>
-            
-            <div class="form-control mb-4">
-                <label class="label">
-                    <span class="label-text">Notes (Optional)</span>
-                </label>
-                <textarea name="notes" class="textarea textarea-bordered h-24"></textarea>
-            </div>
-            
-            <div class="modal-action">
-                <button type="button" onclick="document.getElementById('donation_modal').close();" class="btn">Cancel</button>
-                <button type="submit" class="btn bg-primarycol text-white">Request Donation</button>
-            </div>
-        </form>
+        </div>
+        
+        <div class="modal-action">
+            <button type="button" onclick="document.getElementById('product_detail_modal').close();" class="btn">Close</button>
+        </div>
     </div>
 </dialog>
 
