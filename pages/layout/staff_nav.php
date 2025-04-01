@@ -168,6 +168,12 @@ if (isset($_GET['mark_all_read'])) {
               <span class="flex-1 ms-3 whitespace-nowrap">View Waste Records</span>
             </a>
             </li>
+            <li><a href="../staff/add_stock.php" class="flex items-center p-3 text-gray-900 rounded-lg hover:bg-gray-100">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+    </svg>
+    Add Stock
+</a></li>
             <li class="menu-title pt-4"><span class="font-bold">Donation</span></li>
             <li>
             <a href="../staff/donation_request.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">

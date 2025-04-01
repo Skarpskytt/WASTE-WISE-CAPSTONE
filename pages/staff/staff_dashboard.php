@@ -446,6 +446,86 @@ try {
     <?php endif; ?>
   </div>
 
+  <!-- Add this section to your dashboard -->
+  <div class="bg-white rounded-lg shadow-lg p-6 col-span-1">
+    <h2 class="text-lg font-bold mb-4">Next Items to Use</h2>
+    
+    <div class="tabs mb-4">
+        <a class="tab tab-lifted <?= !isset($_GET['tab']) || $_GET['tab'] == 'fefo' ? 'tab-active' : '' ?>" 
+           href="?tab=fefo">FEFO (by Expiry)</a>
+        <a class="tab tab-lifted <?= isset($_GET['tab']) && $_GET['tab'] == 'fifo' ? 'tab-active' : '' ?>" 
+           href="?tab=fifo">FIFO (by Age)</a>
+    </div>
+    
+    <?php
+    // Get the items based on tab
+    $tab = isset($_GET['tab']) ? $_GET['tab'] : 'fefo';
+    
+    if ($tab == 'fifo') {
+        // Get oldest items (FIFO)
+        $nextItemsStmt = $pdo->prepare("
+            SELECT name, stock_date, expiry_date, stock_quantity
+            FROM products
+            WHERE branch_id = ? AND stock_quantity > 0 AND expiry_date > CURRENT_DATE
+            ORDER BY stock_date ASC
+            LIMIT 5
+        ");
+    } else {
+        // Get soonest expiring items (FEFO)
+        $nextItemsStmt = $pdo->prepare("
+            SELECT name, stock_date, expiry_date, stock_quantity
+            FROM products
+            WHERE branch_id = ? AND stock_quantity > 0 AND expiry_date > CURRENT_DATE
+            ORDER BY expiry_date ASC
+            LIMIT 5
+        ");
+    }
+    
+    $nextItemsStmt->execute([$branchId]);
+    $nextItems = $nextItemsStmt->fetchAll(PDO::FETCH_ASSOC);
+    ?>
+    
+    <?php if (count($nextItems) > 0): ?>
+        <div class="overflow-x-auto">
+            <table class="table table-compact w-full">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th><?= $tab == 'fifo' ? 'In Stock Since' : 'Expires' ?></th>
+                        <th>Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach($nextItems as $item): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($item['name']) ?></td>
+                        <td>
+                            <?php if ($tab == 'fifo'): ?>
+                                <?= date('M j, Y', strtotime($item['stock_date'])) ?>
+                            <?php else: ?>
+                                <?= date('M j, Y', strtotime($item['expiry_date'])) ?>
+                                <span class="text-xs text-gray-500">
+                                    (<?= ceil((strtotime($item['expiry_date']) - time()) / 86400) ?> days)
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $item['stock_quantity'] ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php else: ?>
+        <p>No items in stock.</p>
+    <?php endif; ?>
+    
+    <div class="mt-4">
+        <a href="product_stocks.php?sort=<?= $tab ?>" class="btn btn-sm btn-outline">
+            View All in Inventory
+        </a>
+    </div>
+</div>
+
   <script>
     // Daily sales chart
     document.addEventListener('DOMContentLoaded', function() {

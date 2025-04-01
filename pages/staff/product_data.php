@@ -9,8 +9,8 @@ $pdo = getPDO();
 $errors = [];
 $successMessage = '';
 
-// Create upload directory if it doesn't exist
-$uploadDir = __DIR__ . "/uploads/products/";
+// Create upload directory if it doesn't exist using relative path
+$uploadDir = '../../assets/uploads/products/';
 if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0777, true);
 }
@@ -31,10 +31,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
         $category = htmlspecialchars(trim($_POST['category']));
     }
     
-    $stockDate = $_POST['stockdate'];
     $expiryDate = $_POST['expirydate'];
     $pricePerUnit = floatval($_POST['price_per_unit']);
     $stockQuantity = intval($_POST['stock_quantity']);
+    $batchNumber = isset($_POST['batch_number']) ? trim($_POST['batch_number']) : null;
+    $productionDate = isset($_POST['production_date']) ? trim($_POST['production_date']) : date('Y-m-d');
     $branchId = $_SESSION['branch_id'];
 
     if (!$branchId) {
@@ -58,8 +59,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
         } else {
             $targetPath = $uploadDir . $filename;
             if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $targetPath)) {
-                // Use a full server path for database storage
-                $itemImage = 'uploads/products/' . $filename;  // Remove the leading './'
+                // Store path relative to the site root for better portability
+                $itemImage = '../../assets/uploads/products/' . $filename;
             } else {
                 $errors[] = "Error: Failed to move uploaded file.";
             }
@@ -67,40 +68,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
     }
 
     // Validate dates
-    if (!DateTime::createFromFormat('Y-m-d', $stockDate)) {
-        $errors[] = "Error: Invalid stock date format.";
+    // Keep this validation to ensure expiry date is after production date
+    if (strtotime($expiryDate) <= strtotime($productionDate)) {
+        $errors[] = "Error: Expiry date must be after production date.";
     }
 
-    if (!DateTime::createFromFormat('Y-m-d', $expiryDate)) {
-        $errors[] = "Error: Invalid expiry date format.";
+    // Get shelf life days
+    $shelfLifeDays = null;
+    if ($_POST['expiry_days'] === 'custom') {
+        $shelfLifeDays = intval($_POST['custom_days']);
+    } else {
+        $shelfLifeDays = intval($_POST['expiry_days']);
     }
 
-    if (strtotime($expiryDate) <= strtotime($stockDate)) {
-        $errors[] = "Error: Expiry date must be after stock date.";
-    }
+    $unitType = $_POST['unit_type'] ?? 'piece';
+    $piecesPerBox = ($unitType === 'box') ? intval($_POST['pieces_per_box']) : 1;
 
     // Insert product if no errors
     if (empty($errors)) {
         try {
             $stmt = $pdo->prepare("
                 INSERT INTO products (
-                    name, category, stock_date, expiry_date, price_per_unit, 
-                    stock_quantity, image, branch_id
+                    name, category, expiry_date, unit, price_per_unit, 
+                    stock_quantity, image, branch_id, batch_number, production_date,
+                    shelf_life_days, unit_type, pieces_per_box
                 ) VALUES (
-                    :name, :category, :stock_date, :expiry_date, :price_per_unit, 
-                    :stock_quantity, :image, :branch_id
+                    :name, :category, :expiryDate, 'pcs', :pricePerUnit, 
+                    :stockQuantity, :itemImage, :branchId, :batchNumber, :productionDate,
+                    :shelfLifeDays, :unitType, :piecesPerBox
                 )
             ");
             
             $stmt->execute([
                 ':name' => $itemName,
                 ':category' => $category,
-                ':stock_date' => $stockDate,
-                ':expiry_date' => $expiryDate,
-                ':price_per_unit' => $pricePerUnit,
-                ':stock_quantity' => $stockQuantity,
-                ':image' => $itemImage,
-                ':branch_id' => $branchId
+                ':expiryDate' => $expiryDate,
+                ':pricePerUnit' => $pricePerUnit,
+                ':stockQuantity' => $stockQuantity,
+                ':itemImage' => $itemImage,
+                ':branchId' => $branchId,
+                ':batchNumber' => $batchNumber,
+                ':productionDate' => $productionDate,
+                ':shelfLifeDays' => $shelfLifeDays,
+                ':unitType' => $unitType,
+                ':piecesPerBox' => $piecesPerBox
             ]);
             
             $successMessage = "Product added successfully.";
@@ -136,29 +147,123 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
         }
 
         $(document).ready(function() {
+            // Auto-generate batch number when page loads
+            $('#batch_number').val(generateBatchNumber());
+            
+            // Re-generate batch number when button is clicked
+            $('#regenerate-batch').click(function(e) {
+                e.preventDefault();
+                $('#batch_number').val(generateBatchNumber());
+            });
+            
             $('#dropzone-file').on('change', function() {
                 const file = this.files[0];
                 if (file) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         $('#add_image_preview').attr('src', e.target.result);
-                        $('#add_image_preview').removeClass('hidden');
                     }
                     reader.readAsDataURL(file);
                 }
             });
-            
-            // Handle category selection
-            $('#category').on('change', function() {
+
+            // Show/hide custom days input
+            $('#expiry_days').change(function() {
                 if ($(this).val() === 'custom') {
-                    $('#custom_category_div').removeClass('hidden');
-                    $('#custom_category').prop('required', true);
+                    $('#custom_days_container').removeClass('hidden');
                 } else {
-                    $('#custom_category_div').addClass('hidden');
-                    $('#custom_category').prop('required', false);
+                    $('#custom_days_container').addClass('hidden');
+                }
+                calculateExpiryDate();
+            });
+
+            // Calculate expiry date
+            $('#production_date, #expiry_days, #custom_days').change(function() {
+                calculateExpiryDate();
+            });
+
+            function calculateExpiryDate() {
+                const productionDate = new Date($('#production_date').val());
+                let daysUntilExpiry = parseInt($('#expiry_days').val());
+
+                if ($('#expiry_days').val() === 'custom') {
+                    daysUntilExpiry = parseInt($('#custom_days').val());
+                }
+
+                if (!isNaN(productionDate.getTime()) && !isNaN(daysUntilExpiry)) {
+                    const expiryDate = new Date(productionDate);
+                    expiryDate.setDate(expiryDate.getDate() + daysUntilExpiry);
+                    $('#expiry_preview').val(expiryDate.toISOString().split('T')[0]);
+                    $('#expirydate').val(expiryDate.toISOString().split('T')[0]);
+                }
+            }
+
+            // Calculate expiry date based on production date and shelf life days
+            function calculateExpiryDate() {
+                const productionDate = $('#production_date').val();
+                let days = $('#expiry_days').val();
+                
+                // Handle custom days
+                if (days === 'custom') {
+                    days = $('#custom_days').val();
+                }
+                
+                if (productionDate && days && days !== 'custom') {
+                    // Create a new date from production date
+                    const expiryDate = new Date(productionDate);
+                    // Add the specified days
+                    expiryDate.setDate(expiryDate.getDate() + parseInt(days));
+                    
+                    // Format the date for the input field (YYYY-MM-DD)
+                    const year = expiryDate.getFullYear();
+                    const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(expiryDate.getDate()).padStart(2, '0');
+                    const formattedDate = `${year}-${month}-${day}`;
+                    
+                    // Update the fields
+                    $('#expiry_preview').val(formattedDate);
+                    $('#expirydate').val(formattedDate);
+                } else {
+                    $('#expiry_preview').val('');
+                    $('#expirydate').val('');
+                }
+            }
+
+            // Attach event listeners
+            $('#production_date, #expiry_days, #custom_days').on('change', calculateExpiryDate);
+
+            // Show/hide custom days input
+            $('#expiry_days').on('change', function() {
+                if ($(this).val() === 'custom') {
+                    $('#custom_days_container').removeClass('hidden');
+                } else {
+                    $('#custom_days_container').addClass('hidden');
+                }
+                calculateExpiryDate();
+            });
+
+            // Add this to your existing $(document).ready function
+
+            $('#unit_type').on('change', function() {
+                if ($(this).val() === 'box') {
+                    $('#box_details').removeClass('hidden');
+                    $('#stock_quantity_label').text('Number of Boxes');
+                } else {
+                    $('#box_details').addClass('hidden');
+                    $('#stock_quantity_label').text('Stock Quantity');
                 }
             });
         });
+        
+        function generateBatchNumber() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const random = Math.floor(1000 + Math.random() * 9000);
+            
+            return `BB-${year}${month}${day}-${random}`;
+        }
     </script>
 </head>
 
@@ -236,16 +341,44 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
                         id="custom_category" type="text" name="custom_category" placeholder="Enter Custom Category" />
                     </div>
 
-                    <div class="mb-4">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stockdate">Stock Date</label>
-                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="stockdate" name="stockdate" required />
+                    <div class="mb-4 col-span-1">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expiry_days">
+                            Days Until Expiry
+                        </label>
+                        <select class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                            id="expiry_days" name="expiry_days" required>
+                            <option value="">Select shelf life</option>
+                            <option value="1">1 day</option>
+                            <option value="2">2 days</option>
+                            <option value="3">3 days</option>
+                            <option value="5">5 days</option>
+                            <option value="7">1 week</option>
+                            <option value="14">2 weeks</option>
+                            <option value="30">1 month</option>
+                            <option value="60">2 months</option>
+                            <option value="90">3 months</option>
+                            <option value="180">6 months</option>
+                            <option value="365">1 year</option>
+                            <option value="custom">Custom...</option>
+                        </select>
                     </div>
 
-                    <div class="mb-4">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expirydate">Expiry Date</label>
-                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
-                        id="expirydate" name="expirydate" required />
+                    <div id="custom_days_container" class="mb-4 col-span-1 hidden">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="custom_days">
+                            Custom Days
+                        </label>
+                        <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                            id="custom_days" name="custom_days" min="1" placeholder="Enter number of days" />
+                    </div>
+
+                    <div class="mb-4 col-span-1">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="expiry_preview">
+                            Calculated Expiry Date
+                        </label>
+                        <input type="date" class="appearance-none block w-full bg-gray-100 text-gray-700 font-medium border border-gray-400 rounded-lg py-3 px-3" 
+                            id="expiry_preview" readonly />
+                        <input type="hidden" id="expirydate" name="expirydate" />
+                        <p class="text-xs text-gray-500 mt-1">This date is calculated based on production date + shelf life</p>
                     </div>
 
                     <div class="mb-4">
@@ -255,9 +388,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
                     </div>
 
                     <div class="mb-4">
-                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stock_quantity">Stock Quantity</label>
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="stock_quantity" id="stock_quantity_label">
+                            Stock Quantity
+                        </label>
                         <input type="number" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
                         id="stock_quantity" name="stock_quantity" placeholder="Available Quantity" required />
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="unit_type">
+                            Unit Type
+                        </label>
+                        <select class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                            id="unit_type" name="unit_type">
+                            <option value="piece">Individual Pieces</option>
+                            <option value="box">Box/Package</option>
+                        </select>
+                    </div>
+
+                    <div id="box_details" class="mb-4 hidden">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="pieces_per_box">
+                            Pieces Per Box
+                        </label>
+                        <input type="number" min="1" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                            id="pieces_per_box" name="pieces_per_box" value="12" placeholder="How many pieces in each box?" />
+                        <p class="text-xs text-gray-500 mt-1">Example: 12 cookies per box</p>
+                    </div>
+
+                    <div class="mb-4 relative">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="batch_number">
+                            Batch Number
+                        </label>
+                        <div class="flex">
+                            <input type="text" 
+                                class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                                id="batch_number" 
+                                name="batch_number" 
+                                placeholder="Auto-generated batch identifier" 
+                                readonly />
+                            <button id="regenerate-batch" class="ml-2 bg-sec hover:bg-third text-primarycol font-medium py-2 px-3 rounded-lg">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Automatically generated for batch tracking</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block uppercase tracking-wide text-gray-700 text-sm font-bold mb-2" for="production_date">Production Date</label>
+                        <input type="date" class="appearance-none block w-full bg-white text-gray-900 font-medium border border-gray-400 rounded-lg py-3 px-3 leading-tight focus:outline-none focus:border-[#98c01d]" 
+                            id="production_date" name="production_date" value="<?= date('Y-m-d') ?>" />
+                        <p class="text-xs text-gray-500 mt-1">When was this batch produced</p>
                     </div>
                 </div>
 

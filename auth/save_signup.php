@@ -71,13 +71,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             throw new Exception('Email already registered.');
         }
 
-        // Determine branch_id based on role
-        $branch_id = null;
-        if ($role === 'branch1_staff') {
-            $branch_id = 1;
-        } elseif ($role === 'branch2_staff') {
-            $branch_id = 2;
+        // Update the section that processes role and branch_id:
+
+        // Validate role - allow all branch staff roles and ngo
+        $role = $_POST['role'];
+        if ($role === 'ngo') {
+            $branch_id = null;
+        } else if (preg_match('/^branch(\d+)_staff$/', $role, $matches)) {
+            $branch_id = (int)$matches[1];
+            $role = 'staff'; // Standardize the role to just 'staff'
+        } else {
+            throw new Exception('Invalid role selected.');
         }
+
+        // Use $branch_id and $role in your database insertion
 
         // Insert user - set is_active to 0 for all newly created staff accounts
         // This is key - all staff accounts start as inactive
@@ -94,13 +101,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // After inserting the user
         $user_id = $pdo->lastInsertId();
 
-        if ($role === 'branch1_staff' || $role === 'branch2_staff') {
+        if ($role === 'staff') {
             // Create staff profile with pending status
             $stmt = $pdo->prepare("INSERT INTO staff_profiles (user_id, status) VALUES (?, 'pending')");
             $stmt->execute([$user_id]);
             
-            // Set success message about pending approval
-            $_SESSION['success'] = "Your staff account has been created successfully. Please wait for approval from an administrator.";
+            // Set both session variables for index.php
+            $_SESSION['success'] = "Your staff account has been created successfully.";
+            $_SESSION['pending_approval'] = "Your staff account is pending approval from an administrator.";
         } elseif ($role === 'ngo') {
             // Handle NGO registration
             $stmt = $pdo->prepare('INSERT INTO ngo_profiles (user_id, organization_name, phone, address, status) VALUES (?, ?, ?, ?, ?)');
@@ -111,14 +119,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_POST['address'],
                 'pending'
             ]);
+            
+            // Set both session variables for index.php
+            $_SESSION['success'] = "Your NGO account has been created successfully.";
+            $_SESSION['pending_approval'] = "Your NGO account is pending approval from an administrator.";
         } else {
             $_SESSION['success'] = "Account created successfully. Please login.";
         }
 
+        // File upload handling
+        $uploads_dir = '../uploads/verification';
+
+        // Create directory if it doesn't exist
+        if (!file_exists($uploads_dir)) {
+            mkdir($uploads_dir, 0777, true);
+        }
+
+        // Handle Government ID upload
+        if (isset($_FILES['gov_id']) && $_FILES['gov_id']['error'] === UPLOAD_ERR_OK) {
+            $tmp_name = $_FILES['gov_id']['tmp_name'];
+            $gov_id_name = uniqid('gov_id_'.$user_id.'_') . '_' . basename($_FILES['gov_id']['name']);
+            $gov_id_path = $uploads_dir . '/' . $gov_id_name;
+            
+            if (move_uploaded_file($tmp_name, $gov_id_path)) {
+                // Save file path to database
+                $stmt = $pdo->prepare("UPDATE users SET gov_id_path = ? WHERE id = ?");
+                $stmt->execute([$gov_id_path, $user_id]);
+            } else {
+                // Handle upload error
+                throw new Exception("Failed to upload government ID.");
+            }
+        }
+
+        // Handle Selfie upload
+        if (isset($_POST['selfie_data']) && !empty($_POST['selfie_data'])) {
+            // Get the base64 part of the image data
+            $image_parts = explode(";base64,", $_POST['selfie_data']);
+            $image_base64 = isset($image_parts[1]) ? $image_parts[1] : $_POST['selfie_data'];
+            
+            // Generate filename and path
+            $selfie_name = uniqid('selfie_'.$user_id.'_') . '.jpg';
+            $selfie_path = $uploads_dir . '/' . $selfie_name;
+            
+            // Save the file
+            $result = file_put_contents($selfie_path, base64_decode($image_base64));
+            if ($result) {
+                // Save file path to database
+                $stmt = $pdo->prepare("UPDATE users SET selfie_path = ? WHERE id = ?");
+                $stmt->execute([$selfie_path, $user_id]);
+            } else {
+                // Handle save error
+                throw new Exception("Failed to save selfie image.");
+            }
+        }
+
         // Update success message
         $pdo->commit();
-        $_SESSION['success'] = "Account created successfully. Please login.";
-        header('Location: signup.php');
+        
+        // Redirect to index.php (main login page) instead of signup.php
+        header('Location: ../index.php');
         exit();
 
     } catch (Exception $e) {

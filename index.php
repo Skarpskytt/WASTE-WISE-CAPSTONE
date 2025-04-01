@@ -1,46 +1,49 @@
 <?php
-// Add error reporting at the top
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Include necessary files - REMOVE custom session handler
 require_once 'config/app_config.php';
 require_once 'config/db_connect.php';
-// require_once 'config/session_handler.php'; // Comment this out
+
 require_once 'includes/mail/EmailService.php';
 
-// Start standard PHP session instead
 session_start();
 
-// Remove custom session handler lines
-// use CustomSession\SessionHandler;
-// use function CustomSession\initSession;
+
+if (isset($_SESSION['success'])) {
+    $successMessage = $_SESSION['success'];
+    unset($_SESSION['success']);
+}
+
+if (isset($_SESSION['error'])) {
+    $errorMessage = $_SESSION['error'];
+    unset($_SESSION['error']);
+}
+
+if (isset($_SESSION['pending_approval'])) {
+    $pendingMessage = $_SESSION['pending_approval'];
+    unset($_SESSION['pending_approval']);
+}
+
+
 use App\Mail\EmailService;
 
-// Get database connection
 $pdo = getPDO();
 
-// Remove these lines
-// Initialize session with our custom handler
-// initSession($pdo);
-// Get session handler instance
-// $session = SessionHandler::getInstance($pdo);
 
-// Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_POST['password'])) {
     try {
         $email = trim($_POST['email']);
         $password = $_POST['password'];
 
-        // Add debug log
         error_log("Processing login for email: $email");
 
-        // Fixes for index.php login processing
-        // Add after setting $email and $password variables
+    
         if (empty($email) || empty($password)) {
             $errorMessage = 'Please enter both email and password.';
         } else {
-            // Get user
+      
             $stmt = $pdo->prepare("
                 SELECT u.*, 
                        np.status as ngo_status,
@@ -55,47 +58,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
-            // If user not found
+     
             if (!$user) {
                 $error = 'No account found with that email.';
-                // Directly set variable for rendering rather than using session
+           
                 $errorMessage = $error;
             }
-            // Check if account is locked
+     
             else if ($user['locked_until'] !== null && strtotime($user['locked_until']) > time()) {
                 $timeRemaining = ceil((strtotime($user['locked_until']) - time()) / 60);
                 $errorMessage = "Your account is locked due to multiple failed login attempts. Try again in $timeRemaining minutes.";
             }
-            // Verify password
+    
             else if (!password_verify($password, $user['password'])) {
-                // Increment failed attempts
+          
                 $newAttempts = ($user['failed_attempts'] ?? 0) + 1;
                 
-                // Check if we should lock the account (after 5 attempts)
+            
                 if ($newAttempts >= 5) {
-                    // Lock for 30 minutes
+              
                     $lockedUntil = date('Y-m-d H:i:s', strtotime('+30 minutes'));
                     $stmt = $pdo->prepare("UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?");
                     $stmt->execute([$newAttempts, $lockedUntil, $user['id']]);
                     
                     $errorMessage = 'Your account has been locked due to multiple failed attempts. Try again after 30 minutes.';
                 } else {
-                    // Just update the attempts counter
+           
                     $stmt = $pdo->prepare("UPDATE users SET failed_attempts = ? WHERE id = ?");
                     $stmt->execute([$newAttempts, $user['id']]);
                     
-                    // Direct variables instead of session
+               
                     $loginErrorMessage = "Wrong password";
                     $attemptsLeft = 5 - $newAttempts;
                 }
             }
-            // Login successful
+      
             else {
-                // If login successful, reset failed attempts
+         
                 $stmt = $pdo->prepare("UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?");
                 $stmt->execute([$user['id']]);
 
-                // Check NGO status
+         
                 if ($user['role'] === 'ngo') {
                     $ngoStatusStmt = $pdo->prepare('SELECT status FROM ngo_profiles WHERE user_id = ?');
                     $ngoStatusStmt->execute([$user['id']]);
@@ -108,7 +111,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
                     }
                 }
 
-                // Check staff status
                 if ($user['role'] === 'branch1_staff' || $user['role'] === 'branch2_staff') {
                     $staffStatusStmt = $pdo->prepare('SELECT status FROM staff_profiles WHERE user_id = ?');
                     $staffStatusStmt->execute([$user['id']]);
@@ -125,38 +127,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
                     $errorMessage = 'Your account is inactive. Please contact administrator.';
                 }
 
-                // Generate OTP if all checks pass and no error messages set
+          
                 if (!isset($errorMessage) && !isset($pendingMessage)) {
-                    // Generate OTP
+            
                     $otp = sprintf("%06d", mt_rand(100000, 999999));
                     $expires_at = date('Y-m-d H:i:s', strtotime('+5 minutes'));
 
-                    // Save OTP to database
                     $stmt = $pdo->prepare("
                         INSERT INTO otp_codes (user_id, code, expires_at) 
                         VALUES (?, ?, ?)
                     ");
                     $stmt->execute([$user['id'], $otp, $expires_at]);
 
-                    // Send OTP via email 
+        
                     $emailService = new \App\Mail\EmailService();
                     $emailService->sendOTPEmail([
                         'email' => $user['email'],
                         'fname' => $user['fname'],
                         'otp' => $otp
                     ]);
-                    
-                    // Store session data - CRITICAL: do this only once
+              
                     $_SESSION['temp_user_id'] = $user['id'];
                     $_SESSION['temp_email'] = $user['email']; 
                     
-                    // Log for debugging
+             
                     error_log("Session before redirect - ID: " . session_id() . ", temp_user_id: " . $_SESSION['temp_user_id']);
                     
-                    // Ensure session is written before redirect
+                
                     session_write_close();
                     
-                    // Redirect to OTP verification
+           
                     header('Location: auth/verify_otp.php');
                     exit();
                 }
@@ -176,8 +176,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
   <title>Login</title>
   <link rel="icon" type="image/x-icon" href="assets/images/Company Logo.jpg">
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Add Toastify CSS and JS -->
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   
@@ -194,7 +192,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
    }
   </script>
   <style>
-    /* Custom styling for toasts */
     .toast-message {
       font-family: 'Arial', sans-serif;
     }
@@ -214,9 +211,8 @@ function togglePassword() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("DOM loaded, checking for notifications"); // Debugging
+    console.log("DOM loaded, checking for notifications"); 
 
-    // Regular error messages
     <?php if (isset($errorMessage)): ?>
         console.log("Error notification should display: <?= addslashes($errorMessage) ?>"); // Debug
         Toastify({
@@ -229,10 +225,9 @@ document.addEventListener('DOMContentLoaded', function() {
             stopOnFocus: true
         }).showToast();
     <?php endif; ?>
-    
-    // Login errors with attempts remaining
+
     <?php if (isset($loginErrorMessage) && isset($attemptsLeft)): ?>
-        console.log("Login error notification should display"); // Debug
+        console.log("Login error notification should display"); 
         Toastify({
             text: "🔒 <?= addslashes($loginErrorMessage) ?> (<?= $attemptsLeft ?> attempts remaining)",
             duration: 5000,
@@ -243,10 +238,9 @@ document.addEventListener('DOMContentLoaded', function() {
             stopOnFocus: true
         }).showToast();
     <?php endif; ?>
-    
-    // Pending account messages
+ 
     <?php if (isset($pendingMessage)): ?>
-        console.log("Pending notification should display"); // Debug
+        console.log("Pending notification should display"); 
         Toastify({
             text: "⏳ Account Status: <?= addslashes($pendingMessage) ?>",
             duration: 5000,
@@ -258,9 +252,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }).showToast();
     <?php endif; ?>
     
-    // Success messages
     <?php if (isset($successMessage)): ?>
-        console.log("Success notification should display"); // Debug
+        console.log("Success notification should display");
         Toastify({
             text: "✅ <?= addslashes($successMessage) ?>",
             duration: 5000,
@@ -271,19 +264,6 @@ document.addEventListener('DOMContentLoaded', function() {
             stopOnFocus: true
         }).showToast();
     <?php endif; ?>
-    
-    // Test toast to confirm Toastify is working correctly - uncomment to test
-    /*
-    Toastify({
-        text: "This is a test toast to verify Toastify is working",
-        duration: 5000,
-        close: true,
-        gravity: "top",
-        position: "center",
-        backgroundColor: "#3B82F6",
-        stopOnFocus: true
-    }).showToast();
-    */
 });
 </script>
 
@@ -301,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <h1 class="text-3xl font-semibold mb-6 text-black text-center">Sign in</h1>
       <h1 class="text-sm font-semibold mb-6 text-gray-500 text-center">Welcome to Bea Bakes: A Food Waste Management Hub System</h1>
       
-      <!-- Form now posts directly to the same page -->
+
       <form method="POST" class="space-y-4">
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
@@ -327,7 +307,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <label for="remember" class="ml-2 block text-sm text-gray-900">Remember me</label>
           </div>
           <div>
-            <div></div> <!-- Empty div for spacing -->
+            <div></div> 
             <a href="auth/forgot_password.php" class="text-sm text-primarycol hover:underline">
               Forgot your password?
             </a>
@@ -345,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<!-- Debug information -->
+
 <div id="debug" style="display: none">
 <?php
 echo "Current PHP Session ID: " . session_id() . "<br>";
@@ -359,7 +339,6 @@ if (isset($_SESSION)) {
 ?>
 </div>
 
-<!-- Error variables for debugging -->
 <div id="error-debug" style="display: none">
 <?php
 echo "Error Variables:<br>";
@@ -371,7 +350,6 @@ echo "successMessage: " . (isset($successMessage) ? $successMessage : 'not set')
 ?>
 </div>
 
-<!-- Press F12 to view debug info -->
 <script>
 document.addEventListener('keydown', function(e) {
     if (e.key === 'F12') {
@@ -382,7 +360,6 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Test if Toastify is loaded properly
 console.log("Toastify loaded:", typeof Toastify !== 'undefined');
 </script>
 </body>

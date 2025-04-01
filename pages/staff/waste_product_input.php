@@ -16,11 +16,14 @@ $branchId = $_SESSION['branch_id'];
 $successMessage = '';
 $errorMessage = '';
 
+// Update the SQL query to include batch number, expiry date and days until expiry
 try {
     $prodStmt = $pdo->prepare("
         SELECT 
             p.*,
-            p.stock_quantity as available_quantity
+            p.stock_quantity as available_quantity,
+            DATEDIFF(p.expiry_date, CURRENT_DATE()) AS days_until_expiry,
+            p.created_at AS stock_date
         FROM products p
         WHERE p.branch_id = ? 
         AND p.expiry_date >= CURRENT_DATE()
@@ -29,6 +32,24 @@ try {
     ");
     $prodStmt->execute([$branchId]);
     $products = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Determine earliest expiry date for FEFO indicators
+    $earliestExpiryDate = null;
+    if (!empty($products)) {
+        $earliestExpiryDate = $products[0]['expiry_date'];
+    }
+    
+    // Determine oldest stock date for FIFO indicators
+    $oldestStockDate = null;
+    if (!empty($products)) {
+        $oldestProduct = $products[0]; // Since they're ordered by expiry date
+        foreach ($products as $p) {
+            if (empty($oldestStockDate) || strtotime($p['stock_date']) < strtotime($oldestStockDate)) {
+                $oldestStockDate = $p['stock_date'];
+                $oldestProduct = $p;
+            }
+        }
+    }
 } catch (PDOException $e) {
     die("Error retrieving data: " . $e->getMessage());
 }
@@ -205,6 +226,33 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
         
         .form-section-title {
             @apply text-lg font-semibold mb-3 text-gray-800 border-b pb-2;
+        }
+
+        /* Badge styling */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        /* Status indicators */
+        .expiry-urgent {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            animation: pulse 2s infinite;
+        }
+        
+        .expiry-warning {
+            background-color: #ffedd5;
+            color: #c2410c;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
@@ -408,7 +456,48 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <div class="grid grid-cols-2 gap-1 mt-1 text-xs text-gray-600">
                                         <div class="font-medium text-blue-700">Available Quantity:</div>
                                         <div class="text-right font-medium text-blue-700"><?= htmlspecialchars($product['stock_quantity']) ?> units</div>
+                                        
+                                        <?php if(!empty($product['batch_number'])): ?>
+                                        <div class="font-medium text-blue-700">Batch Number:</div>
+                                        <div class="text-right font-mono text-blue-700"><?= htmlspecialchars($product['batch_number']) ?></div>
+                                        <?php endif; ?>
+                                        
+                                        <div class="font-medium text-blue-700">Expiry Date:</div>
+                                        <div class="text-right text-blue-700">
+                                            <?= date('M j, Y', strtotime($product['expiry_date'])) ?>
+                                            <span class="block">
+                                                (<?= $product['days_until_expiry'] ?> days left)
+                                            </span>
+                                        </div>
                                     </div>
+                                </div>
+
+                                <!-- Add FEFO/FIFO badges - place this after stock information -->
+                                <div class="mt-2">
+                                    <?php if($product['expiry_date'] === $earliestExpiryDate): ?>
+                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800">
+                                            Use First (FEFO)
+                                        </span>
+                                    <?php endif; ?>
+                                    
+                                    <?php if(!empty($oldestStockDate) && $product['stock_date'] === $oldestStockDate): ?>
+                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800 ml-1">
+                                            Use First (FIFO)
+                                        </span>
+                                    <?php endif; ?>
+                                    
+                                    <?php 
+                                    // Expiry status indicator
+                                    if ($product['days_until_expiry'] <= 3): 
+                                    ?>
+                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800 ml-1">
+                                            Critical Expiry
+                                        </span>
+                                    <?php elseif ($product['days_until_expiry'] <= 7): ?>
+                                        <span class="px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800 ml-1">
+                                            Expiring Soon
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             
