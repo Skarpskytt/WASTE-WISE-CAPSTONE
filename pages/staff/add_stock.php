@@ -21,6 +21,29 @@ $productsStmt = $pdo->prepare("
 $productsStmt->execute([$branchId]);
 $products = $productsStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Get all unique products with total stock counts
+$productsQuery = $pdo->prepare("
+    SELECT 
+        p1.id, p1.name, p1.category, p1.price_per_unit, p1.image, 
+        (SELECT SUM(stock_quantity) FROM products WHERE name = p1.name AND branch_id = ?) as total_stock
+    FROM products p1
+    JOIN (
+        SELECT name, MAX(id) as max_id
+        FROM products
+        WHERE branch_id = ?
+        GROUP BY name
+    ) p2 ON p1.id = p2.max_id
+    ORDER BY p1.name ASC
+");
+
+$productsQuery->execute([$branchId, $branchId]);
+$allProducts = $productsQuery->fetchAll(PDO::FETCH_ASSOC);
+
+// Get unique categories for filter dropdown
+$categoriesQuery = $pdo->prepare("SELECT DISTINCT category FROM products WHERE branch_id = ? ORDER BY category");
+$categoriesQuery->execute([$branchId]);
+$categories = $categoriesQuery->fetchAll(PDO::FETCH_COLUMN);
+
 // Function to generate batch number
 function generateBatchNumber() {
     $today = date('Ymd');
@@ -66,6 +89,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
         $errors[] = "Stock quantity must be greater than zero.";
     }
     
+    if ($_POST['unit_type'] === 'box' && (!isset($_POST['pieces_per_box']) || intval($_POST['pieces_per_box']) <= 0)) {
+        $errors[] = "Please specify how many pieces are in each box.";
+    }
+
     // Validate that an expiry date was calculated
     if (empty($_POST['expiry_date'])) {
         $errors[] = "Error: Missing expiry date. The selected product may not have shelf life information. Please contact an administrator.";
@@ -170,75 +197,48 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                         data: { id: productId },
                         dataType: 'json',
                         success: function(data) {
+                            if (data.error) {
+                                console.error("API Error:", data.error);
+                                alert("Error loading product details: " + data.error);
+                                return;
+                            }
+                            
                             $('#product_details').removeClass('hidden');
                             $('#product_name').text(data.name);
                             $('#product_category').text(data.category);
                             $('#product_price').text('₱' + parseFloat(data.price_per_unit).toFixed(2));
                             
-                            // Debug code - show shelf life value
-                            const shelfLifeDays = data.shelf_life_days || 0;
-                            console.log("Product shelf life days:", shelfLifeDays);
-                            if (shelfLifeDays <= 0) {
-                                console.warn("Warning: This product has no shelf life information (days: " + shelfLifeDays + ")");
-                            }
-                            
-                            // ADD THIS LINE - you're not storing the shelf life value anywhere!
-                            $('#product_shelf_life').val(shelfLifeDays);
-                            
-                            // Calculate expiry date based on production date and shelf life
+                            // Store shelf life and calculate expiry
+                            $('#product_shelf_life').val(data.shelf_life_days || 0);
                             calculateExpiryDateFromShelfLife();
                             
-                            // Replace your complex image path handling with this simpler version:
-
+                            // Better image path handling for AJAX responses
                             if (data.image) {
-                                console.log("Image from server:", data.image);
+                                if (data.image.startsWith('../../')) {
+                                    // Path already has the correct prefix
+                                    $('#product_image').attr('src', data.image);
+                                } else if (data.image.includes('/')) {
+                                    // Path contains directory structure but not the prefix
+                                    $('#product_image').attr('src', "../../" + data.image);
+                                } else {
+                                    // Just a filename
+                                    $('#product_image').attr('src', "../../assets/uploads/products/" + data.image);
+                                }
                                 
-                                // Get just the filename without path
-                                const filename = data.image.split('/').pop().split('\\').pop();
-                                
-                                // Try a simpler approach with just one path
-                                const imagePath = `../../uploads/${filename}`;
-                                $('#product_image').attr('src', imagePath);
-                                
-                                // Log what we're doing
-                                console.log("Setting image source to:", imagePath);
+                                // Add error handler
+                                $('#product_image').on('error', function() {
+                                    $(this).attr('src', '../../assets/images/default-product.jpg');
+                                });
                             } else {
                                 $('#product_image').attr('src', '../../assets/images/default-product.jpg');
                             }
                             
-                            // Handle unit type display
-                            if (data.unit_type === 'box') {
-                                $('#unit_type').val('box');
-                                $('#pieces_per_box').val(data.pieces_per_box);
-                                $('#unit_type_text').text('Boxes (packages)');
-                                $('#box_size').text(data.pieces_per_box);
-                                $('#box_info').removeClass('hidden');
-                                
-                                // Update the label for stock quantity
-                                $('label[for="stock_quantity"]').text('Number of Boxes');
-                                
-                                // Calculate total pieces when box quantity changes
-                                $('#stock_quantity').on('input', function() {
-                                    const boxes = parseInt($(this).val()) || 0;
-                                    const piecesPerBox = parseInt(data.pieces_per_box);
-                                    const totalPieces = boxes * piecesPerBox;
-                                    $('#total_pieces_calc').text(`You're adding ${totalPieces} total pieces.`);
-                                });
-                            } else {
-                                $('#unit_type').val('piece');
-                                $('#unit_type_text').text('Individual pieces');
-                                $('#box_info').addClass('hidden');
-                                $('label[for="stock_quantity"]').text('Stock Quantity');
-                            }
-
-                            // Inside the AJAX success function, add:
-                            if (data.debug_image_info) {
-                                console.table(data.debug_image_info);
-                            }
+                            // Rest of your handler...
                         },
-                        error: function() {
+                        error: function(xhr, status, error) {
                             $('#product_details').addClass('hidden');
-                            alert('Error fetching product details');
+                            console.error("AJAX Error:", error);
+                            alert('Error fetching product details: ' + error);
                         }
                     });
                 } else {
@@ -262,48 +262,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                 const productionDate = $('#production_date').val();
                 const shelfLifeDays = parseInt($('#product_shelf_life').val());
                 
-                console.log("CALCULATION TRIGGERED with:", {
-                    productionDate: productionDate,
-                    shelfLifeDays: shelfLifeDays,
-                    isDateValid: !!productionDate,
-                    isShelfLifeValid: !isNaN(shelfLifeDays) && shelfLifeDays > 0
-                });
-                
                 if (productionDate && !isNaN(shelfLifeDays) && shelfLifeDays > 0) {
                     // Create a date object from production date
                     const prodDate = new Date(productionDate);
-                    console.log("Production date as Date object:", prodDate);
                     
                     // Add shelf life days
                     const expiryDate = new Date(prodDate);
                     expiryDate.setDate(prodDate.getDate() + shelfLifeDays);
-                    console.log("Calculated expiry date as Date object:", expiryDate);
                     
                     // Format as YYYY-MM-DD
-                    const year = expiryDate.getFullYear();
-                    const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
-                    const day = String(expiryDate.getDate()).padStart(2, '0');
-                    const formattedDate = `${year}-${month}-${day}`;
+                    const formattedDate = expiryDate.toISOString().split('T')[0];
                     
                     // Update fields
                     $('#expiry_preview').val(formattedDate);
                     $('#expiry_date').val(formattedDate);
                     $('#expiry_message').text(`Based on ${shelfLifeDays} days shelf life`);
-                    console.log("Setting expiry date to:", formattedDate);
-                    
-                } else {
-                    $('#expiry_preview').val('');
-                    $('#expiry_date').val('');
-                    $('#expiry_message').text('Missing shelf life information for this product');
-                    console.log("Could not calculate - missing data");
-                    
-                    if (!productionDate) {
-                        console.error("Missing production date");
-                    }
-                    
-                    if (isNaN(shelfLifeDays) || shelfLifeDays <= 0) {
-                        console.error("Invalid shelf life:", shelfLifeDays);
-                    }
                 }
             }
             
@@ -346,6 +319,41 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                 $('#batch_number_display').text(newBatch);
                 $('#batch_number').val(newBatch);  // Make sure to update the hidden field
             });
+        });
+
+        // Search and filter functionality
+        $(document).ready(function() {
+            const $searchInput = $('#search-products');
+            const $categoryFilter = $('#category-filter');
+            const $stockFilter = $('#stock-filter');
+            const $productCards = $('.product-card');
+            
+            function filterProducts() {
+                const searchTerm = $searchInput.val().toLowerCase();
+                const categoryFilter = $categoryFilter.val();
+                const stockFilter = $stockFilter.val();
+                
+                $productCards.each(function() {
+                    const $card = $(this);
+                    const name = $card.data('name').toLowerCase();
+                    const category = $card.data('category');
+                    const stockStatus = $card.data('stock-status');
+                    
+                    const matchesSearch = name.includes(searchTerm);
+                    const matchesCategory = !categoryFilter || category === categoryFilter;
+                    const matchesStock = !stockFilter || stockStatus === stockFilter;
+                    
+                    if (matchesSearch && matchesCategory && matchesStock) {
+                        $card.show();
+                    } else {
+                        $card.hide();
+                    }
+                });
+            }
+            
+            $searchInput.on('input', filterProducts);
+            $categoryFilter.on('change', filterProducts);
+            $stockFilter.on('change', filterProducts);
         });
     </script>
 </head>
@@ -474,6 +482,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                     </div>
 
                     <input type="hidden" id="product_shelf_life" name="product_shelf_life" value="0">
+                    <input type="hidden" id="expiry_date" name="expiry_date" value="">
+                    <input type="hidden" id="batch_number" name="batch_number" value="">
                 </div>
 
                 <div id="product_details" class="hidden bg-gray-50 p-4 rounded-lg mb-6 flex gap-4 items-center">
@@ -501,6 +511,97 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- Product Overview Section -->
+        <div class="mt-10">
+            <h2 class="text-2xl font-bold text-primarycol mb-4">Products in System</h2>
+            
+            <!-- Search and filter bar -->
+            <div class="flex flex-wrap gap-3 mb-4">
+                <div class="relative flex-1 min-w-[200px]">
+                    <input type="text" id="search-products" placeholder="Search products..." 
+                        class="w-full px-4 py-2 rounded-lg border border-gray-300 pl-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                
+                <select id="category-filter" class="px-3 py-2 rounded-lg border border-gray-300">
+                    <option value="">All Categories</option>
+                    <?php foreach ($categories as $category): ?>
+                        <option value="<?= htmlspecialchars($category) ?>"><?= htmlspecialchars($category) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                
+                <select id="stock-filter" class="px-3 py-2 rounded-lg border border-gray-300">
+                    <option value="">All Stock Levels</option>
+                    <option value="low">Low Stock</option>
+                    <option value="out">Out of Stock</option>
+                    <option value="in">In Stock</option>
+                </select>
+            </div>
+            
+            <!-- Product grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <?php foreach ($allProducts as $product): ?>
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow product-card" data-name="<?= htmlspecialchars($product['name']) ?>" data-category="<?= htmlspecialchars($product['category']) ?>" data-stock-status="<?= $product['total_stock'] <= 0 ? 'out' : ($product['total_stock'] < 10 ? 'low' : 'in') ?>">
+                        <div class="h-48 overflow-hidden relative">
+                            <?php 
+                            // Correct image path handling
+                            $imagePath = "../../assets/images/default-product.jpg";
+                            if (!empty($product['image'])) {
+                                if (substr($product['image'], 0, 6) === '../../') {
+                                    // Path already has the correct prefix, use as is
+                                    $imagePath = $product['image'];
+                                } else if (strpos($product['image'], '/') !== false) {
+                                    // Path contains directory structure but not the prefix
+                                    $imagePath = "../../" . $product['image'];
+                                } else {
+                                    // Just a filename, add full path
+                                    $imagePath = "../../assets/uploads/products/" . $product['image'];
+                                }
+                            }
+                            ?>
+                            <img src="<?= htmlspecialchars($imagePath) ?>" 
+                                 alt="<?= htmlspecialchars($product['name']) ?>"
+                                 class="w-full h-full object-cover rounded"
+                                 onerror="this.src='../../assets/images/default-product.jpg'">
+                            <!-- Stock badge -->
+                            <div class="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold
+                                <?php if($product['total_stock'] <= 0): ?>
+                                    bg-red-100 text-red-800
+                                <?php elseif($product['total_stock'] < 10): ?>
+                                    bg-amber-100 text-amber-800
+                                <?php else: ?>
+                                    bg-green-100 text-green-800
+                                <?php endif; ?>">
+                                <?= $product['total_stock'] <= 0 ? 'Out of Stock' : ($product['total_stock'] < 10 ? 'Low Stock' : 'In Stock') ?>
+                            </div>
+                        </div>
+                        
+                        <div class="p-4">
+                            <h3 class="font-bold text-lg text-gray-800 truncate"><?= htmlspecialchars($product['name']) ?></h3>
+                            <p class="text-sm text-gray-600"><?= htmlspecialchars($product['category']) ?></p>
+                            <div class="flex justify-between items-center mt-3">
+                                <p class="font-medium text-primarycol">₱<?= number_format($product['price_per_unit'], 2) ?></p>
+                                <span class="text-sm text-gray-600"><?= $product['total_stock'] ?> in stock</span>
+                            </div>
+                            
+                            <div class="mt-4 flex justify-between">
+                                <a href="add_stock.php?prefill=<?= $product['id'] ?>" 
+                                   class="px-3 py-1.5 bg-primarycol text-white rounded text-sm hover:bg-opacity-90">
+                                    Add Stock
+                                </a>
+                                <a href="product_details.php?id=<?= $product['id'] ?>" 
+                                   class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                                    View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
     </div>
 </body>

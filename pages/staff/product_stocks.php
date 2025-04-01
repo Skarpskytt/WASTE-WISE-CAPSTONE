@@ -512,7 +512,13 @@ if (!empty($products) && $sort_method == 'fefo') {
             </div>
             <div>
                 <p class="text-sm text-gray-500">Today's Date</p>
-                <p class="text-xl font-bold text-gray-800"><?= date('M j, Y') ?></p>
+                <p class="text-xl font-bold text-gray-800">
+                    <?php 
+                    date_default_timezone_set('Asia/Manila'); 
+                    echo date('M j, Y'); 
+                    ?>
+                </p>
+                <p class="text-xs text-gray-500"><?= date('h:i A') ?> (PHT)</p>
             </div>
         </div>
     </div>
@@ -652,7 +658,16 @@ if (!empty($products) && $sort_method == 'fefo') {
             </thead>
             <tbody>
                 <?php foreach ($products as $index => $product): 
-                    $imgPath = !empty($product['image']) ? $product['image'] : '../../assets/images/default-product.jpg';
+                    // Better image path handling
+                    if (!empty($product['image'])) {
+                        if (strpos($product['image'], '/') !== false) {
+                            $imgPath = '../../' . $product['image'];
+                        } else {
+                            $imgPath = $product['image']; // Use the path directly as stored in DB
+                        }
+                    } else {
+                        $imgPath = '../../assets/images/default-product.jpg';
+                    }
                     
                     // Determine expiry status
                     $expiryStatus = '';
@@ -675,7 +690,26 @@ if ($index === 0 && $sort_method == 'fifo') echo 'fifo-oldest inventory-highligh
 else if ($sort_method == 'fefo' && $product['expiry_date'] === $earliestExpiryDate) echo 'fefo-expiring inventory-highlight';
 ?>">
 <td class="flex justify-center">
-    <img src="<?= htmlspecialchars($imgPath) ?>" alt="Product Image" class="h-8 w-8 object-cover rounded" />
+    <?php 
+    // Correct image path handling
+    $imagePath = "../../assets/images/default-product.jpg";
+    if (!empty($product['image'])) {
+        if (substr($product['image'], 0, 6) === '../../') {
+            // Path already has the correct prefix, use as is
+            $imagePath = $product['image'];
+        } else if (strpos($product['image'], '/') !== false) {
+            // Path contains directory structure but not the prefix
+            $imagePath = "../../" . $product['image'];
+        } else {
+            // Just a filename, add full path
+            $imagePath = "../../assets/uploads/products/" . $product['image'];
+        }
+    }
+    ?>
+    <img src="<?= htmlspecialchars($imagePath) ?>" 
+         alt="<?= htmlspecialchars($product['name']) ?>"
+         class="w-full h-full object-cover rounded"
+         onerror="this.src='../../assets/images/default-product.jpg'">
 </td>
 <td><?= htmlspecialchars($product['name']) ?></td>
 <td><?= htmlspecialchars($product['category']) ?></td>

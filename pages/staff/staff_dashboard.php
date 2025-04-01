@@ -464,16 +464,16 @@ try {
     if ($tab == 'fifo') {
         // Get oldest items (FIFO)
         $nextItemsStmt = $pdo->prepare("
-            SELECT name, stock_date, expiry_date, stock_quantity
+            SELECT name, created_at, expiry_date, stock_quantity
             FROM products
             WHERE branch_id = ? AND stock_quantity > 0 AND expiry_date > CURRENT_DATE
-            ORDER BY stock_date ASC
+            ORDER BY created_at ASC
             LIMIT 5
         ");
     } else {
         // Get soonest expiring items (FEFO)
         $nextItemsStmt = $pdo->prepare("
-            SELECT name, stock_date, expiry_date, stock_quantity
+            SELECT name, created_at, expiry_date, stock_quantity
             FROM products
             WHERE branch_id = ? AND stock_quantity > 0 AND expiry_date > CURRENT_DATE
             ORDER BY expiry_date ASC
@@ -501,7 +501,7 @@ try {
                         <td><?= htmlspecialchars($item['name']) ?></td>
                         <td>
                             <?php if ($tab == 'fifo'): ?>
-                                <?= date('M j, Y', strtotime($item['stock_date'])) ?>
+                                <?= date('M j, Y', strtotime($item['created_at'])) ?>
                             <?php else: ?>
                                 <?= date('M j, Y', strtotime($item['expiry_date'])) ?>
                                 <span class="text-xs text-gray-500">

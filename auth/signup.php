@@ -400,7 +400,7 @@ $session = SessionHandler::getInstance($pdo);
           </div>
           
           <!-- Terms and Submit -->
-          <div class="terms-checkbox flex gap-2">
+          <div class="terms-checkbox flex gap-2 justify-start items-start">
             <input type="checkbox" id="terms" name="terms" required class="mt-1">
             <label for="terms" class="text-xs text-gray-600 hover:text-gray-800">Accept <span id="showTerms" class="text-black cursor-pointer underline hover:text-gray-800">Terms and Conditions</span></label>
           </div>
@@ -694,61 +694,81 @@ $session = SessionHandler::getInstance($pdo);
       const selfieStatus = document.getElementById('selfie-status');
       let stream = null;
       
-      // Single camera access event listener
-      startButton.addEventListener('click', async function() {
+      // Check if camera is actually available before attempting access
+      async function checkCameraAvailability() {
         try {
-          // Clear previous errors
-          selfieStatus.textContent = 'Starting camera...';
-          selfieStatus.className = 'mt-1 text-xs text-gray-500';
-          
-          console.log('Attempting to access camera...');
-          
-          // Check for camera support
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Camera API not supported in this browser');
-          }
-          
-          // Request camera access with explicit error handling
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({ 
-              video: { 
-                width: { ideal: 200 },  // Reduced size
-                height: { ideal: 200 }, // Reduced size
-                facingMode: "user"
-              }
-            });
-            console.log('Camera access granted');
-          } catch (cameraError) {
-            console.error('Camera access specific error:', cameraError.name, cameraError.message);
-            if (cameraError.name === 'NotAllowedError') {
-              throw new Error('Camera access denied. Please allow camera access in your browser settings and try again.');
-            } else if (cameraError.name === 'NotFoundError') {
-              throw new Error('No camera found. Please connect a camera and try again.');
-            } else if (cameraError.name === 'NotReadableError') {
-              throw new Error('Camera is already in use by another application. Please: <br>1. Close other applications using your camera (Zoom, Teams, etc.)<br>2. Close other browser tabs that might be using the camera<br>3. Try restarting your browser');
-            } else {
-              throw cameraError;
-            }
-          }
-          
-          // Camera access successful
-          video.srcObject = stream;
-          video.classList.remove('hidden');
-          startButton.classList.add('hidden');
-          captureButton.style.display = 'inline-flex';
-          
-          video.onloadedmetadata = function() {
-            video.play();
-            selfieStatus.textContent = 'Position your face and click "Take Photo"';
-            selfieStatus.className = 'mt-1 text-xs text-green-600';
-          };
-        } catch (err) {
-          console.error('Camera access error:', err);
-          selfieStatus.textContent = err.message || 'Could not access camera. Please ensure camera permissions are granted.';
-          selfieStatus.className = 'mt-1 text-xs text-red-600';
-          selfieStatus.innerHTML += ' <button class="text-blue-600 underline" onclick="startCameraRetry()">Retry</button>';
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          return videoDevices.length > 0;
+        } catch (e) {
+          console.error('Error checking camera availability:', e);
+          return false;
         }
-      });
+      }
+
+      // Single camera access event listener
+      if (startButton) {
+        startButton.addEventListener('click', async function() {
+          try {
+            // First check if camera is available
+            const cameraAvailable = await checkCameraAvailability();
+            if (!cameraAvailable) {
+              throw new Error('No camera detected on your device. Please connect a camera and try again.');
+            }
+            
+            // Clear previous errors
+            selfieStatus.textContent = 'Starting camera...';
+            selfieStatus.className = 'mt-1 text-xs text-gray-500';
+            
+            console.log('Attempting to access camera...');
+            
+            // Check for camera support
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+              throw new Error('Camera API not supported in this browser');
+            }
+            
+            // Request camera access with explicit error handling
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                  width: { ideal: 200 },  // Reduced size
+                  height: { ideal: 200 }, // Reduced size
+                  facingMode: "user"
+                }
+              });
+              console.log('Camera access granted');
+            } catch (cameraError) {
+              console.error('Camera access specific error:', cameraError.name, cameraError.message);
+              if (cameraError.name === 'NotAllowedError') {
+                throw new Error('Camera access denied. Please allow camera access in your browser settings and try again.');
+              } else if (cameraError.name === 'NotFoundError') {
+                throw new Error('No camera found. Please connect a camera and try again.');
+              } else if (cameraError.name === 'NotReadableError') {
+                throw new Error('Camera is already in use by another application. Please: <br>1. Close other applications using your camera (Zoom, Teams, etc.)<br>2. Close other browser tabs that might be using the camera<br>3. Try restarting your browser');
+              } else {
+                throw cameraError;
+              }
+            }
+            
+            // Camera access successful
+            video.srcObject = stream;
+            video.classList.remove('hidden');
+            startButton.classList.add('hidden');
+            captureButton.style.display = 'inline-flex';
+            
+            video.onloadedmetadata = function() {
+              video.play();
+              selfieStatus.textContent = 'Position your face and click "Take Photo"';
+              selfieStatus.className = 'mt-1 text-xs text-green-600';
+            };
+          } catch (err) {
+            console.error('Camera access error:', err);
+            selfieStatus.textContent = err.message || 'Could not access camera. Please ensure camera permissions are granted.';
+            selfieStatus.className = 'mt-1 text-xs text-red-600';
+            selfieStatus.innerHTML += ' <button class="text-blue-600 underline" onclick="startCameraRetry()">Retry</button>';
+          }
+        });
+      }
       
       // Add this retry function
       function startCameraRetry() {
@@ -769,7 +789,10 @@ $session = SessionHandler::getInstance($pdo);
         if (video.srcObject) {
           try {
             const tracks = video.srcObject.getTracks();
-            tracks.forEach(track => track.stop());
+            tracks.forEach(track => {
+              console.log('Releasing track:', track.kind);
+              track.stop();
+            });
           } catch (e) {
             console.error('Error clearing video source:', e);
           }
@@ -782,12 +805,22 @@ $session = SessionHandler::getInstance($pdo);
         startButton.classList.remove('hidden');
         captureButton.style.display = 'none';
         retakeButton.style.display = 'none';
-        selfieStatus.textContent = 'Preparing camera...';
         
-        // Try camera with a longer delay to ensure resources are freed
-        setTimeout(() => {
-          startButton.click();
-        }, 1500);
+        // Update status with more helpful information
+        selfieStatus.innerHTML = 'Preparing camera for retry... <span class="text-xs">(releasing resources)</span>';
+        
+        // Try camera with a longer delay and show countdown
+        let countdown = 3;
+        const countdownTimer = setInterval(() => {
+          selfieStatus.innerHTML = `Retrying in ${countdown} seconds...`;
+          countdown--;
+          
+          if (countdown < 0) {
+            clearInterval(countdownTimer);
+            selfieStatus.textContent = 'Accessing camera...';
+            startButton.click();
+          }
+        }, 1000);
       }
       
       // Function to capture photo
