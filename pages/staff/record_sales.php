@@ -79,18 +79,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_sales']) && !
                 throw new Exception("Not enough stock for one or more products. Please check quantities.");
             }
             
-            // Insert sales record
-            $insertStmt = $pdo->prepare("
-                INSERT INTO sales (product_id, branch_id, staff_id, quantity_sold, sales_date, created_at)
-                VALUES (?, ?, ?, ?, ?, NOW())
+            // Check if there's already a sales record for this product on this date
+            $existingSalesStmt = $pdo->prepare("
+                SELECT id, quantity_sold 
+                FROM sales 
+                WHERE product_id = ? 
+                AND branch_id = ? 
+                AND sales_date = ? 
+                AND (archived = 0 OR archived IS NULL)
+                LIMIT 1
             ");
-            $insertStmt->execute([
+            $existingSalesStmt->execute([
                 $productId,
                 $_SESSION['branch_id'],
-                $_SESSION['user_id'],
-                $quantity,
                 $salesDate
             ]);
+            $existingSales = $existingSalesStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($existingSales) {
+                // Update existing sales record by adding the new quantity
+                $updateStmt = $pdo->prepare("
+                    UPDATE sales 
+                    SET quantity_sold = quantity_sold + ?, 
+                    updated_at = NOW() 
+                    WHERE id = ?
+                ");
+                $updateStmt->execute([
+                    $quantity,
+                    $existingSales['id']
+                ]);
+            } else {
+                // Insert new sales record
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO sales (product_id, branch_id, staff_id, quantity_sold, sales_date, created_at)
+                    VALUES (?, ?, ?, ?, ?, NOW())
+                ");
+                $insertStmt->execute([
+                    $productId,
+                    $_SESSION['branch_id'],
+                    $_SESSION['user_id'],
+                    $quantity,
+                    $salesDate
+                ]);
+            }
             
             // Update product quantity in stock
             $updateStmt = $pdo->prepare("

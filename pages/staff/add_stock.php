@@ -24,16 +24,20 @@ $products = $productsStmt->fetchAll(PDO::FETCH_ASSOC);
 // Get all unique products with total stock counts
 $productsQuery = $pdo->prepare("
     SELECT 
-        p1.id, p1.name, p1.category, p1.price_per_unit, p1.image, 
-        (SELECT SUM(stock_quantity) FROM products WHERE name = p1.name AND branch_id = ?) as total_stock
-    FROM products p1
-    JOIN (
-        SELECT name, MAX(id) as max_id
-        FROM products
-        WHERE branch_id = ?
-        GROUP BY name
-    ) p2 ON p1.id = p2.max_id
-    ORDER BY p1.name ASC
+        MIN(p.id) as id, 
+        p.name, 
+        p.category, 
+        p.price_per_unit, 
+        p.image,
+        (SELECT SUM(stock_quantity) FROM products 
+         WHERE name = p.name AND branch_id = ? 
+         AND (is_archived = 0 OR is_archived IS NULL)) as total_stock
+    FROM products p
+    WHERE p.branch_id = ?
+    AND (p.is_archived = 0 OR p.is_archived IS NULL)
+    GROUP BY p.name, p.category, p.price_per_unit, p.image
+    ORDER BY p.name ASC
+    LIMIT 12
 ");
 
 $productsQuery->execute([$branchId, $branchId]);
@@ -164,201 +168,261 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primarycol: '#47663B',
-                        sec: '#E8ECD7',
-                        third: '#EED3B1',
-                        fourth: '#1F4529',
-                    }
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    primarycol: '#47663B',
+                    sec: '#E8ECD7',
+                    third: '#EED3B1',
+                    fourth: '#1F4529',
                 }
             }
         }
+    }
+    
+    $(document).ready(function() {
+        // Generate and display batch number
+        function generateBatchNumber() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const dateString = `${year}${month}${day}`;
+            const random = Math.floor(1000 + Math.random() * 9000);
+            
+            return `BB-${dateString}-${random}`;
+        }
+
+        // Set initial batch number on page load
+        const batchNumber = generateBatchNumber();
+        $('#batch_number_display').text(batchNumber);
+        $('#batch_number').val(batchNumber);
+
+        // Regenerate batch number when button is clicked
+        $('#regenerate-batch').on('click', function(e) {
+            e.preventDefault();
+            const newBatch = generateBatchNumber();
+            $('#batch_number_display').text(newBatch);
+            $('#batch_number').val(newBatch);
+        });
         
-        $(document).ready(function() {
-            // Show the auto-generated batch number
-            $('#batch_number_display').text(generateBatchNumber());
+        // Calculate expiry date based on production date and shelf life days
+        function calculateExpiryDateFromShelfLife() {
+            const productionDate = $('#production_date').val();
+            const shelfLifeDays = parseInt($('#product_shelf_life').val()) || 30;
             
-            // Update batch number when button is clicked
-            $('#regenerate-batch').on('click', function(e) {
-                e.preventDefault();
-                $('#batch_number_display').text(generateBatchNumber());
-            });
+            console.log("Calculating expiry date:", productionDate, shelfLifeDays);
             
-            // Get product details when selected
-            $('#product_id').on('change', function() {
-                const productId = $(this).val();
-                if (productId) {
-                    $.ajax({
-                        url: 'get_product_details.php',
-                        type: 'GET',
-                        data: { id: productId },
-                        dataType: 'json',
-                        success: function(data) {
-                            if (data.error) {
-                                console.error("API Error:", data.error);
-                                alert("Error loading product details: " + data.error);
-                                return;
-                            }
-                            
-                            $('#product_details').removeClass('hidden');
-                            $('#product_name').text(data.name);
-                            $('#product_category').text(data.category);
-                            $('#product_price').text('₱' + parseFloat(data.price_per_unit).toFixed(2));
-                            
-                            // Store shelf life and calculate expiry
-                            $('#product_shelf_life').val(data.shelf_life_days || 0);
-                            calculateExpiryDateFromShelfLife();
-                            
-                            // Better image path handling for AJAX responses
-                            if (data.image) {
-                                if (data.image.startsWith('../../')) {
-                                    // Path already has the correct prefix
-                                    $('#product_image').attr('src', data.image);
-                                } else if (data.image.includes('/')) {
-                                    // Path contains directory structure but not the prefix
-                                    $('#product_image').attr('src', "../../" + data.image);
-                                } else {
-                                    // Just a filename
-                                    $('#product_image').attr('src', "../../assets/uploads/products/" + data.image);
-                                }
-                                
-                                // Add error handler
-                                $('#product_image').on('error', function() {
-                                    $(this).attr('src', '../../assets/images/default-product.jpg');
-                                });
-                            } else {
-                                $('#product_image').attr('src', '../../assets/images/default-product.jpg');
-                            }
-                            
-                            // Rest of your handler...
-                        },
-                        error: function(xhr, status, error) {
-                            $('#product_details').addClass('hidden');
-                            console.error("AJAX Error:", error);
-                            alert('Error fetching product details: ' + error);
-                        }
-                    });
-                } else {
-                    $('#product_details').addClass('hidden');
-                }
-            });
-
-            // Show/hide custom days input based on selection
-            $('#expiry_days').on('change', function() {
-                if ($(this).val() === 'custom') {
-                    $('#custom_days_container').removeClass('hidden');
-                } else {
-                    $('#custom_days_container').addClass('hidden');
-                    $('#custom_days').val('');
-                }
-                calculateExpiryDate();
-            });
-
-            // Calculate expiry date based on production date and shelf life days
-            function calculateExpiryDateFromShelfLife() {
-                const productionDate = $('#production_date').val();
-                const shelfLifeDays = parseInt($('#product_shelf_life').val());
+            if (productionDate) {
+                // Create a date object from production date
+                const prodDate = new Date(productionDate);
                 
-                if (productionDate && !isNaN(shelfLifeDays) && shelfLifeDays > 0) {
-                    // Create a date object from production date
-                    const prodDate = new Date(productionDate);
-                    
-                    // Add shelf life days
-                    const expiryDate = new Date(prodDate);
-                    expiryDate.setDate(prodDate.getDate() + shelfLifeDays);
-                    
-                    // Format as YYYY-MM-DD
-                    const formattedDate = expiryDate.toISOString().split('T')[0];
-                    
-                    // Update fields
-                    $('#expiry_preview').val(formattedDate);
-                    $('#expiry_date').val(formattedDate);
+                // Add shelf life days
+                const expiryDate = new Date(prodDate);
+                expiryDate.setDate(prodDate.getDate() + shelfLifeDays);
+                
+                // Format as YYYY-MM-DD
+                const formattedDate = expiryDate.toISOString().split('T')[0];
+                
+                // Update fields
+                $('#expiry_preview').val(formattedDate);
+                $('#expiry_date').val(formattedDate);
+                
+                if (shelfLifeDays <= 0) {
+                    $('#expiry_message').text('Warning: Using default 30 days shelf life');
+                    $('#expiry_message').addClass('text-amber-500');
+                } else {
                     $('#expiry_message').text(`Based on ${shelfLifeDays} days shelf life`);
+                    $('#expiry_message').removeClass('text-red-500 text-amber-500');
                 }
+                
+                console.log("Calculated expiry date:", formattedDate);
+            }
+        }
+        
+        // Production date change handler
+        $('#production_date').on('change', calculateExpiryDateFromShelfLife);
+        
+        // Handle image loading errors
+        function handleImageErrors() {
+            $('img').on('error', function() {
+                $(this).attr('src', '../../assets/images/Company Logo.jpg')
+                      .addClass('img-error');
+            });
+        }
+        
+        // Call handler for existing images
+        handleImageErrors();
+        
+        // Get product details when selected
+        $('#product_id').on('change', function() {
+            const productId = $(this).val();
+            if (!productId) {
+                $('#product_details').addClass('hidden');
+                return;
             }
             
-            // Production date change handler
-            $('#production_date').on('change', function() {
-                console.log("Production date changed to:", $(this).val());
-                calculateExpiryDateFromShelfLife();
-            });
-
-            // Generate and display batch number
-            function generateBatchNumber() {
-                const today = new Date();
-                const year = today.getFullYear();
-                const month = String(today.getMonth() + 1).padStart(2, '0');
-                const day = String(today.getDate()).padStart(2, '0');
-                const dateString = `${year}${month}${day}`;
-                const random = Math.floor(1000 + Math.random() * 9000);
-                
-                // Match the exact format used in PHP
-                return `BB-${dateString}-${random}`;
-            }
-
-            // On page load, generate and set batch number
-            const batchNumber = generateBatchNumber();
-            $('#batch_number_display').text(batchNumber);
-            $('#batch_number').val(batchNumber); // Make sure to update the hidden field!
-
-            // Regenerate batch number when button is clicked
-            $('#regenerate-batch').on('click', function(e) {
-                e.preventDefault();
-                const newBatch = generateBatchNumber();
-                $('#batch_number_display').text(newBatch);
-                $('#batch_number').val(newBatch);
-            });
-
-            // Update batch number when button is clicked
-            $('#regenerate-batch').on('click', function(e) {
-                e.preventDefault();
-                const newBatch = generateBatchNumber();
-                $('#batch_number_display').text(newBatch);
-                $('#batch_number').val(newBatch);  // Make sure to update the hidden field
-            });
-        });
-
-        // Search and filter functionality
-        $(document).ready(function() {
-            const $searchInput = $('#search-products');
-            const $categoryFilter = $('#category-filter');
-            const $stockFilter = $('#stock-filter');
-            const $productCards = $('.product-card');
-            
-            function filterProducts() {
-                const searchTerm = $searchInput.val().toLowerCase();
-                const categoryFilter = $categoryFilter.val();
-                const stockFilter = $stockFilter.val();
-                
-                $productCards.each(function() {
-                    const $card = $(this);
-                    const name = $card.data('name').toLowerCase();
-                    const category = $card.data('category');
-                    const stockStatus = $card.data('stock-status');
-                    
-                    const matchesSearch = name.includes(searchTerm);
-                    const matchesCategory = !categoryFilter || category === categoryFilter;
-                    const matchesStock = !stockFilter || stockStatus === stockFilter;
-                    
-                    if (matchesSearch && matchesCategory && matchesStock) {
-                        $card.show();
-                    } else {
-                        $card.hide();
+            $.ajax({
+                url: 'get_product_details.php',
+                type: 'GET',
+                data: { id: productId },
+                dataType: 'json',
+                success: function(data) {
+                    if (data.error) {
+                        console.error("API Error:", data.error);
+                        alert("Error loading product details: " + data.error);
+                        return;
                     }
-                });
-            }
-            
-            $searchInput.on('input', filterProducts);
-            $categoryFilter.on('change', filterProducts);
-            $stockFilter.on('change', filterProducts);
+                    
+                    $('#product_details').removeClass('hidden');
+                    $('#product_name').text(data.name);
+                    $('#product_category').text(data.category);
+                    $('#product_price').text('₱' + parseFloat(data.price_per_unit).toFixed(2));
+                    
+                    // Store shelf life and calculate expiry
+                    $('#product_shelf_life').val(data.shelf_life_days || 30);
+                    
+                    // Calculate expiry date
+                    calculateExpiryDateFromShelfLife();
+                    
+                    // Improved image handling
+                    if (data.image) {
+                        let imgPath;
+                        
+                        if (data.image.startsWith('../../')) {
+                            imgPath = data.image;
+                        } else if (data.image.includes('/')) {
+                            imgPath = "../../" + data.image;
+                        } else {
+                            imgPath = "../../assets/uploads/products/" + data.image;
+                        }
+                        
+                        const img = new Image();
+                        img.onload = function() {
+                            $('#product_image').attr('src', imgPath);
+                        };
+                        img.onerror = function() {
+                            $('#product_image').attr('src', '../../assets/images/Company Logo.jpg');
+                            $('#image-error').removeClass('hidden');
+                        };
+                        img.src = imgPath;
+                    } else {
+                        $('#product_image').attr('src', '../../assets/images/default-product.jpg');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#product_details').addClass('hidden');
+                    console.error("AJAX Error:", error);
+                    alert('Error fetching product details: ' + error);
+                }
+            });
         });
-    </script>
+
+        // Initialize with current production date
+        if ($('#production_date').val()) {
+            const defaultShelfLife = 30;
+            $('#product_shelf_life').val(defaultShelfLife);
+            calculateExpiryDateFromShelfLife();
+        }
+        
+        // Search and filter functionality
+        const $searchInput = $('#search-products');
+        const $categoryFilter = $('#category-filter');
+        const $stockFilter = $('#stock-filter');
+        const $productCards = $('.product-card');
+        
+        function filterProducts() {
+            const searchTerm = $searchInput.val().toLowerCase();
+            const categoryFilter = $categoryFilter.val();
+            const stockFilter = $stockFilter.val();
+            
+            $productCards.each(function() {
+                const $card = $(this);
+                const name = $card.data('name').toLowerCase();
+                const category = $card.data('category');
+                const stockStatus = $card.data('stock-status');
+                
+                const matchesSearch = name.includes(searchTerm);
+                const matchesCategory = !categoryFilter || category === categoryFilter;
+                const matchesStock = !stockFilter || stockStatus === stockFilter;
+                
+                if (matchesSearch && matchesCategory && matchesStock) {
+                    $card.show();
+                } else {
+                    $card.hide();
+                }
+            });
+        }
+        
+        $searchInput.on('input', filterProducts);
+        $categoryFilter.on('change', filterProducts);
+        $stockFilter.on('change', filterProducts);
+
+        // Optimize image loading
+        optimizeImageLoading();
+    });
+
+    // Replace your optimizeImageLoading function with this simpler version
+    function optimizeImageLoading() {
+        // Simple direct assignment - no delays or complex logic
+        document.querySelectorAll('img[data-src]').forEach(function(img) {
+            var dataSrc = img.getAttribute('data-src');
+            if (dataSrc) {
+                img.src = dataSrc;
+                img.removeAttribute('data-src');
+            }
+        });
+    }
+</script>
+    <style>
+    /* Image loading state indicators */
+    img {
+        transition: opacity 0.3s;
+    }
+    
+    img[src='../../assets/images/Company Logo.jpg'] {
+        opacity: 0.8;
+    }
+    
+    .img-error {
+        border: 1px dashed #eee;
+    }
+    
+    /* Add smooth fade-in effect for images */
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    img:not([src='../../assets/images/Company Logo.jpg']) {
+        animation: fadeIn 0.5s;
+    }
+</style>
 </head>
 
 <body class="flex h-screen">
+    <!-- Add this loading overlay right after your body tag -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-80 z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primarycol mx-auto"></div>
+            <p class="mt-2 text-primarycol">Loading product data...</p>
+        </div>
+    </div>
+
+    <script>
+        // Hide loading overlay when page is fully loaded or after 3 seconds
+        window.addEventListener('load', function() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        });
+        
+        // Fallback - hide loading overlay after 3 seconds even if page doesn't fully load
+        setTimeout(function() {
+            var overlay = document.getElementById('loading-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }, 1000); // Set to 1 second
+    </script>
+
     <?php include ('../layout/staff_nav.php'); ?>
 
     <div class="p-7 w-full">
@@ -477,22 +541,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                         </label>
                         <input type="date" class="appearance-none block w-full bg-gray-100 text-gray-700 font-medium border border-gray-400 rounded-lg py-3 px-3" 
                             id="expiry_preview" readonly />
-                        <input type="hidden" id="expiry_date" name="expiry_date" />
                         <p class="text-xs text-gray-500 mt-1" id="expiry_message">Automatically calculated based on the product's shelf life</p>
                     </div>
 
+                    <!-- Keep only ONE hidden field for product_shelf_life and expiry_date -->
                     <input type="hidden" id="product_shelf_life" name="product_shelf_life" value="0">
                     <input type="hidden" id="expiry_date" name="expiry_date" value="">
-                    <input type="hidden" id="batch_number" name="batch_number" value="">
                 </div>
 
                 <div id="product_details" class="hidden bg-gray-50 p-4 rounded-lg mb-6 flex gap-4 items-center">
                     <div class="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
                         <img id="product_image" 
-                             src="../../assets/images/default-product.jpg" 
+                             src="../../assets/images/Company Logo.jpg" 
                              alt="Product" 
                              class="w-full h-full object-cover"
-                             onerror="this.onerror=null; this.src='../../assets/images/default-product.jpg'; console.error('Image failed to load');">
+                             onerror="this.onerror=null; this.src='../../assets/images/Company Logo.jpg'; console.error('Image failed to load');">
                     </div>
                     <div class="hidden mt-1 text-xs text-red-500" id="image-error">
                         Image could not be loaded
@@ -548,25 +611,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                     <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow product-card" data-name="<?= htmlspecialchars($product['name']) ?>" data-category="<?= htmlspecialchars($product['category']) ?>" data-stock-status="<?= $product['total_stock'] <= 0 ? 'out' : ($product['total_stock'] < 10 ? 'low' : 'in') ?>">
                         <div class="h-48 overflow-hidden relative">
                             <?php 
-                            // Correct image path handling
-                            $imagePath = "../../assets/images/default-product.jpg";
+                            // Fixed image path handling
+                            $imagePath = '';
                             if (!empty($product['image'])) {
-                                if (substr($product['image'], 0, 6) === '../../') {
-                                    // Path already has the correct prefix, use as is
-                                    $imagePath = $product['image'];
-                                } else if (strpos($product['image'], '/') !== false) {
-                                    // Path contains directory structure but not the prefix
-                                    $imagePath = "../../" . $product['image'];
+                                // Check if image is a full path or just a filename
+                                if (strpos($product['image'], '/') !== false) {
+                                    // Path already has structure like 'assets/uploads/products/image.jpg'
+                                    // Just ensure it has the ../../ prefix
+                                    $imagePath = strpos($product['image'], '../../') === 0 ? 
+                                        $product['image'] : 
+                                        "../../" + $product['image'];  // FIXED: Use . for concatenation
                                 } else {
-                                    // Just a filename, add full path
-                                    $imagePath = "../../assets/uploads/products/" . $product['image'];
+                                    // Just a filename, append full path
+                                    $imagePath = "../../assets/uploads/products/" + $product['image'];  // FIXED
                                 }
+                                
+                                // Check if file exists
+                                $imageFilePath = $_SERVER['DOCUMENT_ROOT'] . '/capstone/WASTE-WISE-CAPSTONE/' . 
+                                    str_replace('../../', '', $imagePath);  // FIXED
+                                
+                                if (!file_exists($imageFilePath)) {
+                                    // Use Company Logo.jpg (which exists in your assets folder)
+                                    $imagePath = "../../assets/images/Company Logo.jpg";
+                                }
+                            } else {
+                                // Use an existing image from your assets folder
+                                $imagePath = "../../assets/images/Company Logo.jpg";
                             }
                             ?>
                             <img src="<?= htmlspecialchars($imagePath) ?>" 
                                  alt="<?= htmlspecialchars($product['name']) ?>"
                                  class="w-full h-full object-cover rounded"
-                                 onerror="this.src='../../assets/images/default-product.jpg'">
+                                 onerror="this.onerror=null; this.src='../../assets/images/Company Logo.jpg';">
                             <!-- Stock badge -->
                             <div class="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold
                                 <?php if($product['total_stock'] <= 0): ?>

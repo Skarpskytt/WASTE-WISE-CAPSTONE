@@ -26,10 +26,20 @@ if (isset($_POST['archive_product'])) {
         ");
         $archiveStmt->execute([$productId, $_SESSION['branch_id']]);
         
-        $archiveSuccess = "Product archived successfully!";
+        $archiveSuccess = "Product batch archived successfully! Other batches of the same product remain active.";
     } catch (PDOException $e) {
         $archiveError = "Error archiving product: " . $e->getMessage();
     }
+    
+    // After archiving, recalculate statistics
+    $totalActiveStmt = $pdo->prepare("
+        SELECT COUNT(DISTINCT name) FROM products 
+        WHERE branch_id = ? AND expiry_date > CURRENT_DATE 
+        AND stock_quantity > 0
+        AND (is_archived = 0 OR is_archived IS NULL)
+    ");
+    $totalActiveStmt->execute([$branchId]);
+    $totalActiveProducts = $totalActiveStmt->fetchColumn();
 }
 
 // Handle edit/update action
@@ -429,9 +439,9 @@ if (!empty($products) && $sort_method == 'fefo') {
 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
     <!-- Total Active Products Card - Renamed to be more accurate -->
     <?php
-    // Count all active products (not expired and with stock)
+    // Count UNIQUE active products (not expired and with stock)
     $totalActiveStmt = $pdo->prepare("
-        SELECT COUNT(*) FROM products 
+        SELECT COUNT(DISTINCT name) FROM products 
         WHERE branch_id = ? AND expiry_date > CURRENT_DATE AND stock_quantity > 0
     ");
     $totalActiveStmt->execute([$branchId]);
@@ -445,7 +455,7 @@ if (!empty($products) && $sort_method == 'fefo') {
                 </svg>
             </div>
             <div>
-                <p class="text-sm text-gray-500">Active Products</p>
+                <p class="text-sm text-gray-500">Unique Products</p>
                 <p class="text-xl font-bold text-gray-800"><?= $totalActiveProducts ?></p>
             </div>
         </div>
@@ -737,6 +747,9 @@ else if ($sort_method == 'fefo' && $product['expiry_date'] === $earliestExpiryDa
     <span class="px-2 py-1 rounded text-xs <?= $expiryClass ?>">
         <?= $expiryStatus ?>
     </span>
+    <?php if ($product['is_archived']): ?>
+        <span class="badge badge-warning">Archived</span>
+    <?php endif; ?>
 </td>
 <!-- Then replace your Use Order table cell with this code -->
 <td>
@@ -993,8 +1006,8 @@ else if ($sort_method == 'fefo' && $product['expiry_date'] === $earliestExpiryDa
     <!-- Archive Confirmation Modal -->
 <dialog id="archive_modal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg text-amber-600">Archive Product</h3>
-        <p class="py-4">Are you sure you want to archive this product? Archived products won't appear in active inventory.</p>
+        <h3 class="font-bold text-lg text-amber-600">Archive Product Batch</h3>
+        <p class="py-4">Are you sure you want to archive this specific batch? This will only archive this batch, not other batches of the same product.</p>
         <form method="POST">
             <input type="hidden" id="archive_product_id" name="product_id">
             <div class="modal-action">

@@ -30,88 +30,113 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get form data
     $fname = trim($_POST['fname'] ?? '');
     $lname = trim($_POST['lname'] ?? '');
-    $email = trim($_POST['email'] ?? '');
+    $email = $user['email']; // Always use existing email, ignore form input
     $currentPassword = $_POST['current_password'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     
-    // Basic validation
-    if (empty($fname) || empty($lname) || empty($email)) {
-        $errorMsg = "Name and email fields are required";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errorMsg = "Invalid email format";
-    } else {
-        // Check if email is already in use by another user
-        $checkEmailStmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
-        $checkEmailStmt->execute([$email, $userId]);
-        if ($checkEmailStmt->rowCount() > 0) {
-            $errorMsg = "Email is already in use by another account";
-        } else {
-            try {
-                // Start transaction
-                $pdo->beginTransaction();
-                
-                // Check if user wants to change password
-                if (!empty($currentPassword)) {
-                    // Verify current password
-                    if (!password_verify($currentPassword, $user['password'])) {
-                        throw new Exception("Current password is incorrect");
-                    }
-                    
-                    // Validate new password
-                    if (empty($newPassword)) {
-                        throw new Exception("New password cannot be empty");
-                    }
-                    
-                    if ($newPassword !== $confirmPassword) {
-                        throw new Exception("New passwords do not match");
-                    }
-                    
-                    // Password strength check
-                    if (strlen($newPassword) < 8) {
-                        throw new Exception("Password must be at least 8 characters long");
-                    }
-                    
-                    // Hash the new password
-                    $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
-                    
-                    // Update user data including password
-                    $updateStmt = $pdo->prepare("
-                        UPDATE users 
-                        SET fname = ?, lname = ?, email = ?, password = ?
-                        WHERE id = ?
-                    ");
-                    $updateStmt->execute([$fname, $lname, $email, $hashedPassword, $userId]);
-                } else {
-                    // Update user data without changing password
-                    $updateStmt = $pdo->prepare("
-                        UPDATE users 
-                        SET fname = ?, lname = ?, email = ?
-                        WHERE id = ?
-                    ");
-                    $updateStmt->execute([$fname, $lname, $email, $userId]);
+    // Handle profile image upload
+    $profileImage = $user['profile_image'] ?? ''; // Keep existing image by default
+    
+    if (!empty($_FILES['profile_image']['name'])) {
+        // A new image was uploaded
+        $uploadDir = '../../assets/uploads/profile/';
+        
+        // Create directory if it doesn't exist
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        $fileExtension = pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION);
+        $fileName = 'profile_' . $userId . '_' . time() . '.' . $fileExtension;
+        $targetFile = $uploadDir . $fileName;
+        
+        // Check if it's a valid image
+        $validTypes = ['jpg', 'jpeg', 'png', 'gif'];
+        if (in_array(strtolower($fileExtension), $validTypes)) {
+            if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $targetFile)) {
+                // Delete old file if exists
+                if (!empty($user['profile_image']) && file_exists($uploadDir . $user['profile_image'])) {
+                    unlink($uploadDir . $user['profile_image']);
                 }
                 
-                // Commit transaction
-                $pdo->commit();
-                
-                // Update session data
-                $_SESSION['fname'] = $fname;
-                $_SESSION['lname'] = $lname;
-                $_SESSION['email'] = $email;
-                
-                $successMsg = "Profile updated successfully!";
-                
-                // Refresh user data
-                $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-                $stmt->execute([$userId]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-            } catch (Exception $e) {
-                // Rollback transaction on error
-                $pdo->rollBack();
-                $errorMsg = $e->getMessage();
+                $profileImage = $fileName;
+            } else {
+                $errorMsg = "Failed to upload image. Please try again.";
             }
+        } else {
+            $errorMsg = "Invalid file type. Please use JPG, PNG or GIF images.";
+        }
+    }
+    
+    // Basic validation
+    if (empty($fname) || empty($lname)) {
+        $errorMsg = "Name fields are required";
+    } else if (empty($errorMsg)) { // Only proceed if no error already
+        try {
+            // Start transaction
+            $pdo->beginTransaction();
+            
+            // Check if user wants to change password
+            if (!empty($currentPassword)) {
+                // Verify current password
+                if (!password_verify($currentPassword, $user['password'])) {
+                    throw new Exception("Current password is incorrect");
+                }
+                
+                // Validate new password
+                if (empty($newPassword)) {
+                    throw new Exception("New password cannot be empty");
+                }
+                
+                if ($newPassword !== $confirmPassword) {
+                    throw new Exception("New passwords do not match");
+                }
+                
+                // Password strength check
+                if (strlen($newPassword) < 8) {
+                    throw new Exception("Password must be at least 8 characters long");
+                }
+                
+                // Hash the new password
+                $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+                
+                // Update user data including password and profile image
+                $updateStmt = $pdo->prepare("
+                    UPDATE users 
+                    SET fname = ?, lname = ?, password = ?, profile_image = ?
+                    WHERE id = ?
+                ");
+                $updateStmt->execute([$fname, $lname, $hashedPassword, $profileImage, $userId]);
+            } else {
+                // Update user data without changing password but including profile image
+                $updateStmt = $pdo->prepare("
+                    UPDATE users 
+                    SET fname = ?, lname = ?, profile_image = ?
+                    WHERE id = ?
+                ");
+                $updateStmt->execute([$fname, $lname, $profileImage, $userId]);
+            }
+            
+            // Commit transaction
+            $pdo->commit();
+            
+            // Update session data
+            $_SESSION['fname'] = $fname;
+            $_SESSION['lname'] = $lname;
+            $_SESSION['profile_image'] = $profileImage; // Add this line for profile image in session
+            
+            $successMsg = "Profile updated successfully!";
+            
+            // Refresh user data
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+        } catch (Exception $e) {
+            // Rollback transaction on error
+            $pdo->rollBack();
+            $errorMsg = $e->getMessage();
         }
     }
 }
@@ -167,6 +192,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Toggle icon
         $(this).find('svg').toggleClass('hidden');
     });
+
+    // Add this to the existing script section
+    $('#profile_image').on('change', function(e) {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('#profile-preview').attr('src', e.target.result);
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    });
 });
     function markTaskDone(button) {
       button.parentElement.style.textDecoration = 'line-through';
@@ -199,7 +235,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
         <h2 class="text-xl font-semibold mb-4 text-gray-800">Personal Information</h2>
         
-        <form method="POST" action="">
+        <form method="POST" action="" enctype="multipart/form-data">
+            <div class="mb-6 flex flex-col items-center">
+                <div class="relative mb-4">
+                    <div class="w-32 h-32 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg">
+                        <img id="profile-preview" src="<?= !empty($user['profile_image']) ? '../../assets/uploads/profile/' . htmlspecialchars($user['profile_image']) : '../../assets/images/default-avatar.png' ?>" 
+                            alt="Profile Picture" class="w-full h-full object-cover">
+                    </div>
+                    <label for="profile_image" class="absolute bottom-0 right-0 bg-primarycol hover:bg-fourth text-white rounded-full p-2 cursor-pointer shadow-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </label>
+                </div>
+                <input type="file" id="profile_image" name="profile_image" class="hidden" accept="image/jpeg, image/png, image/gif">
+                <p class="text-sm text-gray-500">Click the camera icon to change your profile picture</p>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                     <label for="fname" class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
@@ -216,8 +268,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <div class="mb-6">
                 <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                <input type="email" name="email" id="email" value="<?= htmlspecialchars($user['email']) ?>" required
-                    class="w-full border-gray-300 rounded-md shadow-sm focus:ring-primarycol focus:border-primarycol border p-2">
+                <div class="flex">
+                    <input type="email" id="email" value="<?= htmlspecialchars($user['email']) ?>" readonly
+                        class="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm text-gray-600 border p-2 cursor-not-allowed">
+                    <div class="tooltip ml-2" data-tip="Email address cannot be changed">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 mt-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Contact an administrator if you need to change your email address</p>
+                
+                <!-- Hidden input to preserve the original email value -->
+                <input type="hidden" name="email" value="<?= htmlspecialchars($user['email']) ?>">
             </div>
             
             <div class="mb-6">

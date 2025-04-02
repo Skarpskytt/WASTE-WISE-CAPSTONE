@@ -28,6 +28,7 @@ try {
         WHERE p.branch_id = ? 
         AND p.expiry_date >= CURRENT_DATE()
         AND p.stock_quantity > 0
+        AND (p.is_archived = 0 OR p.is_archived IS NULL)  /* Add this line to exclude archived products */
         ORDER BY p.expiry_date ASC, p.name ASC
     ");
     $prodStmt->execute([$branchId]);
