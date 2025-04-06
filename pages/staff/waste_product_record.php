@@ -42,7 +42,6 @@ if (isset($_POST['update_waste'])) {
             SET waste_quantity = ?, 
                 waste_date = ?,
                 waste_reason = ?,
-                production_stage = ?,
                 disposal_method = ?,
                 notes = ?,
                 waste_value = ?
@@ -53,7 +52,6 @@ if (isset($_POST['update_waste'])) {
             $wasteQuantity,
             date('Y-m-d H:i:s', strtotime($wasteDate)),
             $wasteReason,
-            $productionStage,
             $disposalMethod,
             $notes,
             $wasteValue,
@@ -82,7 +80,7 @@ $offset = ($page - 1) * $itemsPerPage;
 $countSql = "
     SELECT COUNT(*) 
     FROM product_waste w
-    JOIN products p ON w.product_id = p.id
+    JOIN product_info p ON w.product_id = p.id
     WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "  /* Add this condition */
 ";
 
@@ -116,15 +114,20 @@ try {
     $error = "Error calculating pagination: " . $e->getMessage();
 }
 
-// Build the SQL query to get waste records - updated to use staff_id instead of user_id
+// Enhance the query to include stock batch information
 $sql = "
-    SELECT w.*, p.name as product_name, p.category as product_category, 
-           p.price_per_unit, p.image as product_image,
+    SELECT w.*, 
+           p.name as product_name, 
+           p.category as product_category, 
+           p.price_per_unit, 
+           p.image as product_image,
+           ps.batch_number,
            CONCAT(u.fname, ' ', u.lname) as staff_name
     FROM product_waste w
-    JOIN products p ON w.product_id = p.id
+    JOIN product_info p ON w.product_id = p.id
+    LEFT JOIN product_stock ps ON w.stock_id = ps.id
     JOIN users u ON w.staff_id = u.id
-    WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "  /* Add this condition */
+    WHERE w.branch_id = ? " . ($show_archived ? "" : "AND w.archived = 0") . "
 ";
 
 $params = [$branchId];
@@ -197,7 +200,6 @@ try {
                 const wasteQuantity = $(this).data('waste-quantity');
                 const wasteDate = $(this).data('waste-date');
                 const wasteReason = $(this).data('waste-reason');
-                const productionStage = $(this).data('production-stage');
                 const disposalMethod = $(this).data('disposal-method');
                 const notes = $(this).data('notes');
                 const productValue = $(this).data('product-value');
@@ -207,7 +209,6 @@ try {
                 $('#edit_waste_quantity').val(wasteQuantity);
                 $('#edit_waste_date').val(wasteDate.split(' ')[0]); // Get only the date part
                 $('#edit_waste_reason').val(wasteReason);
-                $('#edit_production_stage').val(productionStage);
                 $('#edit_disposal_method').val(disposalMethod);
                 $('#edit_notes').val(notes);
                 $('#edit_product_value').val(productValue);
@@ -350,9 +351,9 @@ try {
                                 <th>Category</th>
                                 <th>Record Date</th>
                                 <th>Excess</th>
-                                <th>Production Stage</th>
                                 <th>Reason</th>
                                 <th>Disposal Method</th>
+                                <th>Batch #</th>
                                 <th>Staff</th>
                                 <th class="text-center">Action</th>
                             </tr>
@@ -371,9 +372,9 @@ try {
                                     echo "<td>" . htmlspecialchars($record['product_category']) . "</td>";
                                     echo "<td>" . htmlspecialchars($formattedDate) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['waste_quantity']) . "</td>";
-                                    echo "<td>" . htmlspecialchars(ucfirst($record['production_stage'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['waste_reason'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['disposal_method'])) . "</td>";
+                                    echo "<td>" . (isset($record['batch_number']) ? htmlspecialchars($record['batch_number']) : 'N/A') . "</td>";
                                     echo "<td>" . htmlspecialchars($record['staff_name']) . "</td>";
                                     echo "<td class='p-2'>
                                             <div class='flex justify-center space-x-2'>
@@ -383,7 +384,6 @@ try {
                                                     data-waste-quantity='" . $record['waste_quantity'] . "'
                                                     data-waste-date='" . $record['waste_date'] . "'
                                                     data-waste-reason='" . $record['waste_reason'] . "'
-                                                    data-production-stage='" . $record['production_stage'] . "'
                                                     data-disposal-method='" . $record['disposal_method'] . "'
                                                     data-notes='" . htmlspecialchars($record['notes']) . "'
                                                     data-product-value='" . ($record['waste_value'] / $record['waste_quantity']) . "'>
@@ -472,24 +472,6 @@ try {
                             name="waste_date"
                             required
                             class="input input-bordered w-full">
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Production Stage
-                        </label>
-                        <select 
-                            id="edit_production_stage"
-                            name="production_stage"
-                            required
-                            class="select select-bordered w-full">
-                            <option value="">Select Stage</option>
-                            <option value="Mixing">Mixing</option>
-                            <option value="Baking">Baking</option>
-                            <option value="Packaging">Packaging</option>
-                            <option value="Storage">Storage</option>
-                            <option value="Sales">Sales</option>
-                        </select>
                     </div>
                     
                     <div>

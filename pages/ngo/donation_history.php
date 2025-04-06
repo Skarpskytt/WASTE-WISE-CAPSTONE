@@ -63,7 +63,7 @@ $stmt = $pdo->prepare("
     FROM 
         ngo_donation_requests ndr
     JOIN 
-        products p ON ndr.product_id = p.id
+        product_info p ON ndr.product_id = p.id
     JOIN 
         branches b ON ndr.branch_id = b.id
     WHERE 
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_receipt'])) {
                 b.address as branch_address,
                 CONCAT(u.fname, ' ', u.lname) as ngo_name
             FROM ngo_donation_requests ndr
-            JOIN products p ON ndr.product_id = p.id
+            JOIN product_info p ON ndr.product_id = p.id
             JOIN branches b ON ndr.branch_id = b.id
             JOIN users u ON ndr.ngo_id = u.id
             WHERE ndr.id = ?
@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
                 ndr.branch_id, ndr.donation_request_id, 
                 p.name as product_name, b.name as branch_name
             FROM ngo_donation_requests ndr
-            JOIN products p ON ndr.product_id = p.id
+            JOIN product_info p ON ndr.product_id = p.id
             JOIN branches b ON ndr.branch_id = b.id
             WHERE ndr.id = ? AND ndr.ngo_id = ? AND ndr.status = 'approved'
         ");

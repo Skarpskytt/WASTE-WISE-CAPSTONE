@@ -20,16 +20,26 @@ $errorMessage = '';
 try {
     $prodStmt = $pdo->prepare("
         SELECT 
-            p.*,
-            p.stock_quantity as available_quantity,
-            DATEDIFF(p.expiry_date, CURRENT_DATE()) AS days_until_expiry,
-            p.created_at AS stock_date
-        FROM products p
-        WHERE p.branch_id = ? 
-        AND p.expiry_date >= CURRENT_DATE()
-        AND p.stock_quantity > 0
-        AND (p.is_archived = 0 OR p.is_archived IS NULL)  /* Add this line to exclude archived products */
-        ORDER BY p.expiry_date ASC, p.name ASC
+            pi.id AS product_id,
+            ps.id AS stock_id,
+            pi.name,
+            pi.category,
+            pi.price_per_unit,
+            pi.image,
+            ps.quantity AS available_quantity,
+            ps.batch_number,
+            ps.production_date,
+            ps.expiry_date,
+            ps.best_before,
+            DATEDIFF(ps.expiry_date, CURRENT_DATE()) AS days_until_expiry,
+            ps.created_at AS stock_date
+        FROM product_info pi
+        JOIN product_stock ps ON pi.id = ps.product_info_id
+        WHERE pi.branch_id = ? 
+        AND ps.expiry_date >= CURRENT_DATE()
+        AND ps.quantity > 0
+        AND (ps.is_archived = 0 OR ps.is_archived IS NULL)
+        ORDER BY ps.expiry_date ASC, pi.name ASC
     ");
     $prodStmt->execute([$branchId]);
     $products = $prodStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -58,6 +68,7 @@ try {
 if (isset($_POST['submitwaste'])) {
     // Extract form data with better validation
     $productId = isset($_POST['product_id']) && !empty($_POST['product_id']) ? $_POST['product_id'] : null;
+    $stockId = isset($_POST['stock_id']) && !empty($_POST['stock_id']) ? $_POST['stock_id'] : null; // Add this line
     $wasteDate = isset($_POST['waste_date']) && !empty($_POST['waste_date']) ? $_POST['waste_date'] : null;
     $wasteQuantity = isset($_POST['waste_quantity']) && is_numeric($_POST['waste_quantity']) && $_POST['waste_quantity'] > 0 ? (float)$_POST['waste_quantity'] : null;
     $wasteReason = isset($_POST['waste_reason']) && !empty($_POST['waste_reason']) ? $_POST['waste_reason'] : null;
@@ -73,16 +84,17 @@ if (isset($_POST['submitwaste'])) {
     // Validate required fields
     $errors = [];
     if (!$productId) $errors[] = "Product must be selected";
+    if (!$stockId) $errors[] = "Stock batch must be identified"; // Add this line
     if (!$wasteDate) $errors[] = "Excess date is required";
     if (!$wasteQuantity) $errors[] = "Excess quantity is required";
     if (!$wasteReason) $errors[] = "Waste reason is required";
     if (!$disposalMethod) $errors[] = "Disposal method is required";
-    if (!$productionStage) $errors[] = "Production stage is required";
     
     // Debug information - add this temporarily
     if (!empty($errors)) {
         $errorMessage = "Please fill in all required fields: " . implode(", ", $errors);
         $errorMessage .= "<br>Debug: productId=" . (isset($_POST['product_id']) ? $_POST['product_id'] : 'not set') . 
+                        ", stockId=" . (isset($_POST['stock_id']) ? $_POST['stock_id'] : 'not set') . // Add this line
                         ", wasteDate=" . (isset($_POST['waste_date']) ? $_POST['waste_date'] : 'not set') .
                         ", wasteQuantity=" . (isset($_POST['waste_quantity']) ? $_POST['waste_quantity'] : 'not set') .
                         ", wasteReason=" . (isset($_POST['waste_reason']) ? $_POST['waste_reason'] : 'not set') .
@@ -95,9 +107,9 @@ if (isset($_POST['submitwaste'])) {
             // 1. Insert waste record
             $stmt = $pdo->prepare("
                 INSERT INTO product_waste (
-                    product_id, staff_id, waste_date, waste_quantity, 
+                    product_id, stock_id, staff_id, waste_date, waste_quantity, 
                     waste_value, waste_reason, disposal_method, notes, 
-                    branch_id, production_stage
+                    branch_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
@@ -105,19 +117,19 @@ if (isset($_POST['submitwaste'])) {
             $formattedDate = date('Y-m-d H:i:s', strtotime($wasteDate));
             // Then use $formattedDate in your SQL insert statement
             $stmt->execute([
-                $productId, $userId, $formattedDate, $wasteQuantity, 
+                $productId, $stockId, $userId, $formattedDate, $wasteQuantity, 
                 $wasteValue, $wasteReason, $disposalMethod, $notes, 
-                $branchId, $productionStage
+                $branchId
             ]);
             
             // 2. Update product stock quantity
             $updateStmt = $pdo->prepare("
-                UPDATE products 
-                SET stock_quantity = stock_quantity - ? 
+                UPDATE product_stock 
+                SET quantity = quantity - ? 
                 WHERE id = ? AND branch_id = ?
             ");
             
-            $updateStmt->execute([$wasteQuantity, $productId, $branchId]);
+            $updateStmt->execute([$wasteQuantity, $stockId, $branchId]);
             
             $pdo->commit();
             
@@ -400,7 +412,8 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 
                 <div class="grid grid-cols-1 gap-6">
                     <?php foreach ($products as $product):
-                        $productId = $product['id'];
+                        $productId = $product['product_id'];
+                        $stockId = $product['stock_id'];
                         $productName = $product['name'] ?? 'N/A';
                         $productCategory = $product['category'] ?? 'N/A';
                         $productPrice = $product['price_per_unit'] ?? 0;
@@ -421,25 +434,29 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 
                                 <?php if(!empty($productImage)): ?>
                                     <?php
-                                    $imagePath = $productImage;
+                                    // Standardized image path handling
+                                    $imagePath = "../../assets/images/default-product.jpg";
                                     
-                                    if (strpos($imagePath, 'C:') === 0) {
-                                        $filename = basename($imagePath);
-                                        $imagePath = './uploads/products/' . $filename;
-                                    } else if (strpos($imagePath, './uploads/') === 0) {
-                                        $imagePath = $productImage;
-                                    } else if (strpos($imagePath, 'uploads/') === 0) {
-                                        $imagePath = './' . $imagePath;
-                                    } else if (strpos($imagePath, '../../assets/') === 0) {
-                                        $imagePath = $productImage;
-                                    } else {
-                                        $filename = basename($imagePath);
-                                        $imagePath = './uploads/products/' . $filename;
+                                    if (!empty($productImage)) {
+                                        if (strpos($productImage, '/') !== false) {
+                                            // Path already has structure
+                                            if (strpos($productImage, '../../') === 0) {
+                                                $imagePath = $productImage;
+                                            } else if (strpos($productImage, 'assets/') === 0) {
+                                                $imagePath = '../../' . $productImage;
+                                            } else {
+                                                $imagePath = $productImage;
+                                            }
+                                        } else {
+                                            // Just a filename
+                                            $imagePath = "../../assets/uploads/products/" . $productImage;
+                                        }
                                     }
                                     ?>
                                     <img src="<?= htmlspecialchars($imagePath) ?>"
                                          alt="<?= htmlspecialchars($productName) ?>"
-                                         class="h-32 w-full object-cover rounded-md mb-3">
+                                         class="h-32 w-full object-cover rounded-md mb-3"
+                                         onerror="this.src='../../assets/images/default-product.jpg'">
                                 <?php else: ?>
                                     <img src="../../assets/images/default-product.jpg"
                                          alt="<?= htmlspecialchars($productName) ?>"
@@ -456,7 +473,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <h3 class="font-medium text-blue-800 text-sm">Stock Information</h3>
                                     <div class="grid grid-cols-2 gap-1 mt-1 text-xs text-gray-600">
                                         <div class="font-medium text-blue-700">Available Quantity:</div>
-                                        <div class="text-right font-medium text-blue-700"><?= htmlspecialchars($product['stock_quantity']) ?> units</div>
+                                        <div class="text-right font-medium text-blue-700"><?= htmlspecialchars($product['available_quantity']) ?> units</div>
                                         
                                         <?php if(!empty($product['batch_number'])): ?>
                                         <div class="font-medium text-blue-700">Batch Number:</div>
@@ -507,9 +524,10 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                 <h3 class="font-bold text-primarycol mb-3">Record Excess</h3>
                                 
                                 <form method="POST" class="waste-form">
-                                    <input type="hidden" name="product_id" value="<?= htmlspecialchars($productId) ?>">
-                                    <input type="hidden" name="product_value" value="<?= htmlspecialchars($productPrice) ?>">
-                                    <input type="hidden" name="available_stock" value="<?= htmlspecialchars($product['stock_quantity']) ?>">
+                                    <input type="hidden" name="product_id" value="<?= htmlspecialchars($product['product_id']) ?>">
+                                    <input type="hidden" name="stock_id" value="<?= htmlspecialchars($product['stock_id']) ?>">
+                                    <input type="hidden" name="product_value" value="<?= htmlspecialchars($product['price_per_unit']) ?>">
+                                    <input type="hidden" name="available_stock" value="<?= htmlspecialchars($product['available_quantity']) ?>">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <!-- Basic waste info -->
@@ -517,15 +535,26 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                                 Excess Quantity
                                             </label>
-                                            <input type="number"
-                                                name="waste_quantity"
-                                                min="0.01"
-                                                max="<?= htmlspecialchars($product['stock_quantity']) ?>"
-                                                step="any"
-                                                required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                                            <p class="text-xs text-gray-500 mt-1">
-                                                Available: <?= htmlspecialchars($product['stock_quantity']) ?> units
+                                            <div class="relative">
+                                                <input type="number"
+                                                    name="waste_quantity"
+                                                    min="0.01"
+                                                    max="<?= htmlspecialchars($product['available_quantity']) ?>"
+                                                    step="any"
+                                                    required
+                                                    class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                                <button type="button" 
+                                                    class="absolute right-2 top-2 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded"
+                                                    onclick="this.closest('div').querySelector('input[name=waste_quantity]').value = '<?= htmlspecialchars($product['available_quantity']) ?>'">
+                                                    Max
+                                                </button>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1 flex justify-between">
+                                                <span>Available: <?= htmlspecialchars($product['available_quantity']) ?> units</span>
+                                                <a href="#" class="text-primarycol hover:underline" 
+                                                    onclick="event.preventDefault(); this.closest('div').querySelector('input[name=waste_quantity]').value = '<?= htmlspecialchars($product['available_quantity']) ?>'">
+                                                    Use all available
+                                                </a>
                                             </p>
                                         </div>
                                         
@@ -538,22 +567,6 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                                 name="waste_date" 
                                                 value="<?php echo date('Y-m-d'); ?>" 
                                                 class="input input-bordered w-full">
-                                        </div>
-                                        
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                Production Stage
-                                            </label>
-                                            <select name="production_stage"
-                                                required
-                                                class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
-                                                <option value="">Select Stage</option>
-                                                <option value="mixing">Mixing</option>
-                                                <option value="baking">Baking</option>
-                                                <option value="packaging">Packaging</option>
-                                                <option value="storage">Storage</option>
-                                                <option value="sales">Sales</option>
-                                            </select>
                                         </div>
                                         
                                         <div>

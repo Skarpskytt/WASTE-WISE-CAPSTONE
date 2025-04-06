@@ -6,6 +6,25 @@ checkAuth(['staff']);
 
 $pdo = getPDO();
 
+/**
+ * Safely format a date to prevent 1970 issues
+ * @param string $dateString The date string to format
+ * @param string $format The desired output format
+ * @return string Formatted date or error message
+ */
+function safeFormatDate($dateString, $format = 'F j, Y') {
+    if (empty($dateString) || $dateString === '0000-00-00') {
+        return 'Not set';
+    }
+    
+    try {
+        $date = new DateTime($dateString);
+        return $date->format($format);
+    } catch (Exception $e) {
+        return 'Invalid date';
+    }
+}
+
 // Initialize variables
 $message = '';
 $messageType = '';
@@ -18,12 +37,24 @@ $offset = ($page - 1) * $itemsPerPage;
 
 // Fetch active products for the branch
 $stmt = $pdo->prepare("
-    SELECT * 
-    FROM products 
-    WHERE branch_id = ? 
-    AND expiry_date > CURRENT_DATE
-    AND stock_quantity > 0
-    ORDER BY name ASC
+    SELECT 
+        pi.id, 
+        pi.name, 
+        pi.category, 
+        pi.price_per_unit, 
+        pi.image,
+        GROUP_CONCAT(ps.id) AS stock_ids,
+        SUM(ps.quantity) AS stock_quantity,
+        MIN(ps.expiry_date) AS earliest_expiry_date,
+        GROUP_CONCAT(ps.batch_number) AS batch_numbers
+    FROM product_info pi
+    JOIN product_stock ps ON pi.id = ps.product_info_id
+    WHERE pi.branch_id = ? 
+    AND ps.expiry_date > CURRENT_DATE
+    AND ps.quantity > 0
+    AND (ps.is_archived = 0 OR ps.is_archived IS NULL)
+    GROUP BY pi.id, pi.name, pi.category, pi.price_per_unit, pi.image
+    ORDER BY pi.name ASC
 ");
 $stmt->execute([$_SESSION['branch_id']]);
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -44,7 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_sales']) && !
         
         // Before processing, check if there's at least one valid entry
         $validSalesExist = false;
-        foreach ($productSales as $productId => $quantity) {
+        foreach ($productSales as $productId => $data) {
+            $quantity = $data['quantity'] ?? 0;
             if (!empty($quantity) && $quantity > 0) {
                 $validSalesExist = true;
                 break;
@@ -56,82 +88,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_sales']) && !
         }
         
         // Insert each product sale
-        foreach ($productSales as $productId => $quantity) {
+        foreach ($productSales as $productId => $data) {
+            $quantity = $data['quantity'] ?? 0;
+            $stockIds = isset($data['stock_ids']) ? explode(',', $data['stock_ids']) : [];
+            
             // Only process if quantity is greater than 0
-            if (empty($quantity) || $quantity <= 0) {
+            if (empty($quantity) || $quantity <= 0 || empty($stockIds)) {
                 continue;
             }
             
-            // Check if product exists, belongs to the branch, and has enough quantity
-            $productStmt = $pdo->prepare("
-                SELECT id, stock_quantity 
-                FROM products 
-                WHERE id = ? AND branch_id = ?
+            // Get stock information for each batch of this product
+            $stockQuery = $pdo->prepare("
+                SELECT ps.id, ps.quantity
+                FROM product_stock ps
+                WHERE ps.id IN (" . implode(',', array_fill(0, count($stockIds), '?')) . ")
+                AND ps.quantity > 0
+                ORDER BY ps.expiry_date ASC, ps.production_date ASC
             ");
-            $productStmt->execute([$productId, $_SESSION['branch_id']]);
-            $product = $productStmt->fetch(PDO::FETCH_ASSOC);
+            $stockQuery->execute($stockIds);
+            $stocks = $stockQuery->fetchAll(PDO::FETCH_ASSOC);
             
-            if (!$product) {
-                throw new Exception("Invalid product selected.");
+            // Check total available quantity
+            $totalAvailable = 0;
+            foreach ($stocks as $stock) {
+                $totalAvailable += $stock['quantity'];
             }
             
-            if ($product['stock_quantity'] < $quantity) {
-                throw new Exception("Not enough stock for one or more products. Please check quantities.");
+            if ($totalAvailable < $quantity) {
+                throw new Exception("Not enough stock for product ID $productId. Available: $totalAvailable, Requested: $quantity");
             }
             
-            // Check if there's already a sales record for this product on this date
-            $existingSalesStmt = $pdo->prepare("
-                SELECT id, quantity_sold 
-                FROM sales 
-                WHERE product_id = ? 
-                AND branch_id = ? 
-                AND sales_date = ? 
-                AND (archived = 0 OR archived IS NULL)
-                LIMIT 1
-            ");
-            $existingSalesStmt->execute([
-                $productId,
-                $_SESSION['branch_id'],
-                $salesDate
-            ]);
-            $existingSales = $existingSalesStmt->fetch(PDO::FETCH_ASSOC);
+            // Distribute the quantity across batches (FIFO approach)
+            $remainingQuantity = $quantity;
+            $salesRecorded = false;
             
-            if ($existingSales) {
-                // Update existing sales record by adding the new quantity
-                $updateStmt = $pdo->prepare("
-                    UPDATE sales 
-                    SET quantity_sold = quantity_sold + ?, 
-                    updated_at = NOW() 
-                    WHERE id = ?
+            foreach ($stocks as $stock) {
+                if ($remainingQuantity <= 0) break;
+                
+                $stockId = $stock['id'];
+                $availableQty = $stock['quantity'];
+                $qtyToDeduct = min($availableQty, $remainingQuantity);
+                
+                // Check if there's already a sales record for this product batch on this date
+                $existingSalesStmt = $pdo->prepare("
+                    SELECT id, quantity_sold 
+                    FROM sales 
+                    WHERE product_id = ? 
+                    AND stock_id = ?
+                    AND branch_id = ? 
+                    AND sales_date = ? 
+                    AND (archived = 0 OR archived IS NULL)
+                    LIMIT 1
                 ");
-                $updateStmt->execute([
-                    $quantity,
-                    $existingSales['id']
-                ]);
-            } else {
-                // Insert new sales record
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO sales (product_id, branch_id, staff_id, quantity_sold, sales_date, created_at)
-                    VALUES (?, ?, ?, ?, ?, NOW())
-                ");
-                $insertStmt->execute([
+                $existingSalesStmt->execute([
                     $productId,
+                    $stockId,
                     $_SESSION['branch_id'],
-                    $_SESSION['user_id'],
-                    $quantity,
                     $salesDate
                 ]);
+                $existingSales = $existingSalesStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($existingSales) {
+                    // Update existing sales record
+                    $updateStmt = $pdo->prepare("
+                        UPDATE sales 
+                        SET quantity_sold = quantity_sold + ?, 
+                        updated_at = NOW() 
+                        WHERE id = ?
+                    ");
+                    $updateStmt->execute([
+                        $qtyToDeduct,
+                        $existingSales['id']
+                    ]);
+                } else {
+                    // Insert new sales record
+                    $insertStmt = $pdo->prepare("
+                        INSERT INTO sales (product_id, stock_id, branch_id, staff_id, quantity_sold, sales_date, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, NOW())
+                    ");
+                    $insertStmt->execute([
+                        $productId,
+                        $stockId,
+                        $_SESSION['branch_id'],
+                        $_SESSION['user_id'],
+                        $qtyToDeduct,
+                        $salesDate
+                    ]);
+                }
+                
+                // Update product quantity in stock
+                $updateStmt = $pdo->prepare("
+                    UPDATE product_stock 
+                    SET quantity = quantity - ? 
+                    WHERE id = ?
+                ");
+                $updateStmt->execute([$qtyToDeduct, $stockId]);
+                
+                $remainingQuantity -= $qtyToDeduct;
+                $salesRecorded = true;
             }
             
-            // Update product quantity in stock
-            $updateStmt = $pdo->prepare("
-                UPDATE products 
-                SET stock_quantity = stock_quantity - ? 
-                WHERE id = ? AND branch_id = ?
-            ");
-            $updateStmt->execute([$quantity, $productId, $_SESSION['branch_id']]);
-            
-            $salesRecorded = true;
+            if ($salesRecorded) {
+                $salesRecorded = true;
+            }
         }
         
         if (!$salesRecorded) {
@@ -172,7 +231,7 @@ if (isset($_POST['update_sales'])) {
         
         // Get current sales record to calculate quantity difference
         $currentSalesStmt = $pdo->prepare("
-            SELECT s.quantity_sold, s.product_id 
+            SELECT s.quantity_sold, s.product_id, s.stock_id
             FROM sales s 
             WHERE s.id = ? AND s.branch_id = ?
         ");
@@ -189,13 +248,14 @@ if (isset($_POST['update_sales'])) {
         // Check if there's enough stock if we're increasing the quantity
         if ($quantityDifference > 0) {
             $stockCheckStmt = $pdo->prepare("
-                SELECT stock_quantity FROM products 
-                WHERE id = ? AND branch_id = ?
+                SELECT quantity 
+                FROM product_stock
+                WHERE id = ?
             ");
-            $stockCheckStmt->execute([$currentSales['product_id'], $_SESSION['branch_id']]);
+            $stockCheckStmt->execute([$currentSales['stock_id']]);
             $stockCheck = $stockCheckStmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($stockCheck['stock_quantity'] < $quantityDifference) {
+            if ($stockCheck['quantity'] < $quantityDifference) {
                 throw new Exception("Not enough stock available to update this sales record.");
             }
         }
@@ -215,14 +275,13 @@ if (isset($_POST['update_sales'])) {
         
         // Update product stock
         $updateStockStmt = $pdo->prepare("
-            UPDATE products 
-            SET stock_quantity = stock_quantity - ?
-            WHERE id = ? AND branch_id = ?
+            UPDATE product_stock 
+            SET quantity = quantity - ?
+            WHERE id = ?
         ");
         $updateStockStmt->execute([
             $quantityDifference,
-            $currentSales['product_id'],
-            $_SESSION['branch_id']
+            $currentSales['stock_id']
         ]);
         
         $pdo->commit();
@@ -283,10 +342,10 @@ $totalPages = ceil($totalSales / $itemsPerPage);
 
 // Update recent sales query with archived filter
 $recentSalesSql = "
-    SELECT s.id, s.product_id, p.name as product_name, s.quantity_sold, 
-           s.sales_date, p.price_per_unit, s.archived
+    SELECT s.id, s.product_id, s.stock_id, pi.name as product_name, s.quantity_sold, 
+           s.sales_date, pi.price_per_unit, s.archived
     FROM sales s
-    JOIN products p ON s.product_id = p.id
+    JOIN product_info pi ON s.product_id = pi.id
     WHERE s.branch_id = ?
 ";
 
@@ -487,7 +546,7 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
                     <?php if ($messageType === 'success'): ?>
                         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <?php else: ?>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <?php endif; ?>
                     <span><?= htmlspecialchars($message) ?></span>
                 </div>
@@ -539,20 +598,38 @@ $recentSales = $recentSalesStmt->fetchAll(PDO::FETCH_ASSOC);
                                                 <td>
                                                     <div class="flex items-center gap-2">
                                                         <?php 
-                                                        $imgPath = !empty($product['image']) ? $product['image'] : '../../assets/images/default-product.jpg';
+                                                        $imgPath = '../../assets/images/default-product.jpg';
+                                                        if (!empty($product['image'])) {
+                                                            if (strpos($product['image'], '/') !== false) {
+                                                                // Path already has structure
+                                                                if (strpos($product['image'], '../../') === 0) {
+                                                                    $imgPath = $product['image'];
+                                                                } else if (strpos($product['image'], 'assets/') === 0) {
+                                                                    $imgPath = '../../' . $product['image'];
+                                                                } else {
+                                                                    $imgPath = $product['image'];
+                                                                }
+                                                            } else {
+                                                                // Just a filename
+                                                                $imgPath = "../../assets/uploads/products/" . $product['image'];
+                                                            }
+                                                        }
                                                         ?>
-                                                        <img src="<?= htmlspecialchars($imgPath) ?>" alt="Product Image" class="h-8 w-8 object-cover rounded" />
+                                                        <img src="<?= htmlspecialchars($imgPath) ?>" alt="Product Image" class="h-8 w-8 object-cover rounded" 
+                                                            onerror="this.src='../../assets/images/default-product.jpg'"/>
                                                         <span><?= htmlspecialchars($product['name']) ?></span>
                                                     </div>
                                                 </td>
                                                 <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
                                                 <td>₱<?= number_format($product['price_per_unit'], 2) ?></td>
                                                 <td>
-                                                    <input type="number" name="sales[<?= $product['id'] ?>]" 
+                                                    <input type="number" name="sales[<?= $product['id'] ?>][quantity]" 
                                                            class="input input-bordered w-24 quantity-input" 
                                                            data-price="<?= $product['price_per_unit'] ?>"
                                                            min="0" max="<?= $product['stock_quantity'] ?>" 
                                                            placeholder="0">
+                                                    <input type="hidden" name="sales[<?= $product['id'] ?>][stock_ids]" 
+                                                           value="<?= $product['stock_ids'] ?>">
                                                 </td>
                                                 <td><span class="row-total">₱0.00</span></td>
                                             </tr>

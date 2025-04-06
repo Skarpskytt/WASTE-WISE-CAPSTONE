@@ -98,7 +98,7 @@ $topCategoriesQuery = $pdo->prepare("
         SUM(dp.received_quantity) as total_quantity
     FROM donated_products dp
     JOIN donation_requests dr ON dp.donation_request_id = dr.id
-    JOIN products p ON dr.product_id = p.id
+    JOIN product_info p ON dr.product_id = p.id
     WHERE dp.ngo_id = ?
     GROUP BY p.category
     ORDER BY total_quantity DESC
@@ -136,7 +136,7 @@ $recentDonationsQuery = $pdo->prepare("
         b.name as branch_name
     FROM donation_requests dr
     LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id AND dp.ngo_id = ?
-    JOIN products p ON dr.product_id = p.id
+    JOIN product_info p ON dr.product_id = p.id
     JOIN branches b ON dr.branch_id = b.id
     WHERE dr.status IN ('pending', 'approved', 'prepared', 'completed')
     ORDER BY dr.request_date DESC

@@ -196,7 +196,7 @@ $topItemsStmt = $pdo->prepare("
     FROM 
         product_waste pw
     JOIN 
-        products p ON pw.product_id = p.id
+        product_info p ON pw.product_id = p.id  
     JOIN
         branches b ON pw.branch_id = b.id
     WHERE 
@@ -254,7 +254,7 @@ $recentStmt = $pdo->prepare("
     FROM 
         product_waste pw
     JOIN 
-        products p ON pw.product_id = p.id
+        product_info p ON pw.product_id = p.id
     JOIN
         branches b ON pw.branch_id = b.id
     WHERE 
@@ -306,7 +306,7 @@ $recentDonationsStmt = $pdo->prepare("
     JOIN 
         donation_requests dr ON dp.donation_request_id = dr.id
     JOIN 
-        products p ON dr.product_id = p.id
+        product_info p ON dr.product_id = p.id
     WHERE 
         dp.received_date BETWEEN ? AND ?
     ORDER BY 

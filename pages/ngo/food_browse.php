@@ -95,12 +95,12 @@ $query = "
         b.address as branch_address,
         CONCAT(u.fname, ' ', u.lname) as staff_name
     FROM product_waste pw
-    JOIN products p ON pw.product_id = p.id
+    JOIN product_info p ON pw.product_id = p.id
     JOIN branches b ON pw.branch_id = b.id
     JOIN users u ON pw.staff_id = u.id
     WHERE 
         pw.disposal_method = 'donation' 
-        AND pw.waste_quantity >= 20
+        AND pw.waste_quantity >= 5
         AND pw.donation_status IN ('pending', 'in-progress')
         AND p.expiry_date > NOW()
         AND NOT EXISTS (
@@ -156,8 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($donationRequestId <= 0) {
             $errors[] = "Invalid donation selection.";
         }
-        if ($quantity < 20) {
-            $errors[] = "Please request at least 20 items.";
+        if ($quantity < 5) {
+            $errors[] = "Please request at least 5 items.";
         }
         if ($quantity > 30) {
             $errors[] = "Maximum request limit is 30 items.";
@@ -195,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 FROM 
                     product_waste pw
                 JOIN 
-                    products p ON pw.product_id = p.id
+                    product_info p ON pw.product_id = p.id
                 JOIN 
                     branches b ON pw.branch_id = b.id
                 WHERE 
@@ -309,7 +309,7 @@ $sql = "SELECT
     p.name as product_name,
     p.category,
     pw.waste_quantity as available_quantity,
-    p.expiry_date,
+    ps.expiry_date,
     b.id as branch_id,
     b.name as branch_name,
     pw.notes,
@@ -317,7 +317,9 @@ $sql = "SELECT
 FROM 
     product_waste pw
 JOIN 
-    products p ON pw.product_id = p.id
+    product_info p ON pw.product_id = p.id
+JOIN 
+    product_stock ps ON pw.stock_id = ps.id
 JOIN 
     branches b ON pw.branch_id = b.id
 JOIN 
@@ -325,7 +327,8 @@ JOIN
 WHERE 
     pw.disposal_method = 'donation'
     AND pw.donation_status IN ('pending', 'in-progress')
-    AND p.expiry_date > NOW()
+    AND ps.expiry_date > NOW()
+    AND pw.waste_quantity >= 5
     AND NOT EXISTS (
         SELECT 1 FROM ngo_donation_requests ndr 
         WHERE ndr.ngo_id = ? 
@@ -347,7 +350,7 @@ if ($quantityFilter > 0) {
 }
 
 if (!empty($dateFilter)) {
-    $sql .= " AND DATE(p.expiry_date) >= ?";
+    $sql .= " AND DATE(ps.expiry_date) >= ?";  // Change p.expiry_date to ps.expiry_date
     $params[] = $dateFilter;
 }
 
@@ -357,7 +360,7 @@ if (!empty($donorFilter)) {
     $params[] = "%$donorFilter%";
 }
 
-$sql .= " ORDER BY p.expiry_date ASC";
+$sql .= " ORDER BY ps.expiry_date ASC";  // Change p.expiry_date to ps.expiry_date
 
 // Execute query
 try {
@@ -370,7 +373,7 @@ try {
 }
 
 // Get unique categories for filter dropdown
-$catSql = "SELECT DISTINCT category FROM products ORDER BY category";
+$catSql = "SELECT DISTINCT category FROM product_info ORDER BY category";
 $catStmt = $pdo->query($catSql);
 $categories = $catStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -437,7 +440,7 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 
         <?php if (isset($_GET['error'])): ?>
             <div class="alert alert-error shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span><?= htmlspecialchars($_GET['error']) ?></span>
             </div>
         <?php endif; ?>
@@ -451,7 +454,7 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 
         <?php if ($errorMessage): ?>
             <div class="alert alert-error shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span><?= htmlspecialchars($errorMessage) ?></span>
             </div>
         <?php endif; ?>
