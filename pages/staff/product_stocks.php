@@ -811,6 +811,12 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                                             <a href="view_stock.php?id=<?= $stock['id'] ?>" class="text-primarycol hover:text-fourth">
                                                 View
                                             </a>
+                                            <?php if ($daysUntilExpiry <= 3 && $daysUntilExpiry >= 0): ?>
+                                                <a href="waste_product_input.php?stock_id=<?= $stock['id'] ?>&action=donate" 
+                                                   class="text-amber-600 hover:text-amber-800 font-medium">
+                                                    Donate
+                                                </a>
+                                            <?php endif; ?>
                                             <?php if ($daysUntilExpiry < 0): ?>
                                             <a href="waste_product_input.php?stock_id=<?= $stock['id'] ?>" class="text-red-600 hover:text-red-800">
                                                 Record as Waste

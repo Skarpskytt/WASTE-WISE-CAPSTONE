@@ -121,10 +121,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Commit transaction
             $pdo->commit();
             
-            // Update session data
+            // Update session data with the complete filename
             $_SESSION['fname'] = $fname;
             $_SESSION['lname'] = $lname;
-            $_SESSION['profile_image'] = $profileImage; // Add this line for profile image in session
+            $_SESSION['profile_image'] = $profileImage; // Ensure this contains only the filename
+            
+            // Force session write
+            session_write_close();
+            session_start();
             
             $successMsg = "Profile updated successfully!";
             
@@ -404,5 +408,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 
+<?php if (!empty($successMsg)): ?>
+<script>
+    // Force parent elements to refresh the navigation image
+    window.onload = function() {
+        // Small delay to ensure session is updated
+        setTimeout(function() {
+            // This will refresh the navigation bar without reloading the entire page
+            const navProfileImg = window.parent.document.querySelector('.avatar img');
+            if (navProfileImg) {
+                // Add a cache-busting parameter
+                const currentSrc = navProfileImg.src.split('?')[0];
+                navProfileImg.src = currentSrc + '?t=' + new Date().getTime();
+            }
+        }, 100);
+    }
+</script>
+<?php endif; ?>
 </body>
 </html>

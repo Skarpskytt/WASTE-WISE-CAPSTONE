@@ -29,6 +29,7 @@ try {
             ps.quantity AS available_quantity,
             ps.batch_number,
             ps.production_date,
+            ps.production_time, 
             ps.expiry_date,
             ps.best_before,
             DATEDIFF(ps.expiry_date, CURRENT_DATE()) AS days_until_expiry,
@@ -65,6 +66,26 @@ try {
     die("Error retrieving data: " . $e->getMessage());
 }
 
+// Add this after the initial MySQL queries, before the if(isset($_POST['submitwaste'])) section
+
+// Check if we're coming from a donation link in product_stocks.php
+$preselectedStockId = isset($_GET['stock_id']) ? intval($_GET['stock_id']) : null;
+$isDonation = isset($_GET['action']) && $_GET['action'] === 'donate';
+
+// If coming from donation link, find the specific product
+$preselectedProduct = null;
+if ($preselectedStockId) {
+    foreach ($products as $key => $product) {
+        if ($product['stock_id'] == $preselectedStockId) {
+            $preselectedProduct = $product;
+            // Move this product to the beginning of the array so it appears first
+            unset($products[$key]);
+            array_unshift($products, $preselectedProduct);
+            break;
+        }
+    }
+}
+
 if (isset($_POST['submitwaste'])) {
     // Extract form data with better validation
     $productId = isset($_POST['product_id']) && !empty($_POST['product_id']) ? $_POST['product_id'] : null;
@@ -81,6 +102,11 @@ if (isset($_POST['submitwaste'])) {
     $costPerUnit = isset($_POST['product_value']) && is_numeric($_POST['product_value']) ? (float)$_POST['product_value'] : 0;
     $wasteValue = $wasteQuantity * $costPerUnit;
     
+    // Add these new variables for donation metadata
+    $donationPriority = ($disposalMethod === 'donation' && isset($_POST['donation_priority'])) ? $_POST['donation_priority'] : 'normal';
+    $autoApproval = ($disposalMethod === 'donation' && isset($_POST['auto_approval'])) ? (int)$_POST['auto_approval'] : 0;
+    $pickupInstructions = ($disposalMethod === 'donation' && isset($_POST['pickup_instructions'])) ? trim($_POST['pickup_instructions']) : '';
+
     // Validate required fields
     $errors = [];
     if (!$productId) $errors[] = "Product must be selected";
@@ -109,17 +135,19 @@ if (isset($_POST['submitwaste'])) {
                 INSERT INTO product_waste (
                     product_id, stock_id, staff_id, waste_date, waste_quantity, 
                     waste_value, waste_reason, disposal_method, notes, 
-                    branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    branch_id, donation_status, donation_priority, auto_approval, pickup_instructions
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             // When executing the INSERT query, format the date properly
             $formattedDate = date('Y-m-d H:i:s', strtotime($wasteDate));
             // Then use $formattedDate in your SQL insert statement
+            $donationStatus = ($disposalMethod === 'donation') ? 'pending' : NULL;
+
             $stmt->execute([
                 $productId, $stockId, $userId, $formattedDate, $wasteQuantity, 
                 $wasteValue, $wasteReason, $disposalMethod, $notes, 
-                $branchId
+                $branchId, $donationStatus, $donationPriority, $autoApproval, $pickupInstructions
             ]);
             
             // 2. Update product stock quantity
@@ -131,6 +159,86 @@ if (isset($_POST['submitwaste'])) {
             
             $updateStmt->execute([$wasteQuantity, $stockId, $branchId]);
             
+            // Create notification for NGOs about new donation
+            if ($disposalMethod === 'donation') {
+                try {
+                    // Get product name for the notification
+                    $productNameStmt = $pdo->prepare("SELECT name FROM product_info WHERE id = ?");
+                    $productNameStmt->execute([$productId]);
+                    $productName = $productNameStmt->fetchColumn();
+                    
+                    // Insert notification
+                    $notifyStmt = $pdo->prepare("
+                        INSERT INTO notifications (
+                            target_role, message, notification_type, link, is_read
+                        ) VALUES (
+                            'ngo', ?, 'new_donation', ?, 0
+                        )
+                    ");
+                    
+                    $message = "New donation available: " . $productName . " (" . $wasteQuantity . " units)";
+                    $link = "/capstone/WASTE-WISE-CAPSTONE/pages/ngo/food_browse.php";
+                    $notifyStmt->execute([$message, $link]);
+                } catch (PDOException $e) {
+                    // Log notification error but don't stop the process
+                    error_log("Failed to create notification: " . $e->getMessage());
+                }
+            }
+
+            // Add this after creating the notification in the database
+
+            // Send email notifications to NGOs about new donations
+            if ($disposalMethod === 'donation') {
+                // Get all active NGOs
+                $ngoStmt = $pdo->prepare("
+                    SELECT u.email, u.fname, u.lname, np.organization_name 
+                    FROM users u 
+                    JOIN ngo_profiles np ON u.id = np.user_id 
+                    WHERE np.status = 'approved'
+                ");
+                $ngoStmt->execute();
+                $ngos = $ngoStmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Get branch details for the email
+                $branchStmt = $pdo->prepare("SELECT name, address FROM branches WHERE id = ?");
+                $branchStmt->execute([$branchId]);
+                $branchDetails = $branchStmt->fetch(PDO::FETCH_ASSOC);
+                
+                foreach ($ngos as $ngo) {
+                    $ngoName = !empty($ngo['organization_name']) ? $ngo['organization_name'] : $ngo['fname'] . ' ' . $ngo['lname'];
+                    $ngoEmail = $ngo['email'];
+                    
+                    // Build email content
+                    $subject = "New Donation Available: $productName";
+                    $message = "
+                        <html>
+                        <head><title>New Donation Available</title></head>
+                        <body>
+                            <h2>New Donation Available</h2>
+                            <p>Dear $ngoName,</p>
+                            <p>A new donation is available for request:</p>
+                            <ul>
+                                <li><strong>Product:</strong> $productName</li>
+                                <li><strong>Quantity:</strong> $wasteQuantity units</li>
+                                <li><strong>Branch:</strong> {$branchDetails['name']}</li>
+                                <li><strong>Location:</strong> {$branchDetails['address']}</li>
+                                <li><strong>Priority:</strong> " . ucfirst($donationPriority) . "</li>
+                            </ul>
+                            <p><a href='http://yourwebsite.com/capstone/WASTE-WISE-CAPSTONE/pages/ngo/food_browse.php'>Click here</a> to browse and request this donation.</p>
+                            <p>Thank you for your partnership in reducing food waste!</p>
+                        </body>
+                        </html>
+                    ";
+                    
+                    // Set email headers for HTML content
+                    $headers = "MIME-Version: 1.0\r\n";
+                    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+                    
+                    // Send the email
+                    mail($ngoEmail, $subject, $message, $headers);
+                }
+            }
+
             $pdo->commit();
             
             // Redirect with success message
@@ -210,6 +318,41 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 }
             });
         });
+
+        // Replace the existing disposal method change event with this:
+
+        // Show/hide donation details based on disposal method
+        document.querySelectorAll('.disposal-method-select').forEach(function(select) {
+            select.addEventListener('change', function() {
+                const form = this.closest('form');
+                const donationDetails = form.querySelector('.donation-details-section');
+                
+                if (this.value === 'donation') {
+                    donationDetails.classList.remove('hidden');
+                    // Rest of your code...
+                } else {
+                    donationDetails.classList.add('hidden');
+                }
+            });
+        });
+
+        // Add this at the bottom of your JavaScript section
+
+        // Debug donation details visibility
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Checking donation details setup...");
+            
+            const disposalSelects = document.querySelectorAll('.disposal-method-select');
+            console.log("Found " + disposalSelects.length + " disposal method selectors");
+            
+            const donationDetails = document.querySelectorAll('#donationDetails');
+            console.log("Found " + donationDetails.length + " donation details sections");
+            
+            // Check for duplicate IDs which could cause problems
+            if (donationDetails.length > 1) {
+                console.warn("Warning: Multiple elements with id='donationDetails' found. IDs should be unique!");
+            }
+        });
     </script>
 
     <style>
@@ -244,7 +387,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
         /* Badge styling */
         .badge {
             display: inline-block;
-            padding: 0.25rem 0.5rem;
+            padding: 25rem 0.5rem;
             border-radius: 0.25rem;
             font-size: 0.75rem;
             font-weight: 600;
@@ -480,6 +623,16 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                         <div class="text-right font-mono text-blue-700"><?= htmlspecialchars($product['batch_number']) ?></div>
                                         <?php endif; ?>
                                         
+                                        <div class="font-medium text-blue-700">Production Date:</div>
+                                        <div class="text-right text-blue-700">
+                                            <?= date('M j, Y', strtotime($product['production_date'])) ?>
+                                            <?php if(!empty($product['production_time'])): ?>
+                                                <span class="block text-xs text-blue-600">
+                                                    <?= date('h:i A', strtotime($product['production_time'])) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        
                                         <div class="font-medium text-blue-700">Expiry Date:</div>
                                         <div class="text-right text-blue-700">
                                             <?= date('M j, Y', strtotime($product['expiry_date'])) ?>
@@ -528,6 +681,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <input type="hidden" name="stock_id" value="<?= htmlspecialchars($product['stock_id']) ?>">
                                     <input type="hidden" name="product_value" value="<?= htmlspecialchars($product['price_per_unit']) ?>">
                                     <input type="hidden" name="available_stock" value="<?= htmlspecialchars($product['available_quantity']) ?>">
+                                    <input type="hidden" data-days-until-expiry="<?= htmlspecialchars($product['days_until_expiry']) ?>" value="<?= htmlspecialchars($product['days_until_expiry']) ?>">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <!-- Basic waste info -->
@@ -643,6 +797,42 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                         </div>
                                     </div>
                                     
+                                    <div class="donation-details hidden col-span-2 bg-green-50 p-3 rounded-md mt-2 donation-details-section">
+                                        <h4 class="font-medium text-green-700 mb-2">Donation Details</h4>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                    Priority Level
+                                                </label>
+                                                <select name="donation_priority" class="w-full border border-gray-300 rounded-md p-2">
+                                                    <option value="normal">Normal</option>
+                                                    <option value="high">High Priority (Expiring Soon)</option>
+                                                    <option value="urgent">Urgent (Expires in 3 days)</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                    Auto-Approval
+                                                </label>
+                                                <select name="auto_approval" class="w-full border border-gray-300 rounded-md p-2">
+                                                    <option value="0">Require Admin Approval</option>
+                                                    <option value="1">Auto-Approve Requests</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Auto-approval will instantly approve NGO requests</p>
+                                            </div>
+                                            
+                                            <div class="col-span-2">
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                    Pickup Instructions (for NGOs)
+                                                </label>
+                                                <textarea name="pickup_instructions" class="w-full border border-gray-300 rounded-md p-2" 
+                                                          placeholder="Special handling instructions, pickup location details, etc."></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="mt-4">
                                         <button type="submit" name="submitwaste" class="w-full bg-primarycol text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition-colors">
                                             Record Excess Entry
@@ -670,5 +860,69 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             </div>
         </div>
     </div>
+
+<?php if ($preselectedStockId && $isDonation): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Find the form for the preselected product
+    const forms = document.querySelectorAll('.waste-form');
+    let targetForm = null;
+    
+    forms.forEach(form => {
+        const stockIdField = form.querySelector('input[name="stock_id"]');
+        if (stockIdField && stockIdField.value == <?= $preselectedStockId ?>) {
+            targetForm = form;
+        }
+    });
+    
+    if (targetForm) {
+        // Set reason to "overproduction"
+        const reasonSelect = targetForm.querySelector('select[name="waste_reason"]');
+        if (reasonSelect) reasonSelect.value = 'overproduction';
+        
+        // Set disposal method to "donation"
+        const disposalSelect = targetForm.querySelector('select[name="disposal_method"]');
+        if (disposalSelect) {
+            disposalSelect.value = 'donation';
+            
+            // Trigger the change event to show donation details
+            const event = new Event('change');
+            disposalSelect.dispatchEvent(event);
+            
+            // Show donation details section
+            const donationDetails = targetForm.querySelector('.donation-details-section');
+            if (donationDetails) donationDetails.classList.remove('hidden');
+        }
+        
+        // Set auto-approval to 1
+        const autoApproval = targetForm.querySelector('select[name="auto_approval"]');
+        if (autoApproval) autoApproval.value = '1';
+        
+        // Set priority to urgent for products expiring in 3 days or less
+        const daysUntilExpiryField = targetForm.querySelector('input[data-days-until-expiry]');
+        const prioritySelect = targetForm.querySelector('select[name="donation_priority"]');
+        
+        if (daysUntilExpiryField && prioritySelect) {
+            const daysUntilExpiry = parseInt(daysUntilExpiryField.value);
+            if (daysUntilExpiry <= 3) {
+                prioritySelect.value = 'urgent';
+            } else if (daysUntilExpiry <= 7) {
+                prioritySelect.value = 'high';
+            }
+        }
+        
+        // Set default pickup instructions
+        const pickupInstructions = targetForm.querySelector('textarea[name="pickup_instructions"]');
+        if (pickupInstructions) {
+            pickupInstructions.value = 'This product is expiring soon and available for immediate pickup. Please collect as soon as possible.';
+        }
+        
+        // Scroll to the form
+        targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+});
+</script>
+<?php endif; ?>
+
 </body>
 </html>

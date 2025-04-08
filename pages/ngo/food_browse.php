@@ -1,402 +1,259 @@
 <?php
-// Debug logging at the very top
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Log all POST data to a file that you can check
-    file_put_contents(__DIR__ . '/form_debug.log', 
-        date('Y-m-d H:i:s') . ' POST DATA: ' . print_r($_POST, true) . "\n", 
-        FILE_APPEND
-    );
-
-    // Enhanced debugging for donation_id
-    if (isset($_POST['donation_id'])) {
-        $debugDonationId = $_POST['donation_id'];
-        error_log("DONATION DEBUG: Received donation_id: " . $debugDonationId . " (type: " . gettype($debugDonationId) . ")");
-        
-        // Validate donation_id format more strictly
-        if (!is_numeric($debugDonationId) || intval($debugDonationId) <= 0) {
-            error_log("DONATION ERROR: Invalid donation_id format: " . $debugDonationId);
-            $errorMessage = "Invalid donation ID format. Please try again.";
-            // Exit early from the processing
-            $_POST = array(); // Clear post data to prevent processing
-        } else {
-            // Force the donation_id to be an integer
-            $_POST['donation_id'] = intval($debugDonationId);
-            error_log("DONATION DEBUG: Sanitized donation_id to: " . $_POST['donation_id']);
-        }
-    } else {
-        error_log("DONATION ERROR: No donation_id found in POST data");
-        $errorMessage = "No donation ID provided. Please try again.";
-        // Exit early from the processing
-        $_POST = array(); // Clear post data to prevent processing
-    }
-}
+// Set timezone to Philippine time
+date_default_timezone_set('Asia/Manila');
 
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Check for NGO access only
+// Check if user is NGO
 checkAuth(['ngo']);
 
 $pdo = getPDO();
+$ngoId = $_SESSION['user_id'];
 
-// Add this near the top of your file, right after checkAuth(['ngo']);
-$ngoId = $_SESSION['user_id']; // Make sure $ngoId is defined
-
-// Check for 200 item total limit per NGO
-function getNgoTotalRequestedItems($pdo, $ngoId) {
-    $stmt = $pdo->prepare("
-        SELECT SUM(quantity_requested) as total 
-        FROM ngo_donation_requests 
-        WHERE ngo_id = ? AND status IN ('pending', 'approved')
-    ");
-    $stmt->execute([$ngoId]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $result['total'] ?? 0;
+// Initialize cart in session if not exists
+if (!isset($_SESSION['donation_cart'])) {
+    $_SESSION['donation_cart'] = [];
 }
 
-// Add this function to check daily quota
-function getNgoDailyRequestedItems($pdo, $ngoId) {
-    $today = date('Y-m-d');
-    $stmt = $pdo->prepare("
-        SELECT SUM(quantity_requested) as total 
-        FROM ngo_donation_requests 
-        WHERE ngo_id = ? 
-        AND DATE(request_date) = ?
-        AND status IN ('pending', 'approved')
-    ");
-    $stmt->execute([$ngoId, $today]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $result['total'] ?? 0;
-}
-
-$totalRequestedItems = getNgoTotalRequestedItems($pdo, $ngoId);
-$remainingItemsQuota = 200 - $totalRequestedItems;
-
-// Then use this to check daily limit
-$dailyRequestedItems = getNgoDailyRequestedItems($pdo, $ngoId);
-$remainingDailyQuota = 200 - $dailyRequestedItems;
-
-// Modify the query to exclude products already requested by this NGO, even if stock remains
-$query = "
-    SELECT 
-        pw.id as waste_id,
-        p.id as product_id,
-        p.name as product_name,
-        p.category as product_category,
-        p.image as product_image,
-        p.expiry_date,
-        pw.waste_date,
-        pw.waste_quantity,
-        pw.waste_value,
-        pw.waste_reason,
-        pw.notes,
-        b.name as branch_name,
-        b.id as branch_id,
-        b.address as branch_address,
-        CONCAT(u.fname, ' ', u.lname) as staff_name
-    FROM product_waste pw
-    JOIN product_info p ON pw.product_id = p.id
-    JOIN branches b ON pw.branch_id = b.id
-    JOIN users u ON pw.staff_id = u.id
-    WHERE 
-        pw.disposal_method = 'donation' 
-        AND pw.waste_quantity >= 5
-        AND pw.donation_status IN ('pending', 'in-progress')
-        AND p.expiry_date > NOW()
-        AND NOT EXISTS (
-            SELECT 1 
-            FROM ngo_donation_requests ndr 
-            WHERE ndr.ngo_id = ?
-            AND ndr.product_id = p.id
-            AND ndr.branch_id = b.id
-        )
-    ORDER BY p.expiry_date ASC
-";
-
-try {
-    $stmt = $pdo->prepare($query);
-    $stmt->execute([$ngoId]);
-    $availableDonations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $errorMessage = "Database error: " . $e->getMessage();
-    $availableDonations = [];
-}
-
-// Get NGO name for greeting - MOVE THIS TO THE TOP
-$ngoQuery = $pdo->prepare("SELECT CONCAT(fname, ' ', lname) as full_name, organization_name FROM users WHERE id = ?");
-$ngoQuery->execute([$ngoId]);
-$ngoInfo = $ngoQuery->fetch(PDO::FETCH_ASSOC);
-
-// Initialize messages
-$successMessage = null;
-$errorMessage = null;
-
-// Process donation request form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Debug all post variables
-    error_log("All POST data: " . print_r($_POST, true));
-    
-    // First check if donation_id exists and is valid
-    if (!isset($_POST['donation_id']) || empty($_POST['donation_id'])) {
-        error_log("Error: donation_id not set or empty in POST data");
-        $errorMessage = "Invalid donation selection. Please try again or contact support.";
-    } else {
-        // All your form processing code...
-        $donationRequestId = (int)$_POST['donation_id'];
-        $quantity = isset($_POST['quantity']) ? (float)$_POST['quantity'] : 0;
-        $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
-        $pickupDate = isset($_POST['pickup_date']) ? $_POST['pickup_date'] : '';
-        $pickupTime = isset($_POST['pickup_time']) ? $_POST['pickup_time'] : '';
-
-        // Debugging: Log form data
-        error_log("Form Data: donation_id={$donationRequestId}, quantity={$quantity}, pickup_date={$pickupDate}, pickup_time={$pickupTime}");
-
-        // Validate input
-        $errors = [];
-        if ($donationRequestId <= 0) {
-            $errors[] = "Invalid donation selection.";
-        }
-        if ($quantity < 5) {
-            $errors[] = "Please request at least 5 items.";
-        }
-        if ($quantity > 30) {
-            $errors[] = "Maximum request limit is 30 items.";
-        }
+// Process cart submission if form was submitted
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
+    try {
+        $pdo->beginTransaction();
         
-        // Check if this would exceed the 200 item quota
-        if ($quantity > $remainingItemsQuota) {
-            $errors[] = "This request would exceed your total limit of 200 items. You can request up to {$remainingItemsQuota} more items.";
-        }
-
-        // Add validation in form submission
-        if ($quantity > $remainingDailyQuota) {
-            $errors[] = "This request would exceed your daily limit of 200 items. You can request up to {$remainingDailyQuota} more items today.";
-        }
-
-        if (empty($pickupDate)) {
-            $errors[] = "Please select a pickup date.";
-        }
-        if (empty($pickupTime)) {
-            $errors[] = "Please select a pickup time.";
-        }
-
-        // Check if the donation exists and has enough quantity
-        try {
-            $checkStmt = $pdo->prepare("
-                SELECT 
-                    pw.id,
-                    pw.product_id,
-                    p.id as product_id,
-                    pw.branch_id,
-                    b.id as branch_id,
-                    pw.waste_quantity as quantity,
-                    p.name as product_name,
-                    b.name as branch_name
-                FROM 
-                    product_waste pw
-                JOIN 
-                    product_info p ON pw.product_id = p.id
-                JOIN 
-                    branches b ON pw.branch_id = b.id
-                WHERE 
-                    pw.id = ? AND 
-                    pw.disposal_method = 'donation' AND 
-                    pw.donation_status IN ('pending', 'in-progress') AND
-                    pw.waste_quantity >= ?
-            ");
-            $checkStmt->execute([$donationRequestId, $quantity]);
-            $donation = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$donation) {
-                $errors[] = "The requested donation is not available or has insufficient quantity.";
-            }
-        } catch (PDOException $e) {
-            $errors[] = "Database error: " . $e->getMessage();
-        }
-
-        // If no errors, process the request
-        if (empty($errors)) {
-            try {
-                // Start a transaction
-                $pdo->beginTransaction();
-
-                // Create a pending request in the NGO donation requests table
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO ngo_donation_requests (
-                        product_id,
-                        ngo_id,
-                        branch_id,
-                        donation_request_id,
-                        request_date,
-                        pickup_date,
-                        pickup_time,
-                        status,
-                        quantity_requested,
-                        ngo_notes
-                    ) VALUES (?, ?, ?, ?, NOW(), ?, ?, 'pending', ?, ?)
+        if (!empty($_SESSION['donation_cart'])) {
+            $requestDate = date('Y-m-d H:i:s'); // This will use the Asia/Manila timezone
+            $pickupDate = date('Y-m-d', strtotime('+1 day')); // Default to tomorrow
+            $pickupTime = '09:00:00'; // Default pickup time
+            
+            // Generate a UUID for request_group_id to group all items from this request
+            $requestGroupId = uniqid('req-', true);
+            
+            // Create donation requests for each item in cart
+            foreach ($_SESSION['donation_cart'] as $item) {
+                // Insert into ngo_donation_requests table
+                $insertRequest = $pdo->prepare("
+                    INSERT INTO ngo_donation_requests 
+                    (ngo_id, product_id, branch_id, waste_id, request_date, 
+                    pickup_date, pickup_time, status, quantity_requested, ngo_notes, request_group_id) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
                 ");
-
-                $insertStmt->execute([
-                    $donation['product_id'],
+                
+                $insertRequest->execute([
                     $ngoId,
-                    $donation['branch_id'],
-                    $donationRequestId,  // This should be from product_waste.id
+                    $item['product_id'],
+                    $item['branch_id'],
+                    $item['waste_id'],
+                    $requestDate,
                     $pickupDate,
                     $pickupTime,
-                    $quantity,
-                    $notes
+                    $item['quantity'],
+                    '',
+                    $requestGroupId
                 ]);
-
-                // Create notification for admin
-                $notifyAdminStmt = $pdo->prepare("
-                    INSERT INTO notifications (
-                        target_role,
-                        message,
-                        notification_type,
-                        link,
-                        is_read
-                    ) VALUES (
-                        'admin',
-                        ?,
-                        'ngo_donation_request',
-                        '/capstone/WASTE-WISE-CAPSTONE/pages/admin/ngo.php',
-                        0
-                    )
-                ");
-
-                $orgName = $ngoInfo['organization_name'] ?: $ngoInfo['full_name'];
-                $notifyMessage = "New donation request from {$orgName} for {$donation['product_name']}";
-                $notifyAdminStmt->execute([$notifyMessage]);
-
-                // Commit transaction
-                $pdo->commit();
-
-                // Set success message
-                $successMessage = "Your donation request has been submitted and is awaiting approval.";
-                // Add JavaScript to clear form data after submission
-                echo "<script>
-                    if (window.history.replaceState) {
-                        window.history.replaceState(null, null, window.location.href);
-                    }
-                </script>";
-
-            } catch (PDOException $e) {
-                // Rollback on error
-                $pdo->rollBack();
-                $errorMessage = "Error processing request: " . $e->getMessage();
             }
+            
+            // Update donation_status in product_waste table
+            foreach ($_SESSION['donation_cart'] as $item) {
+                // First check the current available quantity
+                $checkQty = $pdo->prepare("
+                    SELECT waste_quantity FROM product_waste 
+                    WHERE id = ? AND disposal_method = 'donation'
+                ");
+                $checkQty->execute([$item['waste_id']]);
+                $currentQty = $checkQty->fetchColumn();
+                
+                // Calculate remaining quantity after request
+                $requestedQty = floatval($item['quantity']);
+                $remainingQty = $currentQty - $requestedQty;
+                
+                if ($remainingQty <= 0) {
+                    // If taking all or more than available, mark as fully requested
+                    $updateWaste = $pdo->prepare("
+                        UPDATE product_waste 
+                        SET donation_status = 'requested' 
+                        WHERE id = ? AND disposal_method = 'donation'
+                    ");
+                    $updateWaste->execute([$item['waste_id']]);
+                } else {
+                    // If taking only a portion, reduce the quantity but keep status as pending
+                    $updateWaste = $pdo->prepare("
+                        UPDATE product_waste 
+                        SET waste_quantity = ? 
+                        WHERE id = ? AND disposal_method = 'donation'
+                    ");
+                    $updateWaste->execute([$remainingQty, $item['waste_id']]);
+                }
+            }
+            
+            // Create notification for admin/staff
+            $notifyStmt = $pdo->prepare("
+                INSERT INTO notifications (user_id, message, link, created_at)
+                SELECT u.id, CONCAT('New donation request from ', np.organization_name), 
+                       CONCAT('/admin/ngo.php?group=', ?), NOW()
+                FROM users u
+                JOIN ngo_profiles np ON np.user_id = ?
+                WHERE u.role = 'admin' OR u.role = 'staff'
+            ");
+            $notifyStmt->execute([$requestGroupId, $ngoId]);
+
+            // Add this after successfully creating donation requests, before the success message
+
+            // Create notification for admin
+            $ngoName = $_SESSION['organization_name'] ?: ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
+            $notifyAdminStmt = $pdo->prepare("
+                INSERT INTO notifications (
+                    target_role, 
+                    message, 
+                    notification_type,
+                    link, 
+                    is_read,
+                    created_at
+                ) VALUES (
+                    'admin', 
+                    ?, 
+                    'donation_requested',
+                    '../admin/ngo.php?tab=pending', 
+                    0,
+                    NOW()
+                )
+            ");
+
+            // If you have the count of requested items
+            $itemCount = count($_SESSION['donation_cart']);
+            $message = "New donation request from {$ngoName} - {$itemCount} item(s) pending approval";
+            $notifyAdminStmt->execute([$message]);
+            
+            $pdo->commit();
+            
+            // Clear the cart
+            $_SESSION['donation_cart'] = [];
+            $successMessage = "Your donation request has been submitted successfully!";
         } else {
-            $errorMessage = implode(" ", $errors);
+            $errorMessage = "Your cart is empty. Please add items before submitting.";
         }
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        $errorMessage = "Error submitting donation request: " . $e->getMessage();
     }
 }
 
-// Initialize filter variables
-$typeFilter = isset($_GET['food_type']) ? $_GET['food_type'] : '';
-$quantityFilter = isset($_GET['min_quantity']) && is_numeric($_GET['min_quantity']) ? (int)$_GET['min_quantity'] : 0;
-$dateFilter = isset($_GET['expiry_date']) ? $_GET['expiry_date'] : '';
-$donorFilter = isset($_GET['donor_name']) ? $_GET['donor_name'] : '';
+// Get total items requested today for this NGO
+$todayStart = date('Y-m-d 00:00:00');
+$todayEnd = date('Y-m-d 23:59:59');
 
-// Add this line BEFORE you start building your SQL query (around line 159)
+$requestedTodayQuery = $pdo->prepare("
+    SELECT COALESCE(SUM(quantity_requested), 0) as total_requested
+    FROM ngo_donation_requests
+    WHERE ngo_id = ? AND request_date BETWEEN ? AND ?
+");
+$requestedTodayQuery->execute([$ngoId, $todayStart, $todayEnd]);
+$totalRequestedToday = $requestedTodayQuery->fetchColumn();
 
-$params = [$ngoId]; // Initialize the params array
+$dailyLimit = 200;
+$remainingLimit = $dailyLimit - $totalRequestedToday;
 
-// Replace your current SQL query with this one:
+// Get categories for filter
+$categoriesQuery = $pdo->query("SELECT DISTINCT category FROM product_info ORDER BY category");
+$categories = $categoriesQuery->fetchAll(PDO::FETCH_COLUMN);
 
-$sql = "SELECT 
-    pw.id,
-    p.id as product_id,
-    p.name as product_name,
-    p.category,
-    pw.waste_quantity as available_quantity,
-    ps.expiry_date,
-    b.id as branch_id,
-    b.name as branch_name,
-    pw.notes,
-    CONCAT(u.fname, ' ', u.lname) as donor_name
-FROM 
-    product_waste pw
-JOIN 
-    product_info p ON pw.product_id = p.id
-JOIN 
-    product_stock ps ON pw.stock_id = ps.id
-JOIN 
-    branches b ON pw.branch_id = b.id
-JOIN 
-    users u ON pw.staff_id = u.id
-WHERE 
-    pw.disposal_method = 'donation'
-    AND pw.donation_status IN ('pending', 'in-progress')
-    AND ps.expiry_date > NOW()
-    AND pw.waste_quantity >= 5
-    AND NOT EXISTS (
-        SELECT 1 FROM ngo_donation_requests ndr 
-        WHERE ndr.ngo_id = ? 
-        AND ndr.product_id = p.id
-        AND ndr.branch_id = b.id
-        AND (ndr.status = 'pending' OR ndr.status = 'approved')
-    )
+// Build query based on filters
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$category = isset($_GET['category']) ? trim($_GET['category']) : '';
+$expiryFilter = isset($_GET['expiry']) ? trim($_GET['expiry']) : '';
+$sort = isset($_GET['sort']) ? trim($_GET['sort']) : 'newest';
+
+$params = [];
+$sql = "
+    SELECT 
+        pw.id as waste_id, 
+        p.id as product_id, 
+        p.name as product_name, 
+        p.category, 
+        pw.waste_quantity as available_quantity,
+        ps.expiry_date, 
+        p.image, 
+        b.id as branch_id, 
+        b.name as branch_name, 
+        b.address as branch_address,
+        b.location as branch_location,
+        pw.waste_date, 
+        pw.waste_value,
+        ps.batch_number
+    FROM product_waste pw
+    JOIN product_info p ON pw.product_id = p.id
+    JOIN branches b ON pw.branch_id = b.id
+    LEFT JOIN product_stock ps ON pw.stock_id = ps.id
+    WHERE pw.disposal_method = 'donation' 
+    AND pw.donation_status = 'pending'
+    AND pw.archived = 0
 ";
 
-// Apply filters (needs adjusting for the new query structure)
-if (!empty($typeFilter) && $typeFilter !== 'All') {
+if (!empty($search)) {
+    $sql .= " AND (p.name LIKE ? OR p.category LIKE ?)";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+}
+
+if (!empty($category)) {
     $sql .= " AND p.category = ?";
-    $params[] = $typeFilter;
+    $params[] = $category;
 }
 
-if ($quantityFilter > 0) {
-    $sql .= " AND pw.waste_quantity >= ?";
-    $params[] = $quantityFilter;
+// Apply expiry date filter
+if (!empty($expiryFilter)) {
+    $today = date('Y-m-d');
+    $tomorrow = date('Y-m-d', strtotime('+1 day'));
+    $weekLater = date('Y-m-d', strtotime('+7 days'));
+    
+    switch ($expiryFilter) {
+        case 'today':
+            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) = ?";
+            $params[] = $today;
+            break;
+        case 'tomorrow':
+            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) = ?";
+            $params[] = $tomorrow;
+            break;
+        case 'this_week':
+            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) BETWEEN ? AND ?";
+            $params[] = $today;
+            $params[] = $weekLater;
+            break;
+    }
 }
 
-if (!empty($dateFilter)) {
-    $sql .= " AND DATE(ps.expiry_date) >= ?";  // Change p.expiry_date to ps.expiry_date
-    $params[] = $dateFilter;
+// Apply sorting
+switch ($sort) {
+    case 'expiry':
+        $sql .= " ORDER BY COALESCE(ps.expiry_date, pw.waste_date) ASC";
+        break;
+    case 'quantity':
+        $sql .= " ORDER BY pw.waste_quantity DESC";
+        break;
+    case 'name':
+        $sql .= " ORDER BY p.name ASC";
+        break;
+    case 'newest':
+    default:
+        $sql .= " ORDER BY pw.created_at DESC";
+        break;
 }
-
-if (!empty($donorFilter)) {
-    $sql .= " AND (u.fname LIKE ? OR u.lname LIKE ?)";
-    $params[] = "%$donorFilter%";
-    $params[] = "%$donorFilter%";
-}
-
-$sql .= " ORDER BY ps.expiry_date ASC";  // Change p.expiry_date to ps.expiry_date
 
 // Execute query
-try {
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $donations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "Database error: " . $e->getMessage();
-    $donations = [];
-}
-
-// Get unique categories for filter dropdown
-$catSql = "SELECT DISTINCT category FROM product_info ORDER BY category";
-$catStmt = $pdo->query($catSql);
-$categories = $catStmt->fetchAll(PDO::FETCH_COLUMN);
-
-// Get IDs of donations this NGO has already requested
-$requestedQuery = $pdo->prepare("
-    SELECT dr.product_id
-    FROM ngo_donation_requests ndr
-    JOIN donation_requests dr ON ndr.donation_request_id = dr.id
-    WHERE ndr.ngo_id = ? AND (ndr.status = 'pending' OR ndr.status = 'approved')
-");
-$requestedQuery->execute([$ngoId]);
-$requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NGO Dashboard - Food Browse</title>
+    <title>Browse Available Food - WasteWise</title>
     <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -416,434 +273,637 @@ $requestedDonations = $requestedQuery->fetchAll(PDO::FETCH_COLUMN);
 <body class="flex h-screen bg-slate-100">
     <?php include '../layout/ngo_nav.php' ?>
 
-    <div class="flex flex-col w-full p-6 space-y-6 overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-            <div>
-                <div class="text-2xl font-bold text-primarycol">Browse Available Donations</div>
-                <div class="text-sm text-gray-500">Welcome, <?= htmlspecialchars($ngoInfo['organization_name'] ?? $ngoInfo['full_name']) ?></div>
-            </div>
-            <div class="flex flex-col items-end">
-                <a href="donation_history.php" class="btn btn-sm bg-primarycol text-white mb-2">View My Requests</a>
-                <div class="text-sm text-gray-600">
-                    Item Quota: <span class="font-bold"><?= $totalRequestedItems ?>/200</span> 
-                    (<?= $remainingItemsQuota ?> remaining)
+    <div class="flex flex-col w-full overflow-y-auto">
+        <!-- Page Header -->
+        <div class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold text-primarycol">Available Food Donations</h1>
+                        <p class="text-gray-500 text-sm mt-1">Browse and request available food donations from local businesses</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="text-sm text-gray-600 bg-sec px-3 py-1.5 rounded-md">
+                            <span class="font-semibold"><?= $remainingLimit ?></span> of <span class="font-semibold"><?= $dailyLimit ?></span> items remaining today
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <?php if (isset($_GET['success']) && $_GET['success'] === 'requested'): ?>
-            <div class="alert alert-success shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span>Your donation request has been submitted successfully! The donor will contact you soon.</span>
-            </div>
+        <?php if (isset($successMessage)): ?>
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 m-4" role="alert">
+            <p><?= htmlspecialchars($successMessage) ?></p>
+        </div>
         <?php endif; ?>
 
-        <?php if (isset($_GET['error'])): ?>
-            <div class="alert alert-error shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span><?= htmlspecialchars($_GET['error']) ?></span>
-            </div>
+        <?php if (isset($errorMessage)): ?>
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 m-4" role="alert">
+            <p><?= htmlspecialchars($errorMessage) ?></p>
+        </div>
         <?php endif; ?>
 
-        <?php if ($successMessage): ?>
-            <div class="alert alert-success shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span><?= htmlspecialchars($successMessage) ?></span>
+        <!-- Filters and Search -->
+        <div class="bg-white border-t border-gray-200 shadow-sm">
+            <div class="max-w-7xl mx-auto py-3 px-4 sm:px-6 lg:px-8">
+                <form method="GET" action="" class="flex flex-col sm:flex-row gap-4 justify-between">
+                    <div class="flex gap-2 items-center">
+                        <div class="dropdown">
+                            <div tabindex="0" role="button" class="btn btn-sm m-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                                Filter
+                            </div>
+                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                <li class="menu-title">Categories</li>
+                                <?php foreach ($categories as $cat): ?>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="category" class="radio radio-sm" 
+                                               value="<?= htmlspecialchars($cat) ?>" 
+                                               <?= ($category === $cat) ? 'checked' : '' ?>>
+                                        <span><?= htmlspecialchars($cat) ?></span>
+                                    </label>
+                                </li>
+                                <?php endforeach; ?>
+                                <div class="divider my-1"></div>
+                                <li class="menu-title">Expiry Date</li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="expiry" class="radio radio-sm" 
+                                               value="today" <?= ($expiryFilter === 'today') ? 'checked' : '' ?>>
+                                        <span>Today</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="expiry" class="radio radio-sm" 
+                                               value="tomorrow" <?= ($expiryFilter === 'tomorrow') ? 'checked' : '' ?>>
+                                        <span>Tomorrow</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="expiry" class="radio radio-sm" 
+                                               value="this_week" <?= ($expiryFilter === 'this_week') ? 'checked' : '' ?>>
+                                        <span>This Week</span>
+                                    </label>
+                                </li>
+                                <li class="mt-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-full">Apply</button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="dropdown">
+                            <div tabindex="0" role="button" class="btn btn-sm m-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                                </svg>
+                                Sort
+                            </div>
+                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="newest" <?= ($sort === 'newest' || empty($sort)) ? 'checked' : '' ?>>
+                                    <span>Newest First</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="expiry" <?= ($sort === 'expiry') ? 'checked' : '' ?>>
+                                    <span>Expiry Date (Soonest)</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="quantity" <?= ($sort === 'quantity') ? 'checked' : '' ?>>
+                                    <span>Quantity (Highest)</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="name" <?= ($sort === 'name') ? 'checked' : '' ?>>
+                                    <span>Name (A-Z)</span>
+                                </label></li>
+                                <li class="mt-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-full">Apply</button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                            </svg>
+                        </div>
+                        <input type="search" id="search" name="search" value="<?= htmlspecialchars($search) ?>" class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500" placeholder="Search food items...">
+                        <button type="submit" class="absolute end-2.5 bottom-1 top-1 px-3 bg-primarycol text-white rounded-md hover:bg-fourth">Search</button>
+                    </div>
+                </form>
             </div>
-        <?php endif; ?>
-
-        <?php if ($errorMessage): ?>
-            <div class="alert alert-error shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span><?= htmlspecialchars($errorMessage) ?></span>
-            </div>
-        <?php endif; ?>
-
-        <!-- Filter/Search Options -->
-        <div class="bg-white p-4 rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold text-primarycol mb-4">Filter/Search Options</h2>
-            <form method="GET" action="">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div>
-                        <label class="block text-gray-700">Type of Food</label>
-                        <select name="food_type" class="w-full p-2 border rounded-lg">
-                            <option value="All" <?= $typeFilter === 'All' ? 'selected' : '' ?>>All</option>
-                            <?php foreach ($categories as $category): ?>
-                                <option value="<?= htmlspecialchars($category) ?>" 
-                                        <?= $typeFilter === $category ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($category) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700">Quantity Available</label>
-                        <input type="number" name="min_quantity" class="w-full p-2 border rounded-lg" 
-                               placeholder="Minimum quantity" value="<?= htmlspecialchars($quantityFilter) ?>">
-                    </div>
-                    <div>
-                        <label class="block text-gray-700">Expiration Date</label>
-                        <input type="date" name="expiry_date" class="w-full p-2 border rounded-lg"
-                               value="<?= htmlspecialchars($dateFilter) ?>">
-                    </div>
-                    <div>
-                        <label class="block text-gray-700">Donor Name</label>
-                        <input type="text" name="donor_name" class="w-full p-2 border rounded-lg" 
-                               placeholder="Donor name" value="<?= htmlspecialchars($donorFilter) ?>">
-                    </div>
-                </div>
-                <button type="submit" class="mt-4 px-4 py-2 bg-primarycol text-white rounded-lg">Search</button>
-                <a href="food_browse.php" class="mt-4 px-4 py-2 bg-gray-500 text-white rounded-lg ml-2">Reset Filters</a>
-            </form>
         </div>
 
-        <!-- Food Listing -->
-        <div class="bg-white p-4 rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold text-primarycol mb-4">Available Donations</h2>
-            
-            <?php if (isset($error)): ?>
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    <p><?= htmlspecialchars($error) ?></p>
+        <!-- Food Items Grid -->
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <?php if (empty($donationItems)): ?>
+                <div class="text-center py-12">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
+                    </svg>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900">No donation items available</h3>
+                    <p class="mt-1 text-sm text-gray-500">There are currently no items available for donation. Please check back later.</p>
                 </div>
-            <?php endif; ?>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <?php if (count($donations) > 0): ?>
-                    <?php 
-                    // Set up the check request statement once, outside the loop
-                    $checkRequestStmt = $pdo->prepare("
-                        SELECT status FROM ngo_donation_requests 
-                        WHERE ngo_id = ? AND donation_request_id = ?
-                    ");
-                                    
-                    foreach ($donations as $item): 
-                        // Debug the donation ID
-                        error_log("Rendering donation item with ID: " . $item['id'] . " (type: " . gettype($item['id']) . ")");
-                        
-                        // Check if this item has been requested
-                        $checkRequestStmt->execute([$ngoId, $item['id']]);
-                        $requestStatus = $checkRequestStmt->fetchColumn();
-                        $alreadyRequested = ($requestStatus === 'pending');
-                        $alreadyApproved = ($requestStatus === 'approved');
-                        
-                        // Skip this item if it's already approved
-                        if ($alreadyApproved) continue;
-                    ?>
-                        <div class="bg-white border <?= $alreadyRequested ? 'border-yellow-400' : 'border-gray-200' ?> p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-                            <!-- If already requested, show a badge -->
-                            <?php if ($alreadyRequested): ?>
-                                <div class="mb-2">
-                                    <span class="inline-block bg-yellow-400 text-white text-xs px-2 py-1 rounded-full ml-1">
-                                        Pending Approval
+            <?php else: ?>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <?php foreach ($donationItems as $item): ?>
+                        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+                            <figure class="h-48 bg-gray-100 relative">
+                                <?php 
+                                // Fix the image path handling
+                                if (!empty($item['image'])) {
+                                    // Remove the leading '../../' if it exists in the database path
+                                    $imagePath = $item['image'];
+                                    if (strpos($imagePath, '../../') === 0) {
+                                        // The path already has ../../, so don't add it again
+                                        $imagePath = substr($imagePath, 6); // Remove the ../../
+                                        echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                    } else {
+                                        // No prefix, add the path as normal
+                                        echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                    }
+                                } else {
+                                    echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                }
+                                ?>
+                                
+                                <!-- Expiry badge -->
+                                <?php
+                                $expiryDate = !empty($item['expiry_date']) ? $item['expiry_date'] : $item['waste_date'];
+                                $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
+                                $expiryClass = $daysUntilExpiry <= 1 ? 'bg-red-500' : ($daysUntilExpiry <= 3 ? 'bg-amber-500' : 'bg-green-500');
+                                ?>
+                                <div class="absolute top-2 right-2">
+                                    <span class="badge <?= $expiryClass ?> text-white border-none">
+                                        Expires in <?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?>
                                     </span>
                                 </div>
-                            <?php endif; ?>
-                            <div class="flex flex-col h-full">
-                                <div class="mb-2">
-                                    <span class="inline-block bg-primarycol text-white text-xs px-2 py-1 rounded-full">
-                                        <?= htmlspecialchars($item['category']) ?>
-                                    </span>
-                                    <?php if (isset($item['expiry_date'])): 
-                                        $expiryDate = new DateTime($item['expiry_date']);
-                                        $today = new DateTime();
-                                        $daysUntilExpiry = $today->diff($expiryDate)->days;
-                                        
-                                        $expiryClass = 'bg-green-500';
-                                        if ($daysUntilExpiry < 3) {
-                                            $expiryClass = 'bg-red-500';
-                                        } elseif ($daysUntilExpiry < 7) {
-                                            $expiryClass = 'bg-yellow-500';
-                                        }
-                                    ?>
-                                    <span class="inline-block <?= $expiryClass ?> text-white text-xs px-2 py-1 rounded-full ml-1">
-                                        Expires in <?= $daysUntilExpiry ?> days
-                                    </span>
-                                    <?php endif; ?>
+                            </figure>
+                            <div class="card-body p-4">
+                                <div class="flex justify-between items-start">
+                                    <h2 class="card-title text-lg"><?= htmlspecialchars($item['product_name']) ?></h2>
+                                    <span class="badge badge-sm bg-sec text-primarycol border-none"><?= htmlspecialchars($item['category']) ?></span>
                                 </div>
-                                <h3 class="text-lg font-semibold text-primarycol"><?= htmlspecialchars($item['product_name']) ?></h3>
-                                <p class="text-sm text-gray-600 mb-2">From: <?= htmlspecialchars($item['branch_name']) ?></p>
-                                <p class="text-sm text-gray-600 mb-2">Donor: <?= htmlspecialchars($item['donor_name']) ?></p>
-                                
-                                <?php if (!empty($item['notes'])): ?>
-                                <p class="text-sm text-gray-600 mb-4">
-                                    <?= htmlspecialchars(substr($item['notes'], 0, 100)) ?>
-                                    <?= strlen($item['notes']) > 100 ? '...' : '' ?>
-                                </p>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($item['waste_reason'])): ?>
-                                <p class="text-sm text-gray-600 mb-4">
-                                    Reason: <?= htmlspecialchars(ucfirst($item['waste_reason'])) ?>
-                                </p>
-                                <?php endif; ?>
-                                
-                                <div class="mt-auto pt-4 flex justify-between items-center">
-                                    <div class="font-bold"><?= htmlspecialchars($item['available_quantity']) ?> items</div>
-                                    <button class="btn btn-primary btn-sm request-btn" 
-                                            data-id="<?= $item['id'] ?>"
-                                            data-name="<?= htmlspecialchars($item['product_name']) ?>"
-                                            data-branch="<?= $item['branch_id'] ?>">
-                                        Request
-                                    </button>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <div class="flex justify-between">
+                                        <span>Available:</span>
+                                        <span class="font-medium"><?= htmlspecialchars($item['available_quantity']) ?> units</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Expiry Date:</span>
+                                        <span class="font-medium"><?= date('M d, Y', strtotime($expiryDate)) ?></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Location:</span>
+                                        <span class="font-medium"><?= htmlspecialchars($item['branch_name']) ?></span>
+                                    </div>
+                                </div>
+                                <div class="card-actions justify-between mt-4 items-center">
+                                    <div class="form-control">
+                                        <label class="input-group input-group-xs">
+                                            <span>Qty</span>
+                                            <input type="number" min="1" max="<?= $item['available_quantity'] ?>" value="1" 
+                                                   class="input input-xs input-bordered w-16 item-quantity" 
+                                                   data-item-id="<?= $item['waste_id'] ?>">
+                                        </label>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button class="btn btn-sm btn-outline" 
+                                                onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
+                                            View
+                                        </button>
+                                        <button class="btn btn-sm bg-primarycol text-white hover:bg-fourth" 
+                                               onclick="addToCart({
+                                                   waste_id: <?= $item['waste_id'] ?>,
+                                                   product_id: <?= $item['product_id'] ?>,
+                                                   branch_id: <?= $item['branch_id'] ?>, 
+                                                   name: '<?= htmlspecialchars(addslashes($item['product_name'])) ?>', 
+                                                   max: <?= $item['available_quantity'] ?>
+                                               }, this)">
+                                            Add to Cart
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                <?php else: ?>
-                    <!-- No donations found message -->
-                    <div class="col-span-full flex flex-col items-center justify-center py-8 text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 20h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <h3 class="text-lg font-semibold text-gray-700">No donations available</h3>
-                        <p class="text-gray-500 mt-2">There are currently no food items marked for donation that match your criteria.</p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Cart Drawer -->
+    <div id="cartDrawer" class="fixed top-0 right-0 z-50 h-screen p-4 overflow-y-auto bg-white w-80 dark:bg-gray-800 transform translate-x-full transition-transform duration-300 ease-in-out shadow-lg">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Your Donation Request</h3>
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 absolute top-2.5 right-2.5 flex items-center justify-center" onclick="toggleCart()">
+            <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14">
+                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
+            </svg>
+            <span class="sr-only">Close menu</span>
+        </button>
+
+        <div class="mt-8">
+            <div class="flex justify-between items-center py-2 border-y border-gray-200 mb-4">
+                <span class="font-medium">Selected Items</span>
+                <span class="text-sm text-gray-500">Daily Limit: <span id="cartCount">0</span>/<?= $dailyLimit ?></span>
+            </div>
+            
+            <form method="POST" action="">
+                <div id="cartItems" class="divide-y divide-gray-100 mb-4">
+                    <!-- Cart items will be added here via JavaScript -->
+                    <div class="py-3 flex justify-between items-center text-gray-500">
+                        Your cart is empty
                     </div>
-                <?php endif; ?>
+                </div>
+
+                <div class="py-2 border-t border-gray-200">
+                    <button type="button" id="clearCartBtn" onclick="clearCart()" class="w-full btn btn-sm btn-outline mt-2 mb-2" disabled>
+                        Clear Cart
+                    </button>
+                    <button type="submit" name="submit_request" id="requestItemsBtn" class="w-full btn btn-sm bg-primarycol text-white hover:bg-fourth" disabled>
+                        Request All Items
+                    </button>
+                    <p class="text-xs text-gray-500 mt-2 text-center">
+                        Items will be reserved for pickup at their respective branches
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Product Details Modal -->
+    <dialog id="productDetailsModal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            </form>
+            <h3 id="modalProductTitle" class="text-lg font-bold text-primarycol mb-2"></h3>
+            
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="md:w-1/3">
+                    <div class="bg-gray-100 rounded-lg overflow-hidden h-48 md:h-64">
+                        <img id="modalProductImage" src="" alt="Product" class="w-full h-full object-cover">
+                    </div>
+                    
+                    <div class="mt-4 flex flex-col gap-2">
+                        <div>
+                            <span class="text-sm text-gray-600">Category:</span>
+                            <span id="modalProductCategory" class="font-medium"></span>
+                        </div>
+                        <div>
+                            <span class="text-sm text-gray-600">Available Quantity:</span>
+                            <span id="modalProductQuantity" class="font-medium"></span>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-600">Expires On:</div>
+                            <div id="modalProductExpiry" class="font-medium"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="md:w-2/3">
+                    <div class="mb-6">
+                        <h4 class="font-medium text-gray-900">Pickup Location</h4>
+                        <div class="mt-1 space-y-1">
+                            <p id="modalBranchName" class="font-medium"></p>
+                            <p id="modalBranchAddress" class="text-gray-600"></p>
+                            <p id="modalBranchLocation" class="text-gray-600"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 pt-4">
+                        <h4 class="font-medium text-gray-900">Request This Item</h4>
+                        
+                        <div class="flex items-center gap-3 mt-3">
+                            <div class="form-control">
+                                <label class="input-group">
+                                    <span>Quantity</span>
+                                    <input id="modalQuantityInput" type="number" min="1" class="input input-bordered w-20" value="1">
+                                </label>
+                            </div>
+                            <button id="modalAddToCartBtn" class="btn bg-primarycol text-white hover:bg-fourth">
+                                Add to Cart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn">Close</button>
+                </form>
             </div>
         </div>
-    </div>
-
-    <!-- Donation Request Modal -->
-    <div id="requestModal" class="modal">
-      <div class="modal-box max-w-lg">
-        <h3 class="font-bold text-lg mb-4">Request Donation</h3>
-        <div id="itemDetails" class="p-4 bg-gray-100 rounded-md mb-4">
-          <!-- Item details filled by JavaScript -->
-        </div>
-        
-        <form id="requestForm" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
-          <!-- Add name attribute to form for easier debugging -->
-          <input type="hidden" id="donationId" name="donation_id" value="">
-          <input type="hidden" id="productName" name="product_name" value="">
-          <input type="hidden" id="branchId" name="branch_id" value="">
-          
-          <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Quantity <span id="maxQuantity" class="text-sm text-gray-500"></span></label>
-            <input type="number" name="quantity" required min="20" max="30" value="20"
-                   class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-            <p class="text-xs text-gray-500 mt-1">Minimum: 20, Maximum: 30 items</p>
-          </div>
-          
-          <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Pickup Date</label>
-            <input type="date" name="pickup_date" required min="<?= date('Y-m-d') ?>"
-                   class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-          </div>
-          
-          <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Pickup Time Slot</label>
-            <select name="pickup_time" required
-                   class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol">
-              <option value="">Select a time slot...</option>
-              <option value="09:00:00">9:00 AM - 10:00 AM</option>
-              <option value="10:00:00">10:00 AM - 11:00 AM</option>
-              <option value="11:00:00">11:00 AM - 12:00 PM</option>
-              <option value="13:00:00">1:00 PM - 2:00 PM</option>
-              <option value="14:00:00">2:00 PM - 3:00 PM</option>
-              <option value="15:00:00">3:00 PM - 4:00 PM</option>
-              <option value="16:00:00">4:00 PM - 5:00 PM</option>
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Please select a time slot during branch operating hours</p>
-          </div>
-          
-          <div class="mb-4">
-            <label class="block text-gray-700 font-medium mb-1">Notes</label>
-            <textarea name="notes" rows="3" 
-                      class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primarycol"
-                      placeholder="Any additional requirements..."></textarea>
-          </div>
-          
-          <div class="flex justify-end gap-2 mt-6">
-            <button type="button" class="btn bg-gray-300 hover:bg-gray-400 text-gray-800" onclick="closeModal()">Cancel</button>
-            <button type="submit" class="btn bg-primarycol hover:bg-fourth text-white">Submit Request</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </dialog>
 
     <script>
-    // Wait for DOM to be fully loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded, initializing...");
+        let cart = <?= !empty($_SESSION['donation_cart']) ? json_encode($_SESSION['donation_cart']) : '[]' ?>;
+        const dailyLimit = <?= $dailyLimit ?>;
+        let remainingLimit = <?= $remainingLimit ?>;
+        let currentProductDetails = null;
         
-        // Set up request buttons
-        setupRequestButtons();
+        // Toggle cart drawer
+        function toggleCart() {
+            const drawer = document.getElementById('cartDrawer');
+            drawer.classList.toggle('translate-x-full');
+        }
         
-        // Set up form submission handler
-        setupFormHandler();
-    });
-
-    // Function to set up request buttons
-    function setupRequestButtons() {
-        const requestButtons = document.querySelectorAll('.request-btn');
-        console.log("Found " + requestButtons.length + " request buttons");
-        
-        requestButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                // Clear any previous values from the form first
-                clearModalForm();
-                
-                // Get all attributes
-                const id = this.getAttribute('data-id');
-                
-                // Debug the donation ID value
-                console.log("Button clicked with donation ID:", id, "Type:", typeof id);
-                
-                // Validate the ID immediately
-                if (!id || id === '0' || id === 0) {
-                    console.error("Invalid donation ID detected:", id);
-                    alert("Error: This donation has an invalid ID. Please contact support.");
-                    return; // Stop execution
-                }
-                
-                const name = this.getAttribute('data-name');
-                const branchId = this.getAttribute('data-branch');
-                
-                // Find the parent card
-                const card = this.closest('.bg-white.border');
-                
-                // Get details from card
-                const quantityElement = card.querySelector('.font-bold');
-                const quantity = quantityElement ? quantityElement.textContent.split(' ')[0] : 'N/A';
-                
-                const expiryElement = card.querySelector('[class*="bg-"][class*="-500"]');
-                const expiryDate = expiryElement ? expiryElement.textContent.replace('Expires in ', '').replace(' days', '') : 'N/A';
-                
-                const branchElement = card.querySelector('p.text-sm.text-gray-600');
-                const branchName = branchElement ? branchElement.textContent.replace('From: ', '') : 'Unknown';
-                
-                // Show modal and pass all parameters
-                openModalWithData(id, name, quantity, expiryDate, branchName, branchId);
-            });
+        document.getElementById('cartToggle').addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleCart();
         });
-    }
-
-    // Function to clear the modal form
-    function clearModalForm() {
-        // Reset all form fields
-        document.getElementById('donationId').value = "";
-        document.getElementById('productName').value = "";
-        document.getElementById('branchId').value = "";
         
-        // Reset quantity input
-        const quantityInput = document.querySelector('input[name="quantity"]');
-        if (quantityInput) {
-            quantityInput.value = 20;
+        // View product details
+        function viewProductDetails(item) {
+            currentProductDetails = item;
+            
+            // Set modal content
+            document.getElementById('modalProductTitle').textContent = item.product_name;
+            
+            // Set image
+            const modalImage = document.getElementById('modalProductImage');
+            if (item.image && item.image.length > 0) {
+                modalImage.src = '../../' + item.image;
+            } else {
+                modalImage.src = '../../assets/images/placeholder-food.jpg';
+            }
+            
+            // Set other details
+            document.getElementById('modalProductCategory').textContent = item.category;
+            document.getElementById('modalProductQuantity').textContent = item.available_quantity + ' units';
+            
+            // Set expiry date
+            const expiryDate = item.expiry_date || item.waste_date;
+            document.getElementById('modalProductExpiry').textContent = formatDate(expiryDate);
+            
+            // Set location details
+            document.getElementById('modalBranchName').textContent = item.branch_name;
+            document.getElementById('modalBranchAddress').textContent = item.branch_address;
+            document.getElementById('modalBranchLocation').textContent = item.branch_location || '';
+            
+            // Set quantity input max
+            const quantityInput = document.getElementById('modalQuantityInput');
+            quantityInput.max = item.available_quantity;
+            quantityInput.value = 1;
+            
+            // Set add to cart button action
+            const addToCartBtn = document.getElementById('modalAddToCartBtn');
+            addToCartBtn.onclick = function() {
+                const qty = parseInt(quantityInput.value);
+                addToCartFromModal(item, qty);
+            };
+            
+            // Open modal
+            document.getElementById('productDetailsModal').showModal();
         }
         
-        // Reset other form fields
-        const dateInput = document.querySelector('input[name="pickup_date"]');
-        if (dateInput) {
-            dateInput.value = "";
+        // Format date helper
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'long',
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric'
+            });
         }
         
-        const timeInput = document.querySelector('select[name="pickup_time"]');
-        if (timeInput) {
-            timeInput.selectedIndex = 0;
+        // Add to cart from modal
+        function addToCartFromModal(item, qty) {
+            if (qty <= 0 || qty > item.available_quantity) {
+                alert('Please select a valid quantity (between 1 and ' + item.available_quantity + ')');
+                return;
+            }
+            
+            // Create item object
+            const cartItem = {
+                waste_id: item.waste_id,
+                product_id: item.product_id,
+                branch_id: item.branch_id,
+                name: item.product_name,
+                quantity: qty,
+                max: item.available_quantity
+            };
+            
+            // Add to cart using existing function
+            const result = addToCartCore(cartItem);
+            if (result) {
+                document.getElementById('productDetailsModal').close();
+            }
         }
         
-        const notesInput = document.querySelector('textarea[name="notes"]');
-        if (notesInput) {
-            notesInput.value = "";
-        }
-    }
-
-    // Function to open modal with data
-    function openModalWithData(id, productName, quantity, expiryDate, branchName, branchId) {
-        console.log("Opening modal with donation ID:", id);
-        
-        // IMPORTANT: Set hidden fields directly
-        document.getElementById('donationId').value = id;
-        document.getElementById('productName').value = productName;
-        document.getElementById('branchId').value = branchId;
-        
-        // Verify the values were set with console logging
-        console.log("Values set - donation ID:", document.getElementById('donationId').value);
-        console.log("Values set - product name:", document.getElementById('productName').value);
-        console.log("Values set - branch ID:", document.getElementById('branchId').value);
-        
-        // Update the modal content
-        document.getElementById('itemDetails').innerHTML = `
-            <div class="mb-1"><span class="font-semibold">Product:</span> ${productName}</div>
-            <div class="mb-1"><span class="font-semibold">Available:</span> ${quantity} items</div>
-            <div class="mb-1"><span class="font-semibold">Expires in:</span> ${expiryDate} days</div>
-            <div class="mb-1"><span class="font-semibold">Branch:</span> ${branchName}</div>
-            <div class="mt-2 text-sm text-primarycol">Your remaining quota: <?= $remainingItemsQuota ?> of 200 items</div>
-            <div class="mt-1 text-xs text-red-500">Donation ID: ${id}</div>
-        `;
-        
-        // Set max quantity hint with realistic maximum
-        const maxToRequest = Math.min(quantity, 30, <?= $remainingItemsQuota ?>);
-        document.getElementById('maxQuantity').textContent = `(Available: ${quantity}, Request 20-${maxToRequest})`;
-        
-        // Update the quantity input max value
-        const quantityInput = document.querySelector('input[name="quantity"]');
-        if (quantityInput) {
-            quantityInput.max = maxToRequest;
-        }
-        
-        // Show the modal
-        document.getElementById('requestModal').classList.add('modal-open');
-    }
-
-    // Function to set up form handler
-    function setupFormHandler() {
-        const form = document.getElementById('requestForm');
-        
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                // Prevent default initially to validate
-                e.preventDefault();
-                
-                // Get donation ID from the hidden field
-                let donationId = document.getElementById('donationId').value;
-                
-                // Parse as integer to handle string values
-                donationId = parseInt(donationId, 10);
-                
-                console.log("Form submitting with donation ID:", donationId);
-                
-                // Comprehensive validation
-                if (isNaN(donationId) || donationId <= 0) {
-                    alert("Error: Invalid donation ID detected (" + donationId + "). Please try again or contact support.");
-                    console.error("Form submission prevented - invalid donation ID:", donationId);
+        // Core add to cart functionality
+        function addToCartCore(item) {
+            // Check if adding would exceed daily limit
+            let currentTotal = cart.reduce((sum, cartItem) => sum + parseInt(cartItem.quantity), 0);
+            if (currentTotal + parseInt(item.quantity) > remainingLimit) {
+                alert(`You can only request up to ${dailyLimit} items per day. You currently have ${currentTotal} items in your cart and ${remainingLimit} items remaining in your daily limit.`);
+                return false;
+            }
+            
+            // Check if item is already in cart
+            const existingItemIndex = cart.findIndex(cartItem => cartItem.waste_id === item.waste_id);
+            
+            if (existingItemIndex !== -1) {
+                // Update quantity if not exceeding max
+                const newQty = parseInt(cart[existingItemIndex].quantity) + parseInt(item.quantity);
+                if (newQty > item.max) {
+                    alert(`You cannot request more than ${item.max} units of this item.`);
                     return false;
                 }
+                cart[existingItemIndex].quantity = newQty;
+            } else {
+                cart.push({
+                    waste_id: item.waste_id,
+                    product_id: item.product_id,
+                    branch_id: item.branch_id,
+                    name: item.name,
+                    quantity: parseInt(item.quantity),
+                    max: item.max
+                });
+            }
+            
+            // Update cart count in navbar and save cart to session via AJAX
+            saveCartToSession();
+            
+            // Update cart UI
+            updateCartUI();
+            
+            // Show cart drawer
+            document.getElementById('cartDrawer').classList.remove('translate-x-full');
+            
+            return true;
+        }
+        
+        // Add to cart function for card buttons
+        function addToCart(item, button) {
+            const quantityInput = button.closest('.card-actions').querySelector('.item-quantity');
+            const qty = parseInt(quantityInput.value);
+            
+            item.quantity = qty;
+            const result = addToCartCore(item);
+            
+            if (result) {
+                // Provide feedback
+                button.textContent = 'Added!';
+                button.classList.add('btn-success');
                 
-                // Set the value back as a clean integer
-                document.getElementById('donationId').value = donationId;
-                
-                // Log all form data for debugging
-                const formData = new FormData(form);
-                let debugData = {};
-                for (let [key, value] of formData.entries()) {
-                    debugData[key] = value;
+                setTimeout(() => {
+                    button.textContent = 'Add to Cart';
+                    button.classList.remove('btn-success');
+                }, 1000);
+            }
+        }
+        
+        // Save cart to session via AJAX
+        function saveCartToSession() {
+            fetch('save_cart.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({cart: cart})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update cart count in navbar
+                    const cartBadge = document.querySelector('#cartToggle span');
+                    if (cartBadge) {
+                        cartBadge.textContent = cart.length;
+                    }
                 }
-                console.log("Form data being submitted:", debugData);
-                
-                // If everything is valid, manually submit the form
-                console.log("Form submission proceeding with donation ID:", donationId);
-                form.submit();
+            })
+            .catch(error => {
+                console.error('Error saving cart:', error);
             });
-        } else {
-            console.error("Could not find requestForm element");
         }
-    }
-
-    // Modal close function
-    function closeModal() {
-        document.getElementById('requestModal').classList.remove('modal-open');
-        // Also clear the form when closing
-        clearModalForm();
-    }
-
-    // Close modal when clicking outside
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('requestModal');
-        if (event.target === modal) {
-            closeModal();
+        
+        // Update cart UI
+        function updateCartUI() {
+            const cartItemsContainer = document.getElementById('cartItems');
+            const cartCountElement = document.getElementById('cartCount');
+            const clearCartBtn = document.getElementById('clearCartBtn');
+            const requestItemsBtn = document.getElementById('requestItemsBtn');
+            
+            // Update total count
+            const totalItems = cart.reduce((sum, item) => sum + parseInt(item.quantity), 0);
+            cartCountElement.textContent = totalItems;
+            
+            // Enable/disable buttons
+            clearCartBtn.disabled = cart.length === 0;
+            requestItemsBtn.disabled = cart.length === 0;
+            
+            // Update cart items
+            if (cart.length === 0) {
+                cartItemsContainer.innerHTML = `
+                    <div class="py-3 flex justify-between items-center text-gray-500">
+                        Your cart is empty
+                    </div>
+                `;
+                return;
+            }
+            
+            cartItemsContainer.innerHTML = '';
+            cart.forEach((item, index) => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'py-3 flex justify-between';
+                
+                // Add hidden inputs to submit with the form
+                const hiddenInputs = `
+                    <input type="hidden" name="cart[${index}][waste_id]" value="${item.waste_id}">
+                    <input type="hidden" name="cart[${index}][product_id]" value="${item.product_id}">
+                    <input type="hidden" name="cart[${index}][branch_id]" value="${item.branch_id}">
+                    <input type="hidden" name="cart[${index}][name]" value="${item.name}">
+                    <input type="hidden" name="cart[${index}][quantity]" value="${item.quantity}">
+                    <input type="hidden" name="cart[${index}][max]" value="${item.max}">
+                `;
+                
+                itemElement.innerHTML = `
+                    ${hiddenInputs}
+                    <div>
+                        <h4 class="font-medium">${item.name}</h4>
+                        <div class="flex items-center mt-1">
+                            <button type="button" onclick="updateQuantity(${index}, -1)" class="btn btn-xs btn-circle">-</button>
+                            <span class="mx-2">${item.quantity}</span>
+                            <button type="button" onclick="updateQuantity(${index}, 1)" class="btn btn-xs btn-circle">+</button>
+                        </div>
+                    </div>
+                    <button type="button" onclick="removeItem(${index})" class="btn btn-ghost btn-xs btn-circle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                `;
+                cartItemsContainer.appendChild(itemElement);
+            });
         }
-    });
-</script>
+        
+        // Update item quantity
+        function updateQuantity(index, change) {
+            const newQty = parseInt(cart[index].quantity) + change;
+            
+            if (newQty <= 0) {
+                removeItem(index);
+                return;
+            }
+            
+            if (newQty > cart[index].max) {
+                alert(`You cannot request more than ${cart[index].max} units of this item.`);
+                return;
+            }
+            
+            // Check if change would exceed daily limit
+            const currentTotal = cart.reduce((sum, item) => sum + parseInt(item.quantity), 0);
+            if (currentTotal + change > remainingLimit) {
+                alert(`You can only request up to ${dailyLimit} items per day. You have ${remainingLimit} items remaining in your daily limit.`);
+                return;
+            }
+            
+            cart[index].quantity = newQty;
+            saveCartToSession();
+            updateCartUI();
+        }
+        
+        // Remove item from cart
+        function removeItem(index) {
+            cart.splice(index, 1);
+            
+            saveCartToSession();
+            updateCartUI();
+        }
+        
+        // Clear cart
+        function clearCart() {
+            cart = [];
+            
+            saveCartToSession();
+            updateCartUI();
+        }
+        
+        // Initialize sidebar toggle
+        document.getElementById('toggleSidebar').addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+        });
+        
+        document.getElementById('closeSidebar').addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.add('-translate-x-full');
+        });
+        
+        // Initialize cart UI on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCartUI();
+        });
+    </script>
 </body>
 </html>

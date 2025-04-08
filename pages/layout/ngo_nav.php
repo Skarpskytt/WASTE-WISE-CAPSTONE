@@ -25,6 +25,18 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'ngo') {
     $unreadCount = 0;
 }
 
+// Add this code right after the other session handling code, before the HTML output
+// Get NGO organization info
+$ngoOrgNameQuery = $pdo->prepare("
+    SELECT np.organization_name, np.organization_logo 
+    FROM ngo_profiles np 
+    JOIN users u ON np.user_id = u.id 
+    WHERE u.id = ? AND u.role = 'ngo'
+");
+$ngoOrgNameQuery->execute([$_SESSION['user_id']]);
+$ngoOrgInfo = $ngoOrgNameQuery->fetch(PDO::FETCH_ASSOC);
+$organizationName = $ngoOrgInfo['organization_name'] ?? 'WasteWise NGO'; 
+
 // Mark notification as read if requested
 if (isset($_GET['mark_read']) && is_numeric($_GET['mark_read'])) {
     $markReadStmt = $pdo->prepare("
@@ -65,11 +77,22 @@ if (isset($_GET['mark_all_read'])) {
         </button>
        <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
        <div class="mb-3">
-        <a href="staff_dashboard.php" class="flex ms-2 md:me-24">
-           <img src="../../assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
-           <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Bea Bakes</span>
-         </a>
-        </div>
+    <a href="../ngo/ngo_dashboard.php" class="flex flex-col items-center w-full p-2">
+        <?php if (isset($ngoOrgInfo['organization_logo']) && !empty($ngoOrgInfo['organization_logo'])): ?>
+            <img src="../../<?= htmlspecialchars($ngoOrgInfo['organization_logo']) ?>" 
+                 class="w-32 h-32 object-contain rounded-full mb-2" 
+                 alt="Organization Logo" 
+                 onerror="this.src='../../assets/images/Logo.png'; this.onerror=null;"/>
+        <?php else: ?>
+            <img src="../../assets/images/Logo.png" 
+                 class="w-32 h-32 object-contain mb-2" 
+                 alt="WasteWise"/>
+        <?php endif; ?>
+        <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
+            <?= htmlspecialchars($organizationName) ?>
+        </span>
+    </a>
+</div>
           <li>
              <a href="../ngo/ngo_dashboard.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
@@ -127,118 +150,130 @@ if (isset($_GET['mark_all_read'])) {
           
   <div class="flex-1">
  
-   <div class="px-3 py-3 lg:px-5 lg:pl-3">
-     <div class="flex items-center justify-between">
-       <div class="flex items-center justify-start rtl:justify-end">
-         <button  id="toggleSidebar" class="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600">
+<div class="px-3 py-3 lg:px-5 lg:pl-3">
+  <div class="flex items-center justify-between">
+     <div class="flex items-center justify-start rtl:justify-end">
+        <button  id="toggleSidebar" class="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600">
             <span class="sr-only">Open sidebar</span>
             <svg class="w-6 h-6" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-               <path clip-rule="evenodd" fill-rule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"></path>
+                <path clip-rule="evenodd" fill-rule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"></path>
             </svg>
-         </button>
-       </div>
-       <div class="flex items-center">
-           <div class="flex items-center ms-3 gap-4">
-           <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'ngo'): ?>
+        </button>
+     </div>
+     <div class="flex items-center">
+          <div class="flex items-center ms-3 gap-4">
+          <div class="relative">
+ <a href="#" id="cartToggle" class="flex items-center px-3 py-2 text-black rounded-md hover:bg-fourth hover:text-white">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <?php if (isset($_SESSION['donation_cart']) && count($_SESSION['donation_cart']) > 0): ?>
+            <span class="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full h-5 w-5 flex items-center justify-center">
+                 <?= count($_SESSION['donation_cart']) ?>
+            </span>
+      <?php endif; ?>
+ </a>
+</div>
+          <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'ngo'): ?>
             <!-- Notification bell and dropdown -->
             <div class="dropdown dropdown-end">
-    <div tabindex="0" role="button" class="btn btn-ghost btn-circle relative">
-        <div class="indicator">
+ <div tabindex="0" role="button" class="btn btn-ghost btn-circle relative">
+      <div class="indicator">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
             </svg>
             <?php if ($unreadCount > 0): ?>
-                <span class="badge badge-sm badge-error animate-pulse absolute -top-1 -right-1 px-1.5 py-0.5 text-xs text-white font-bold rounded-full"><?= $unreadCount ?></span>
+                 <span class="badge badge-sm badge-error animate-pulse absolute -top-1 -right-1 px-1.5 py-0.5 text-xs text-white font-bold rounded-full"><?= $unreadCount ?></span>
             <?php endif; ?>
-        </div>
-    </div>
-    <div tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-96 p-0 shadow-lg overflow-hidden">
-        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 flex justify-between items-center sticky top-0">
+      </div>
+ </div>
+ <div tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-96 p-0 shadow-lg overflow-hidden">
+      <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 flex justify-between items-center sticky top-0">
             <h3 class="font-medium text-lg">Notifications</h3>
             <?php if ($unreadCount > 0): ?>
-                <a href="?mark_all_read=1" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">Mark all read</a>
+                 <a href="?mark_all_read=1" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">Mark all read</a>
             <?php endif; ?>
-        </div>
-        
-        <div class="max-h-[70vh] overflow-y-auto">
+      </div>
+      
+      <div class="max-h-[70vh] overflow-y-auto">
             <?php if (!empty($notifications)): ?>
-                <?php foreach ($notifications as $notification): ?>
-                    <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-yellow-50/30 dark:bg-yellow-800/10' ?>">
-                        <a href="<?= $notification['link'] ?>" class="block px-4 py-3 relative">
-                            <?php if (!$notification['is_read']): ?>
-                                <span class="absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-yellow-500 rounded-full"></span>
-                            <?php endif; ?>
-                            <div class="flex items-start">
-                                <div class="mr-3 bg-yellow-100 text-yellow-800 rounded-full p-2 flex-shrink-0">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                                    </svg>
-                                </div>
-                                <div class="flex-1">
-                                    <p class="text-sm font-medium mb-0.5 <?= $notification['is_read'] ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white' ?>">
-                                        <?= htmlspecialchars($notification['message']) ?>
-                                    </p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                        <?= date('M d, h:i A', strtotime($notification['created_at'])) ?>
-                                    </p>
-                                </div>
-                                <?php if (!$notification['is_read']): ?>
-                                    <a href="?mark_read=<?= $notification['id'] ?>" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
-                                        Mark read
-                                    </a>
-                                <?php endif; ?>
-                            </div>
-                        </a>
-                    </div>
-                <?php endforeach; ?>
+                 <?php foreach ($notifications as $notification): ?>
+                      <div class="border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors <?= $notification['is_read'] ? '' : 'bg-yellow-50/30 dark:bg-yellow-800/10' ?>">
+                            <a href="<?= $notification['link'] ?>" class="block px-4 py-3 relative">
+                                 <?php if (!$notification['is_read']): ?>
+                                      <span class="absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                 <?php endif; ?>
+                                 <div class="flex items-start">
+                                      <div class="mr-3 bg-yellow-100 text-yellow-800 rounded-full p-2 flex-shrink-0">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                                            </svg>
+                                      </div>
+                                      <div class="flex-1">
+                                            <p class="text-sm font-medium mb-0.5 <?= $notification['is_read'] ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white' ?>">
+                                                 <?= htmlspecialchars($notification['message']) ?>
+                                            </p>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                                 <?= date('M d, h:i A', strtotime($notification['created_at'])) ?>
+                                            </p>
+                                      </div>
+                                      <?php if (!$notification['is_read']): ?>
+                                            <a href="?mark_read=<?= $notification['id'] ?>" class="ml-2 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline">
+                                                 Mark read
+                                            </a>
+                                      <?php endif; ?>
+                                 </div>
+                            </a>
+                      </div>
+                 <?php endforeach; ?>
             <?php else: ?>
-                <div class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                    <p class="font-medium">No notifications</p>
-                    <p class="text-sm mt-1">You're all caught up!</p>
-                </div>
-            <?php endif; ?>
-        </div>
-        
-        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-t border-gray-200 text-center">
-            <a href="../ngo/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
-                View all notifications
-            </a>
-        </div>
-    </div>
-</div>
-        <?php endif; ?>
-        
-        <!-- User avatar dropdown (for all user types) -->
-        <div class="dropdown dropdown-end">
-            <div class="dropdown dropdown-end">
-               <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
-                 <div class="w-10 rounded-full">
-                   <img
-                     alt="Tailwind CSS Navbar component"
-                     src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" />
+                 <div class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
+                      <p class="font-medium">No notifications</p>
+                      <p class="text-sm mt-1">You're all caught up!</p>
                  </div>
-               </div>
-               <ul
-                 tabindex="0"
-                 class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
-                 <li>
-                   <a href="../ngo/profile.php" class="justify-between">
-                     Profile
-                     <span class="badge">New</span>
-                   </a>
-                 </li>
-                 <li><a>Settings</a></li>
-                 <li><a href="../../auth/logout.php">Logout</a></li>
-               </ul>
+            <?php endif; ?>
+      </div>
+      
+      <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-t border-gray-200 text-center">
+            <a href="../ngo/all_notifications.php" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline">
+                 View all notifications
+            </a>
+      </div>
+ </div>
+</div>
+      <?php endif; ?>
+      
+      <!-- User avatar dropdown (for all user types) -->
+      <div class="dropdown dropdown-end">
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
+                  <div class="w-10 rounded-full">
+                     <img
+                        alt="Tailwind CSS Navbar component"
+                        src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" />
+                  </div>
+                </div>
+                <ul
+                  tabindex="0"
+                  class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
+                  <li>
+                     <a href="../ngo/profile.php" class="justify-between">
+                        Profile
+                        <span class="badge">New</span>
+                     </a>
+                  </li>
+                  <li><a>Settings</a></li>
+                  <li><a href="../../auth/logout.php">Logout</a></li>
+                </ul>
              </div>
              
-           </div>
-         </div>
-     </div>
-   </div>
+          </div>
+        </div>
+  </div>
+</div>
  </nav>
  
  <hr class="bg-sec">

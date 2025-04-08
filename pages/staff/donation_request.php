@@ -3,10 +3,11 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/../../logs/error.log'); // Update the path to a writable location
 
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
+require_once '../../includes/mail/EmailService.php';
+use App\Mail\EmailService;
 
 // Check for staff access
 checkAuth(['staff']);
@@ -15,10 +16,13 @@ $pdo = getPDO();
 $branchId = $_SESSION['branch_id'];
 
 // Get all NGO donation requests APPROVED by admin but not yet prepared
+// Only show products that were donated by this specific branch
 $stmt = $pdo->prepare("
     SELECT 
         ndr.id,
         ndr.product_id,
+        ndr.branch_id,
+        ndr.waste_id,
         ndr.quantity_requested,
         ndr.request_date,
         ndr.pickup_date,
@@ -26,21 +30,29 @@ $stmt = $pdo->prepare("
         ndr.status,
         ndr.ngo_notes,
         ndr.admin_notes,
-        p.name as product_name,
-        p.category,
-        COALESCE(u.organization_name, CONCAT(u.fname, ' ', u.lname)) as ngo_name,
+        pi.name as product_name,
+        pi.category,
+        COALESCE(np.organization_name, u.organization_name, CONCAT(u.fname, ' ', u.lname)) as ngo_name,
         u.email as ngo_email,
         u.phone as ngo_phone,
-        ndr.ngo_id
+        ndr.ngo_id,
+        pw.waste_date as expiry_date
     FROM 
         ngo_donation_requests ndr
     JOIN 
-        products p ON ndr.product_id = p.id
+        product_info pi ON ndr.product_id = pi.id
+    JOIN 
+        product_waste pw ON ndr.waste_id = pw.id
     JOIN 
         users u ON ndr.ngo_id = u.id
+    LEFT JOIN
+        ngo_profiles np ON u.id = np.user_id
     WHERE 
         ndr.branch_id = ? AND 
+        pw.branch_id = ? AND  /* Ensure waste was from this branch */
+        pw.staff_id IN (SELECT id FROM users WHERE branch_id = ?) AND  /* Staff from this branch */
         ndr.status = 'approved' AND
+        pw.disposal_method = 'donation' AND
         NOT EXISTS (
             SELECT 1 FROM donation_prepared dp 
             WHERE dp.ngo_request_id = ndr.id
@@ -48,7 +60,7 @@ $stmt = $pdo->prepare("
     ORDER BY 
         ndr.pickup_date ASC, ndr.pickup_time ASC
 ");
-$stmt->execute([$branchId]);
+$stmt->execute([$branchId, $branchId, $branchId]);
 $pendingRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Group requests by NGO
@@ -80,11 +92,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
         $pdo->beginTransaction();
         
         if ($action === 'prepare') {
-            // Get the donation request details
+            // Get the donation request details with all needed information
             $requestStmt = $pdo->prepare("
-                SELECT ndr.product_id, ndr.quantity_requested, ndr.ngo_id, p.name as product_name
+                SELECT 
+                    ndr.product_id, 
+                    ndr.quantity_requested, 
+                    ndr.ngo_id,
+                    ndr.branch_id,
+                    ndr.pickup_date,
+                    ndr.pickup_time,
+                    pi.name as product_name,
+                    u.email as ngo_email,
+                    COALESCE(np.organization_name, u.organization_name, CONCAT(u.fname, ' ', u.lname)) as ngo_name,
+                    b.name as branch_name,
+                    b.address as branch_address
                 FROM ngo_donation_requests ndr
-                JOIN products p ON ndr.product_id = p.id
+                JOIN product_info pi ON ndr.product_id = pi.id
+                JOIN users u ON ndr.ngo_id = u.id
+                JOIN branches b ON ndr.branch_id = b.id
+                LEFT JOIN ngo_profiles np ON u.id = np.user_id
                 WHERE ndr.id = ? AND ndr.branch_id = ? AND ndr.status = 'approved'
             ");
             $requestStmt->execute([$requestId, $branchId]);
@@ -109,17 +135,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
             $notifyStmt = $pdo->prepare("
                 INSERT INTO notifications (
                     user_id,
-                    target_role,
                     message,
                     notification_type,
                     link,
                     is_read
                 ) VALUES (
                     ?,
-                    'ngo',
                     ?,
                     'donation_prepared',
-                    '/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php',
+                    '../ngo/donation_history.php',
                     0
                 )
             ");
@@ -127,7 +151,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
             $message = "Your donation request for {$requestDetails['product_name']} is ready for pickup!";
             $notifyStmt->execute([$requestDetails['ngo_id'], $message]);
             
-            $successMessage = "Request marked as prepared. NGO has been notified.";
+            // Send email to NGO
+            try {
+                $emailService = new EmailService();
+                $emailData = [
+                    'name' => $requestDetails['ngo_name'],
+                    'email' => $requestDetails['ngo_email'],
+                    'product_name' => $requestDetails['product_name'],
+                    'quantity' => $requestDetails['quantity_requested'],
+                    'branch_name' => $requestDetails['branch_name'],
+                    'branch_address' => $requestDetails['branch_address'],
+                    'pickup_date' => $requestDetails['pickup_date'],
+                    'pickup_time' => formatTimeSlot($requestDetails['pickup_time']),
+                    'staff_notes' => $staffNotes
+                ];
+                
+                $emailService->sendDonationPreparationEmail($emailData);
+            } catch (Exception $emailErr) {
+                // Log the error but don't fail the operation
+                error_log("Failed to send preparation email: " . $emailErr->getMessage());
+            }
+            
+            $successMessage = "Request marked as prepared. NGO has been notified via app and email.";
         }
         
         $pdo->commit();
@@ -135,6 +180,150 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
     } catch (Exception $e) {
         $pdo->rollBack();
         $errorMessage = "Error: " . $e->getMessage();
+    }
+}
+
+// Add this to your existing PHP code where you handle other POST requests
+
+// Handle bulk preparation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_request_ids'], $_POST['action']) && $_POST['action'] === 'bulk_prepare') {
+    // Initialize arrays for prepared products
+    $preparedProducts = [];
+    $productNames = [];
+    
+    $requestIds = json_decode($_POST['bulk_request_ids'], true);
+    $staffNotes = isset($_POST['staff_notes']) ? trim($_POST['staff_notes']) : '';
+    
+    // Validate request IDs
+    if (!is_array($requestIds) || empty($requestIds)) {
+        $errorMessage = "No valid requests selected for preparation.";
+    } else {
+        try {
+            $pdo->beginTransaction();
+            $successCount = 0;
+            $ngoId = null;
+            $ngoName = null;
+            $productNames = [];
+            $preparedProducts = [];
+            
+            foreach ($requestIds as $requestId) {
+                // Get the donation request details
+                $requestStmt = $pdo->prepare("
+                    SELECT 
+                        ndr.product_id, 
+                        ndr.quantity_requested, 
+                        ndr.ngo_id,
+                        ndr.branch_id,
+                        ndr.pickup_date,
+                        ndr.pickup_time, 
+                        pi.name as product_name,
+                        COALESCE(np.organization_name, u.organization_name, CONCAT(u.fname, ' ', u.lname)) as ngo_name,
+                        u.email as ngo_email,
+                        b.name as branch_name,
+                        b.address as branch_address
+                    FROM ngo_donation_requests ndr
+                    JOIN product_info pi ON ndr.product_id = pi.id
+                    JOIN users u ON ndr.ngo_id = u.id
+                    JOIN branches b ON ndr.branch_id = b.id
+                    LEFT JOIN ngo_profiles np ON u.id = np.user_id
+                    WHERE ndr.id = ? AND ndr.branch_id = ? AND ndr.status = 'approved'
+                ");
+                $requestStmt->execute([$requestId, $branchId]);
+                $requestDetails = $requestStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$requestDetails) {
+                    continue; // Skip if not found or not valid
+                }
+                
+                // Store NGO info for notification
+                if (!$ngoId) {
+                    $ngoId = $requestDetails['ngo_id'];
+                    $ngoName = $requestDetails['ngo_name'];
+                    $ngoEmail = $requestDetails['ngo_email'];
+                    $branchName = $requestDetails['branch_name'];
+                    $branchAddress = $requestDetails['branch_address'];
+                    $pickupDate = $requestDetails['pickup_date'];
+                }
+                
+                // Store product details for email
+                $preparedProducts[] = [
+                    'product_name' => $requestDetails['product_name'],
+                    'quantity' => $requestDetails['quantity_requested']
+                ];
+                
+                // Add product name to list for notification
+                $productNames[] = $requestDetails['product_name'];
+                
+                // Record the preparation
+                $prepareStmt = $pdo->prepare("
+                    INSERT INTO donation_prepared (
+                        ngo_request_id,
+                        staff_id,
+                        prepared_date,
+                        staff_notes
+                    ) VALUES (?, ?, NOW(), ?)
+                ");
+                $prepareStmt->execute([$requestId, $_SESSION['user_id'], $staffNotes]);
+                
+                $successCount++;
+            }
+            
+            // Send single notification for all prepared items
+            if ($ngoId && $successCount > 0) {
+                // Create notification for NGO
+                $notifyStmt = $pdo->prepare("
+                    INSERT INTO notifications (
+                        user_id,
+                        message,
+                        notification_type,
+                        link,
+                        is_read
+                    ) VALUES (
+                        ?,
+                        ?,
+                        'donation_prepared',
+                        '../ngo/donation_history.php',
+                        0
+                    )
+                ");
+                
+                // Format product names nicely
+                $productList = count($productNames) > 3 
+                    ? implode(', ', array_slice($productNames, 0, 3)) . " and " . (count($productNames) - 3) . " more"
+                    : implode(', ', $productNames);
+                
+                $message = "{$successCount} items ({$productList}) are now ready for pickup!";
+                $notifyStmt->execute([$ngoId, $message]);
+                
+                // Send bulk email notification
+                try {
+                    $emailService = new EmailService();
+                    $emailData = [
+                        'name' => $ngoName,
+                        'email' => $ngoEmail,
+                        'branch_name' => $branchName,
+                        'branch_address' => $branchAddress,
+                        'pickup_date' => $pickupDate,
+                        'staff_notes' => $staffNotes,
+                        'products' => $preparedProducts,
+                        'products_count' => count($preparedProducts),
+                        'item_count' => $successCount
+                    ];
+                    
+                    $emailService->sendBulkDonationPreparationEmail($emailData);
+                } catch (Exception $emailErr) {
+                    // Log the error but don't fail the operation
+                    error_log("Failed to send bulk preparation email: " . $emailErr->getMessage());
+                }
+            }
+            
+            $pdo->commit();
+            $successMessage = "{$successCount} items have been marked as prepared for {$ngoName}. NGO has been notified.";
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $errorMessage = "Error processing bulk preparation: " . $e->getMessage();
+        }
     }
 }
 ?>
@@ -164,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
         }
         
         $(document).ready(function() {
-            // Prepare button click
+            // Existing prepare button click handler
             $('.prepare-btn').on('click', function() {
                 const requestId = $(this).data('id');
                 const productName = $(this).data('product');
@@ -172,6 +361,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
                 $('#request_id').val(requestId);
                 $('#product_name_display').text(productName);
                 document.getElementById('prepare_modal').showModal();
+            });
+            
+            // Toggle all checkboxes for an NGO
+            $('.select-all-ngo').on('change', function() {
+                const ngoId = $(this).data('ngo-id');
+                const isChecked = $(this).prop('checked');
+                
+                $(`.request-checkbox[data-ngo-id="${ngoId}"]`).prop('checked', isChecked);
+                updateBulkButtonVisibility(ngoId);
+            });
+            
+            // Update bulk button when individual checkboxes change
+            $('.request-checkbox').on('change', function() {
+                const ngoId = $(this).data('ngo-id');
+                updateBulkButtonVisibility(ngoId);
+                
+                // Update "select all" checkbox state
+                const totalCheckboxes = $(`.request-checkbox[data-ngo-id="${ngoId}"]`).length;
+                const checkedCheckboxes = $(`.request-checkbox[data-ngo-id="${ngoId}"]:checked`).length;
+                
+                $(`.select-all-ngo[data-ngo-id="${ngoId}"]`).prop('checked', 
+                    totalCheckboxes > 0 && totalCheckboxes === checkedCheckboxes);
+            });
+            
+            // Update bulk button visibility based on selected checkboxes
+            function updateBulkButtonVisibility(ngoId) {
+                const selectedCount = $(`.request-checkbox[data-ngo-id="${ngoId}"]:checked`).length;
+                const bulkButton = $(`.bulk-prepare-btn[data-ngo-id="${ngoId}"]`);
+                
+                if (selectedCount > 0) {
+                    bulkButton.removeClass('hidden');
+                    bulkButton.find('.selected-count').text(selectedCount);
+                } else {
+                    bulkButton.addClass('hidden');
+                }
+            }
+            
+            // Handle bulk prepare button click
+            $('.bulk-prepare-btn').on('click', function() {
+                const ngoId = $(this).data('ngo-id');
+                const ngoName = $(this).data('ngo-name');
+                
+                // Get all checked request IDs for this NGO
+                const selectedIds = [];
+                const selectedProducts = [];
+                
+                $(`.request-checkbox[data-ngo-id="${ngoId}"]:checked`).each(function() {
+                    selectedIds.push($(this).data('id'));
+                    selectedProducts.push($(this).data('product'));
+                });
+                
+                // Populate the bulk modal
+                $('#bulk_ngo_name').text(ngoName);
+                $('#bulk_request_ids').val(JSON.stringify(selectedIds));
+                
+                // Create list of products
+                let listHtml = '';
+                selectedProducts.forEach(product => {
+                    listHtml += `<div class="text-sm py-1">${product}</div>`;
+                });
+                $('#bulk_items_list').html(listHtml);
+                
+                // Show the modal
+                document.getElementById('bulk_prepare_modal').showModal();
             });
         });
     </script>
@@ -240,21 +493,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
                 <?php foreach ($requestsByNgo as $ngoId => $ngoData): ?>
                     <div class="card bg-white shadow-md mb-6">
                         <div class="card-body">
-                            <h3 class="card-title text-primarycol">
-                                <?= htmlspecialchars($ngoData['ngo_name']) ?>
-                                <span class="badge badge-primary ml-2">
-                                    <?= count($ngoData['items']) ?> items
-                                </span>
-                            </h3>
-                            <p class="text-sm text-gray-500">
-                                Pickup on: <?= date('M d, Y', strtotime($ngoData['pickup_date'])) ?>
-                            </p>
+                            <div class="flex justify-between items-center mb-4">
+                                <div>
+                                    <h3 class="text-xl font-semibold text-primarycol">
+                                        <?= htmlspecialchars($ngoData['ngo_name']) ?>
+                                        <span class="badge badge-primary ml-2">
+                                            <?= count($ngoData['items']) ?> items
+                                        </span>
+                                    </h3>
+                                    <p class="text-sm text-gray-500">
+                                        Pickup on: <?= date('M d, Y', strtotime($ngoData['pickup_date'])) ?>
+                                    </p>
+                                </div>
+                                <button data-ngo-id="<?= $ngoId ?>" 
+                                        data-ngo-name="<?= htmlspecialchars($ngoData['ngo_name']) ?>" 
+                                        class="bulk-prepare-btn btn btn-success btn-sm hidden">
+                                    <i class="fas fa-check-circle mr-1"></i>
+                                    Bulk Prepare (<span class="selected-count">0</span>)
+                                </button>
+                            </div>
                             
                             <!-- Display items table -->
                             <div class="overflow-x-auto mt-4">
                                 <table class="table w-full">
                                     <thead>
                                         <tr class="bg-sec">
+                                            <th class="w-10">
+                                                <input type="checkbox" class="select-all-ngo checkbox checkbox-sm" data-ngo-id="<?= $ngoId ?>">
+                                            </th>
                                             <th>ID</th>
                                             <th>Product</th>
                                             <th>Quantity</th>
@@ -265,6 +531,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
                                     <tbody>
                                         <?php foreach ($ngoData['items'] as $request): ?>
                                             <tr class="hover">
+                                                <td>
+                                                    <input type="checkbox" 
+                                                           class="request-checkbox checkbox checkbox-sm" 
+                                                           data-id="<?= $request['id'] ?>"
+                                                           data-ngo-id="<?= $ngoId ?>"
+                                                           data-product="<?= htmlspecialchars($request['product_name']) ?>">
+                                                </td>
                                                 <td><?= $request['id'] ?></td>
                                                 <td><?= htmlspecialchars($request['product_name']) ?></td>
                                                 <td><?= $request['quantity_requested'] ?></td>
@@ -313,6 +586,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_id'], $_POST[
                 <div class="modal-action">
                     <button type="button" onclick="document.getElementById('prepare_modal').close();" class="btn">Cancel</button>
                     <button type="submit" class="btn bg-primarycol text-white">Confirm Preparation</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+    
+    <!-- Add this after the existing prepare_modal -->
+    <dialog id="bulk_prepare_modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-primarycol">Bulk Preparation</h3>
+            <p class="py-2">Prepare multiple items for <span id="bulk_ngo_name" class="font-semibold"></span></p>
+            
+            <div id="bulk_items_list" class="py-2 px-4 my-2 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">
+                <!-- Will be populated by JavaScript -->
+            </div>
+            
+            <form method="POST">
+                <input type="hidden" id="bulk_request_ids" name="bulk_request_ids">
+                <input type="hidden" name="action" value="bulk_prepare">
+                
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text">Additional Notes (Optional)</span>
+                    </label>
+                    <textarea name="staff_notes" class="textarea textarea-bordered h-24"
+                              placeholder="Add preparation details, pickup instructions, etc."></textarea>
+                </div>
+                
+                <div class="alert alert-info mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>The NGO will be notified when these items are prepared.</span>
+                </div>
+                
+                <div class="modal-action">
+                    <button type="button" onclick="document.getElementById('bulk_prepare_modal').close();" class="btn">Cancel</button>
+                    <button type="submit" class="btn bg-primarycol text-white">Prepare Selected Items</button>
                 </div>
             </form>
         </div>

@@ -351,6 +351,7 @@ try {
                                 <th>Category</th>
                                 <th>Record Date</th>
                                 <th>Excess</th>
+                                <th>Value</th>
                                 <th>Reason</th>
                                 <th>Disposal Method</th>
                                 <th>Batch #</th>
@@ -372,6 +373,7 @@ try {
                                     echo "<td>" . htmlspecialchars($record['product_category']) . "</td>";
                                     echo "<td>" . htmlspecialchars($formattedDate) . "</td>";
                                     echo "<td>" . htmlspecialchars($record['waste_quantity']) . "</td>";
+                                    echo "<td>₱" . number_format($record['waste_value'], 2) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['waste_reason'])) . "</td>";
                                     echo "<td>" . htmlspecialchars(ucfirst($record['disposal_method'])) . "</td>";
                                     echo "<td>" . (isset($record['batch_number']) ? htmlspecialchars($record['batch_number']) : 'N/A') . "</td>";
@@ -386,7 +388,7 @@ try {
                                                     data-waste-reason='" . $record['waste_reason'] . "'
                                                     data-disposal-method='" . $record['disposal_method'] . "'
                                                     data-notes='" . htmlspecialchars($record['notes']) . "'
-                                                    data-product-value='" . ($record['waste_value'] / $record['waste_quantity']) . "'>
+                                                    data-product-value='" . ($record['waste_quantity'] > 0 ? ($record['waste_value'] / $record['waste_quantity']) : 0) . "'>
                                                     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 mr-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
                                                         <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-5-5l5 5m0 0l-5 5m5-5H13' />
                                                     </svg>

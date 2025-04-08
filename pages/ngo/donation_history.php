@@ -46,7 +46,7 @@ $stmt = $pdo->prepare("
         ndr.id,
         ndr.product_id,
         ndr.branch_id,
-        ndr.donation_request_id,
+        ndr.waste_id,
         ndr.request_date,
         ndr.pickup_date,
         ndr.pickup_time,
@@ -142,8 +142,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
         $checkStmt = $pdo->prepare("
             SELECT 
                 ndr.id, ndr.ngo_id, ndr.product_id, ndr.quantity_requested,
-                ndr.branch_id, ndr.donation_request_id, 
-                p.name as product_name, b.name as branch_name
+                ndr.branch_id, ndr.waste_id, /* Changed from donation_request_id to waste_id */
+                p.name as product_name, b.name as branch_name,
+                b.address as branch_address /* Added to avoid undefined index later */
             FROM ngo_donation_requests ndr
             JOIN product_info p ON ndr.product_id = p.id
             JOIN branches b ON ndr.branch_id = b.id
@@ -165,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
         ");
         $insertStmt->execute([
             $_SESSION['user_id'],
-            $requestDetails['donation_request_id'], // Use the donation_request_id field instead of the ngo_donation_request id
+            $requestDetails['id'], // Use the request ID
             $receivedBy,
             $receivedQuantity,
             $remarks
@@ -187,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
                 'admin',
                 ?,
                 'donation_received',
-                '/capstone/WASTE-WISE-CAPSTONE/pages/admin/donation_history.php',
+                '../admin/foods.php',
                 0
             )
         ");
@@ -217,6 +218,154 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
     } catch (Exception $e) {
         $pdo->rollBack();
         $errorMessage = "Error confirming pickup: " . $e->getMessage();
+    }
+}
+
+// Handle bulk pickup confirmation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_bulk_pickup'])) {
+    if (!isset($_POST['request_ids']) || !is_array($_POST['request_ids'])) {
+        $errorMessage = "No donations selected for pickup.";
+    } else {
+        try {
+            $pdo->beginTransaction();
+            $requestIds = $_POST['request_ids'];
+            $receivedBy = $_POST['received_by'];
+            $remarks = $_POST['remarks'] ?? '';
+            $successCount = 0;
+            
+            // For bulk receipt - collect all products
+            $allProducts = [];
+            $totalQuantity = 0;
+            $branchName = "";
+            $branchAddress = "";
+            
+            foreach ($requestIds as $requestId) {
+                // Existing code for checking and processing each request
+                $requestId = (int)$requestId;
+                $receivedQuantity = (float)($_POST['quantities'][$requestId] ?? 0);
+                
+                if ($receivedQuantity <= 0) {
+                    continue; // Skip if quantity is invalid
+                }
+                
+                // Check if request exists and is approved
+                $checkStmt = $pdo->prepare("
+                    SELECT 
+                        ndr.id, ndr.ngo_id, ndr.product_id, ndr.quantity_requested,
+                        ndr.branch_id, ndr.waste_id,
+                        p.name as product_name, b.name as branch_name,
+                        b.address as branch_address
+                    FROM ngo_donation_requests ndr
+                    JOIN product_info p ON ndr.product_id = p.id
+                    JOIN branches b ON ndr.branch_id = b.id
+                    WHERE ndr.id = ? AND ndr.ngo_id = ? AND ndr.status = 'approved' AND ndr.is_received = 0
+                ");
+                $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+                $requestDetails = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$requestDetails) {
+                    continue; // Skip if request not found or already received
+                }
+                
+                // Record donation receipt
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO donated_products (
+                        ngo_id, donation_request_id, received_by, received_date,
+                        received_quantity, remarks
+                    ) VALUES (?, ?, ?, NOW(), ?, ?)
+                ");
+                $insertStmt->execute([
+                    $_SESSION['user_id'],
+                    $requestDetails['id'],  // Use request ID instead of waste_id
+                    $receivedBy,
+                    $receivedQuantity,
+                    $remarks
+                ]);
+                
+                // Update request status
+                $updateStmt = $pdo->prepare("
+                    UPDATE ngo_donation_requests 
+                    SET is_received = 1, received_at = NOW()
+                    WHERE id = ?
+                ");
+                $updateStmt->execute([$requestId]);
+                
+                // Collect product info for bulk receipt
+                $allProducts[] = [
+                    'id' => $requestId,
+                    'product_name' => $requestDetails['product_name'],
+                    'quantity' => $receivedQuantity
+                ];
+                $totalQuantity += $receivedQuantity;
+                
+                // Store branch info (assuming all products are from same branch)
+                $branchName = $requestDetails['branch_name'];
+                $branchAddress = $requestDetails['branch_address'] ?? 'Address not available';
+                
+                $successCount++;
+            }
+            
+            // Send a single bulk notification to admin AFTER the loop instead of individual ones
+            if ($successCount > 0) {
+                $notifyStmt = $pdo->prepare("
+                    INSERT INTO notifications (
+                        target_role, 
+                        message, 
+                        notification_type,
+                        link, 
+                        is_read
+                    ) VALUES (
+                        'admin',
+                        ?,
+                        'donation_received',
+                        '../admin/donation_history.php', 
+                        0
+                    )
+                ");
+                
+                $ngoName = $_SESSION['organization_name'] ?: ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
+                
+                // Format product list for notification
+                $productSummary = '';
+                if (count($allProducts) > 3) {
+                    $topProducts = array_slice($allProducts, 0, 3);
+                    $productNames = array_column($topProducts, 'product_name');
+                    $productSummary = implode(', ', $productNames) . ' and ' . (count($allProducts) - 3) . ' more';
+                } else {
+                    $productNames = array_column($allProducts, 'product_name');
+                    $productSummary = implode(', ', $productNames);
+                }
+                
+                $message = "NGO '{$ngoName}' has confirmed bulk pickup of {$successCount} items ({$totalQuantity} total qty): {$productSummary}";
+                $notifyStmt->execute([$message]);
+            }
+            
+            // Send a single bulk receipt email if products were processed
+            if (count($allProducts) > 0) {
+                $emailService = new EmailService();
+                $bulkEmailData = [
+                    'ngo_name' => $ngoName,
+                    'ngo_email' => $_SESSION['email'],
+                    'date' => date('Y-m-d H:i:s'),
+                    'branch_name' => $branchName,
+                    'branch_address' => $branchAddress,
+                    'received_by' => $receivedBy,
+                    'products' => $allProducts,
+                    'total_quantity' => $totalQuantity,
+                    'remarks' => $remarks,
+                    'is_bulk' => true
+                ];
+                
+                $emailService->sendBulkDonationReceiptEmail($bulkEmailData);
+            }
+            
+            $pdo->commit();
+            $successMessage = "Successfully confirmed pickup of {$successCount} donations! A receipt has been sent to your email.";
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $errorMessage = "Error confirming pickups: " . $e->getMessage();
+        }
     }
 }
 
@@ -317,10 +466,20 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
         <?php endif; ?>
         
         <div class="bg-white shadow-md rounded-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold">Your Donations</h3>
+                <button id="bulk-confirm-btn" 
+                        class="btn btn-primary btn-sm bg-primarycol hidden">
+                    Confirm Selected Pickups
+                </button>
+            </div>
             <div class="overflow-x-auto">
                 <table class="table w-full">
                     <thead>
                         <tr>
+                            <th>
+                                <input type="checkbox" id="select-all" class="checkbox checkbox-sm">
+                            </th>
                             <th>ID</th>
                             <th>Product</th>
                             <th>Quantity</th>
@@ -333,13 +492,22 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <tbody>
                         <?php if (count($donations) === 0): ?>
                             <tr>
-                                <td colspan="7" class="text-center py-4 text-gray-500">
+                                <td colspan="8" class="text-center py-4 text-gray-500">
                                     No donation history found.
                                 </td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($donations as $donation): ?>
                                 <tr class="hover">
+                                    <td>
+                                        <?php if ($donation['status'] === 'approved' && !$donation['is_received']): ?>
+                                        <input type="checkbox" 
+                                               class="donation-checkbox checkbox checkbox-sm" 
+                                               data-id="<?= $donation['id'] ?>"
+                                               data-product="<?= htmlspecialchars($donation['product_name']) ?>"
+                                               data-quantity="<?= $donation['quantity_requested'] ?>">
+                                        <?php endif; ?>
+                                    </td>
                                     <td><?= $donation['id'] ?></td>
                                     <td><?= htmlspecialchars($donation['product_name']) ?></td>
                                     <td><?= $donation['quantity_requested'] ?></td>
@@ -531,6 +699,51 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
         </dialog>
     <?php endforeach; ?>
     
+    <!-- Add this after your existing modals -->
+<dialog id="bulk_pickup_modal" class="modal">
+    <div class="modal-box max-w-3xl">
+        <h3 class="font-bold text-lg mb-4">Bulk Donation Pickup Confirmation</h3>
+        <form method="POST" action="">
+            <input type="hidden" name="bulk_pickup" value="1">
+            <div id="selected-donations-container">
+                <!-- Will be populated by JS -->
+            </div>
+            
+            <div class="form-control mb-4 mt-6">
+                <label class="label">
+                    <span class="label-text">Received By (Name of person who picked up)</span>
+                </label>
+                <input type="text" name="received_by" class="input input-bordered" 
+                       value="<?= htmlspecialchars($ngoInfo['full_name']) ?>" required>
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text">Remarks (Optional - applies to all selected donations)</span>
+                </label>
+                <textarea name="remarks" class="textarea textarea-bordered h-24" 
+                          placeholder="Any notes about the pickup, condition, etc."></textarea>
+            </div>
+            
+            <div class="alert alert-info mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>A receipt confirmation will be sent to your email (<?= htmlspecialchars($userEmail) ?>).</span>
+            </div>
+            
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="document.getElementById('bulk_pickup_modal').close()">
+                    Cancel
+                </button>
+                <button type="submit" name="confirm_bulk_pickup" class="btn btn-primary bg-primarycol">
+                    Confirm All Pickups
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
     <script>
         // Show details modal
         document.querySelectorAll('.view-details-btn').forEach(button => {
@@ -564,6 +777,90 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                 document.getElementById('pickup_quantity').value = quantity;
                 document.getElementById('pickup_modal').showModal();
             });
+        });
+
+        // Existing scripts...
+
+        // Bulk donation selection functionality
+        const selectAllCheckbox = document.getElementById('select-all');
+        const donationCheckboxes = document.querySelectorAll('.donation-checkbox');
+        const bulkConfirmBtn = document.getElementById('bulk-confirm-btn');
+        
+        // Toggle all checkboxes
+        selectAllCheckbox?.addEventListener('change', function() {
+            const isChecked = this.checked;
+            donationCheckboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateBulkButtonVisibility();
+        });
+        
+        // Update button visibility when individual checkboxes change
+        donationCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateBulkButtonVisibility);
+        });
+        
+        function updateBulkButtonVisibility() {
+            const checkedBoxes = document.querySelectorAll('.donation-checkbox:checked');
+            if (checkedBoxes.length > 0) {
+                bulkConfirmBtn.classList.remove('hidden');
+            } else {
+                bulkConfirmBtn.classList.add('hidden');
+            }
+        }
+        
+        // Handle bulk confirm button click
+        bulkConfirmBtn?.addEventListener('click', function() {
+            const selectedCheckboxes = document.querySelectorAll('.donation-checkbox:checked');
+            const selectedDonationsContainer = document.getElementById('selected-donations-container');
+            
+            // Clear previous content
+            selectedDonationsContainer.innerHTML = '';
+            
+            if (selectedCheckboxes.length === 0) {
+                return;
+            }
+            
+            // Add a table showing selected donations
+            let html = `
+                <div class="overflow-x-auto">
+                    <table class="table w-full mb-4">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            selectedCheckboxes.forEach(checkbox => {
+                const id = checkbox.getAttribute('data-id');
+                const product = checkbox.getAttribute('data-product');
+                const quantity = checkbox.getAttribute('data-quantity');
+                
+                html += `
+                    <tr>
+                        <td>${id}</td>
+                        <td>${product}</td>
+                        <td>
+                            <input type="hidden" name="request_ids[]" value="${id}">
+                            <input type="number" name="quantities[${id}]" class="input input-bordered input-sm w-24"
+                                   value="${quantity}" min="0.01" step="0.01" required>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            selectedDonationsContainer.innerHTML = html;
+            document.getElementById('bulk_pickup_modal').showModal();
         });
     </script>
 </body>

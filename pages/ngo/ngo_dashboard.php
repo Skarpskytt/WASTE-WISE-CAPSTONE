@@ -58,7 +58,7 @@ $receivedDonations = $receivedDonationsQuery->fetch(PDO::FETCH_ASSOC);
 // Get pending requests
 $pendingRequestsQuery = $pdo->prepare("
     SELECT COUNT(*) as count
-    FROM donation_requests dr
+    FROM ngo_donation_requests dr
     JOIN donated_products dp ON dr.id = dp.donation_request_id
     WHERE dp.ngo_id = ? AND dr.status = 'pending'
 ");
@@ -67,10 +67,10 @@ $pendingRequests = $pendingRequestsQuery->fetch(PDO::FETCH_ASSOC);
 
 // Get ready for pickup (prepared but not yet received)
 $readyForPickupQuery = $pdo->prepare("
-    SELECT COUNT(*) as count, SUM(dr.quantity) as quantity
-    FROM donation_requests dr
+    SELECT COUNT(*) as count, SUM(dr.quantity_requested) as quantity
+    FROM ngo_donation_requests dr
     LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id AND dp.ngo_id = ?
-    WHERE dr.status = 'prepared' AND dp.id IS NULL
+    WHERE dr.status = 'approved' AND dp.id IS NULL
 ");
 $readyForPickupQuery->execute([$ngoId]);
 $readyForPickup = $readyForPickupQuery->fetch(PDO::FETCH_ASSOC);
@@ -97,7 +97,7 @@ $topCategoriesQuery = $pdo->prepare("
         p.category,
         SUM(dp.received_quantity) as total_quantity
     FROM donated_products dp
-    JOIN donation_requests dr ON dp.donation_request_id = dr.id
+    JOIN ngo_donation_requests dr ON dp.donation_request_id = dr.id
     JOIN product_info p ON dr.product_id = p.id
     WHERE dp.ngo_id = ?
     GROUP BY p.category
@@ -113,7 +113,7 @@ $topBranchesQuery = $pdo->prepare("
         b.name as branch_name,
         COUNT(*) as donation_count
     FROM donated_products dp
-    JOIN donation_requests dr ON dp.donation_request_id = dr.id
+    JOIN ngo_donation_requests dr ON dp.donation_request_id = dr.id
     JOIN branches b ON dr.branch_id = b.id
     WHERE dp.ngo_id = ?
     GROUP BY b.name
@@ -127,22 +127,22 @@ $topBranches = $topBranchesQuery->fetchAll(PDO::FETCH_ASSOC);
 $recentDonationsQuery = $pdo->prepare("
     SELECT 
         dr.id,
-        dr.quantity,
+        dr.quantity_requested as quantity,
         dp.received_date as pickup_date,
         dr.request_date as created_at,
         dr.status,
         CASE WHEN dp.id IS NOT NULL THEN 1 ELSE 0 END as is_received,
         p.name as product_name,
         b.name as branch_name
-    FROM donation_requests dr
+    FROM ngo_donation_requests dr
     LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id AND dp.ngo_id = ?
     JOIN product_info p ON dr.product_id = p.id
     JOIN branches b ON dr.branch_id = b.id
-    WHERE dr.status IN ('pending', 'approved', 'prepared', 'completed')
+    WHERE dr.ngo_id = ? AND dr.status IN ('pending', 'approved', 'rejected')
     ORDER BY dr.request_date DESC
     LIMIT 5
 ");
-$recentDonationsQuery->execute([$ngoId]);
+$recentDonationsQuery->execute([$ngoId, $ngoId]);
 $recentDonations = $recentDonationsQuery->fetchAll(PDO::FETCH_ASSOC);
 
 // Format chart data for JSON
@@ -234,7 +234,7 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
                             <p class="text-2xl font-bold text-gray-800"><?= $pendingRequests['count'] ?></p>
                             <p class="text-sm text-gray-500">awaiting approval</p>
                         </div>
-                        <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php" class="text-xs text-primarycol hover:underline">View requests</a>
+                        <a href="donation_history.php" class="text-xs text-primarycol hover:underline">View requests</a>
                     </div>
                 </div>
             </div>
@@ -294,7 +294,7 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
                 <?php if (empty($recentDonations)): ?>
                     <div class="text-center text-gray-500 py-8">
                         <p>No recent donation activity</p>
-                        <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/food_browse.php" class="btn btn-sm bg-primarycol text-white mt-4">Browse Available Food</a>
+                        <a href="food_browse.php" class="btn btn-sm bg-primarycol text-white mt-4">Browse Available Food</a>
                     </div>
                 <?php else: ?>
                     <div class="space-y-4">
@@ -310,7 +310,7 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
                                 </p>
                             </div>
                         <?php endforeach; ?>
-                        <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php" class="btn btn-sm btn-outline w-full mt-2">View All History</a>
+                        <a href="donation_history.php" class="btn btn-sm btn-outline w-full mt-2">View All History</a>
                     </div>
                 <?php endif; ?>
             </div>
@@ -369,13 +369,13 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
             <div class="bg-white p-6 rounded-lg shadow-md">
                 <h3 class="text-lg font-semibold text-primarycol mb-4">Quick Actions</h3>
                 <div class="space-y-3">
-                    <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/food_browse.php" class="btn btn-block bg-primarycol text-white">
+                    <a href="food_browse.php" class="btn btn-block bg-primarycol text-white">
                         Browse Available Donations
                     </a>
-                    <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php" class="btn btn-block btn-outline border-primarycol text-primarycol">
+                    <a href="donation_history.php" class="btn btn-block btn-outline border-primarycol text-primarycol">
                         View Donation History
                     </a>
-                    <a href="/capstone/WASTE-WISE-CAPSTONE/pages/ngo/donation_history.php" class="btn btn-block btn-outline border-primarycol text-primarycol">
+                    <a href="donation_history.php" class="btn btn-block btn-outline border-primarycol text-primarycol">
                         Confirm Pickups
                     </a>
                 </div>

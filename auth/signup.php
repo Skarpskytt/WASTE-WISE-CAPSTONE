@@ -160,38 +160,20 @@ $session = SessionHandler::getInstance($pdo);
       padding: 0.75rem;
     }
 
-    /* Make camera container smaller */
-    #camera-container {
-      height: 150px;
-    }
-
-    /* Reduce spacing between form sections */
-    .mt-4 {
-      margin-top: 0.75rem;
-    }
-
-    /* Adjust heading sizes to be more compact */
-    h1.text-2xl {
-      margin-bottom: 0.25rem;
-    }
-    
-    h1.text-sm {
-      margin-bottom: 1rem;
-    }
-
-    /* Make camera container smaller and better proportioned for faces */
+    /* Fix conflicting camera container settings */
     #camera-container {
       height: 200px;
-      width: 200px; /* Set equal width for square aspect ratio */
-      margin: 0 auto; /* Center the camera container */
-      border-radius: 8px; /* Optional: rounded corners */
+      width: 200px; 
+      margin: 0 auto; 
+      position: relative;
+      border-radius: 8px;
     }
 
     #video, #canvas {
       width: 100%;
       height: 100%;
-      object-fit: cover; /* Ensure the video fills the container */
-      border-radius: 8px; /* Match container's rounded corners */
+      object-fit: cover;
+      border-radius: 8px;
     }
 
     #face-detection-box {
@@ -200,14 +182,6 @@ $session = SessionHandler::getInstance($pdo);
       border-radius: 4px;
       display: none;
       z-index: 10;
-    }
-    
-    #camera-container {
-      height: 200px;
-      width: 200px; /* Square aspect ratio for better face centering */
-      margin: 0 auto;
-      position: relative; /* For absolute positioning of detection box */
-      border-radius: 8px;
     }
   </style>
 </head>

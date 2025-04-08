@@ -15,4 +15,25 @@ function getBaseUrl() {
 
 // App configuration
 define('BASE_URL', getBaseUrl());
+
+// Set default timezone to Philippines
+date_default_timezone_set('Asia/Manila');
+
+// Other timezone-specific settings
+define('TIMEZONE', 'Asia/Manila');
+define('TIMEZONE_DISPLAY', 'PHT'); // Philippine Time
+
+/**
+ * Generate relative URL paths that work across environments
+ * 
+ * @param string $path The path relative to the app root
+ * @param bool $includeBase Whether to include BASE_URL prefix
+ * @return string The formatted path
+ */
+function appPath($path, $includeBase = true) {
+    // Remove leading slashes
+    $path = ltrim($path, '/');
+    
+    return $includeBase ? BASE_URL . '/' . $path : $path;
+}
 ?>
