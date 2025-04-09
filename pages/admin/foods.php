@@ -8,170 +8,123 @@ checkAuth(['admin']);
 $pdo = getPDO();
 
 // Auto-handle expired products
-try {
-    $currentDate = date('Y-m-d');
-    $expiredItemsStmt = $pdo->prepare("
-        UPDATE product_waste pw
-        JOIN products p ON pw.product_id = p.id
-        SET pw.donation_status = 'cancelled', 
-            pw.admin_notes = CONCAT(IFNULL(pw.admin_notes, ''), '\n[System] Automatically cancelled due to expiration on ', ?)
-        WHERE pw.disposal_method = 'donation'
-        AND pw.donation_status IN ('pending', 'in-progress')
-        AND p.expiry_date < ?
-        AND NOT EXISTS (
-            SELECT 1 FROM ngo_donation_requests ndr 
-            WHERE ndr.donation_request_id = pw.id AND ndr.status = 'approved'
-        )
-    ");
-    $expiredItemsStmt->execute([$currentDate, $currentDate]);
-    
-    $changedRows = $expiredItemsStmt->rowCount();
-    if ($changedRows > 0) {
-        $successMessage = "System automatically updated $changedRows expired donation items.";
-    }
-} catch (PDOException $e) {
-    $errorMessage = "Error handling expired products: " . $e->getMessage();
-}
+// Logic for handling expired products could be added here
 
-// Initialize variables
-$successMessage = isset($successMessage) ? $successMessage : '';
-$errorMessage = isset($errorMessage) ? $errorMessage : '';
-$searchTerm = '';
-$statusFilter = isset($_GET['status']) ? $_GET['status'] : 'all';
-$branchFilter = isset($_GET['branch_id']) ? $_GET['branch_id'] : '';
-$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
-$dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
+// Get categories for filter
+$categoriesQuery = $pdo->query("SELECT DISTINCT category FROM product_info ORDER BY category");
+$categories = $categoriesQuery->fetchAll(PDO::FETCH_COLUMN);
 
-// Add expiry filter handling
-$expiryFilter = isset($_GET['expiry_status']) ? $_GET['expiry_status'] : 'all';
+// Build query based on filters
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$category = isset($_GET['category']) ? trim($_GET['category']) : '';
+$expiryFilter = isset($_GET['expiry']) ? trim($_GET['expiry']) : '';
+$status = isset($_GET['status']) ? trim($_GET['status']) : 'all';
+$sort = isset($_GET['sort']) ? trim($_GET['sort']) : 'newest';
 
-// Process donation status updates
-if (isset($_POST['update_status'])) {
-    $donationId = $_POST['donation_id'];
-    $newStatus = $_POST['new_status'];
-    $notes = $_POST['admin_notes'] ?? '';
-    
-    try {
-        $stmt = $pdo->prepare("
-            UPDATE product_waste 
-            SET donation_status = ?, admin_notes = ?, updated_at = NOW() 
-            WHERE id = ? AND disposal_method = 'donation'
-        ");
-        
-        $stmt->execute([$newStatus, $notes, $donationId]);
-        $successMessage = "Donation status updated successfully.";
-    } catch (PDOException $e) {
-        $errorMessage = "Error updating status: " . $e->getMessage();
-    }
-}
-
-// Search handling
-if (isset($_GET['search'])) {
-    $searchTerm = trim($_GET['search']);
-}
-
-// Build the query
-$query = "
+$params = [];
+$sql = "
     SELECT 
-        pw.id as waste_id,
-        p.name as product_name,
-        p.category as product_category,
-        p.image as product_image,
-        p.expiry_date,
-        pw.waste_date,
-        pw.waste_quantity,
+        pw.id as waste_id, 
+        p.id as product_id, 
+        p.name as product_name, 
+        p.category, 
+        pw.waste_quantity as available_quantity,
+        ps.expiry_date, 
+        p.image, 
+        b.id as branch_id, 
+        b.name as branch_name, 
+        b.address as branch_address,
+        b.location as branch_location,
+        pw.waste_date, 
         pw.waste_value,
-        pw.waste_reason,
-        pw.notes,
+        ps.batch_number,
         pw.donation_status,
-        pw.admin_notes,
-        CONCAT(s.fname, ' ', s.lname) as staff_name,
-        b.name as branch_name,
-        b.id as branch_id
+        pw.created_at,
+        (SELECT COUNT(*) FROM ngo_donation_requests ndr WHERE ndr.waste_id = pw.id) as request_count
     FROM product_waste pw
-    JOIN products p ON pw.product_id = p.id
-    JOIN users s ON pw.staff_id = s.id
+    JOIN product_info p ON pw.product_id = p.id
     JOIN branches b ON pw.branch_id = b.id
-    WHERE pw.disposal_method = 'donation'
+    LEFT JOIN product_stock ps ON pw.stock_id = ps.id
+    WHERE pw.disposal_method = 'donation' 
+    AND pw.archived = 0
 ";
 
-// Add filters
-$params = [];
-
-if (!empty($searchTerm)) {
-    $query .= " AND (p.name LIKE ? OR pw.notes LIKE ? OR s.fname LIKE ? OR s.lname LIKE ?)";
-    $searchParam = "%$searchTerm%";
-    $params = array_merge($params, [$searchParam, $searchParam, $searchParam, $searchParam]);
+// Filter by donation status
+if ($status != 'all') {
+    $sql .= " AND pw.donation_status = ?";
+    $params[] = $status;
 }
 
-if ($statusFilter !== 'all') {
-    $query .= " AND pw.donation_status = ?";
-    $params[] = $statusFilter;
+if (!empty($search)) {
+    $sql .= " AND (p.name LIKE ? OR p.category LIKE ?)";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
 }
 
-if (!empty($branchFilter)) {
-    $query .= " AND pw.branch_id = ?";
-    $params[] = $branchFilter;
+if (!empty($category)) {
+    $sql .= " AND p.category = ?";
+    $params[] = $category;
 }
 
-if (!empty($dateFrom)) {
-    $query .= " AND DATE(pw.waste_date) >= ?";
-    $params[] = $dateFrom;
-}
-
-if (!empty($dateTo)) {
-    $query .= " AND DATE(pw.waste_date) <= ?";
-    $params[] = $dateTo;
-}
-
-if ($expiryFilter !== 'all') {
-    $currentDate = date('Y-m-d');
-    $soonDate = date('Y-m-d', strtotime('+3 days'));
+// Apply expiry date filter
+if (!empty($expiryFilter)) {
+    $today = date('Y-m-d');
+    $tomorrow = date('Y-m-d', strtotime('+1 day'));
+    $weekLater = date('Y-m-d', strtotime('+7 days'));
     
-    if ($expiryFilter === 'expired') {
-        $query .= " AND p.expiry_date < ?";
-        $params[] = $currentDate;
-    } elseif ($expiryFilter === 'expiring_soon') {
-        $query .= " AND p.expiry_date >= ? AND p.expiry_date <= ?";
-        $params[] = $currentDate;
-        $params[] = $soonDate;
-    } elseif ($expiryFilter === 'valid') {
-        $query .= " AND p.expiry_date > ?";
-        $params[] = $currentDate;
+    switch ($expiryFilter) {
+        case 'today':
+            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) = ?";
+            $params[] = $today;
+            break;
+        case 'tomorrow':
+            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) = ?";
+            $params[] = $tomorrow;
+            break;
+        case 'this_week':
+            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) BETWEEN ? AND ?";
+            $params[] = $today;
+            $params[] = $weekLater;
+            break;
     }
 }
 
-$query .= " ORDER BY pw.waste_date DESC";
-
-try {
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $donations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Fetch branches for filter dropdown
-    $branchStmt = $pdo->query("SELECT id, name FROM branches ORDER BY name");
-    $branches = $branchStmt->fetchAll(PDO::FETCH_ASSOC);
-    
-} catch (PDOException $e) {
-    $errorMessage = "Database error: " . $e->getMessage();
-    $donations = [];
-    $branches = [];
+// Apply sorting
+switch ($sort) {
+    case 'expiry':
+        $sql .= " ORDER BY COALESCE(ps.expiry_date, pw.waste_date) ASC";
+        break;
+    case 'quantity':
+        $sql .= " ORDER BY pw.waste_quantity DESC";
+        break;
+    case 'name':
+        $sql .= " ORDER BY p.name ASC";
+        break;
+    case 'requests':
+        $sql .= " ORDER BY request_count DESC";
+        break;
+    case 'newest':
+    default:
+        $sql .= " ORDER BY pw.created_at DESC";
+        break;
 }
 
-// Calculate stats
-$totalDonations = count($donations);
-$totalPendingDonations = 0;
-$totalCompletedDonations = 0;
-$totalDonationValue = 0;
+// Execute query
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-foreach ($donations as $donation) {
-    $totalDonationValue += $donation['waste_value'];
-    if ($donation['donation_status'] === 'pending') {
-        $totalPendingDonations++;
-    } elseif ($donation['donation_status'] === 'completed') {
-        $totalCompletedDonations++;
-    }
-}
+// Get overall statistics
+$statsQuery = $pdo->query("
+    SELECT 
+        COUNT(*) as total_items,
+        SUM(CASE WHEN donation_status = 'pending' THEN 1 ELSE 0 END) as pending_items,
+        SUM(CASE WHEN donation_status = 'requested' THEN 1 ELSE 0 END) as requested_items,
+        SUM(CASE WHEN donation_status = 'approved' THEN 1 ELSE 0 END) as approved_items
+    FROM product_waste
+    WHERE disposal_method = 'donation' AND archived = 0
+");
+$stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -179,7 +132,7 @@ foreach ($donations as $donation) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Food Donation Management - WasteWise</title>
+    <title>Food Donations - WasteWise</title>
     <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -197,490 +150,501 @@ foreach ($donations as $donation) {
                 }
             }
         }
-
-        $(document).ready(function() {
-            // Sidebar toggling
-            $('#toggleSidebar').on('click', function() {
-                $('#sidebar').toggleClass('-translate-x-full');
-            });
-
-            $('#closeSidebar').on('click', function() {
-                $('#sidebar').addClass('-translate-x-full');
-            });
-            
-            // Auto-hide notification after 5 seconds
-            setTimeout(function() {
-                $('.notification').fadeOut();
-            }, 5000);
-            
-            // Show modal for status update
-            $('.update-status-btn').on('click', function() {
-                const donationId = $(this).data('id');
-                const status = $(this).data('status');
-                const notes = $(this).data('notes') || '';
-                
-                $('#donationId').val(donationId);
-                $('#statusSelect').val(status);
-                $('#adminNotes').val(notes);
-                $('#statusModal').removeClass('hidden');
-            });
-            
-            // Close modal
-            $('.close-modal').on('click', function() {
-                $('#statusModal').addClass('hidden');
-            });
-            
-            // Reset filters
-            $('#resetFilters').on('click', function() {
-                window.location.href = 'foods.php';
-            });
-        });
     </script>
-    
-    <style>
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            border-radius: 5px;
-            color: white;
-            z-index: 1000;
-        }
-        
-        .notification-success {
-            background-color: #47663B;
-        }
-        
-        .notification-error {
-            background-color: #ef4444;
-        }
-        
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .status-pending {
-            background-color: #FEF3C7;
-            color: #92400E;
-        }
-        
-        .status-in-progress {
-            background-color: #DBEAFE;
-            color: #1E40AF;
-        }
-        
-        .status-completed {
-            background-color: #D1FAE5;
-            color: #065F46;
-        }
-        
-        .status-cancelled {
-            background-color: #FEE2E2;
-            color: #B91C1C;
-        }
-    </style>
 </head>
 
 <body class="flex min-h-screen bg-gray-50">
     <?php include('../layout/nav.php'); ?>
 
-    <div class="p-5 w-full">
-        <!-- Statistics Cards -->
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-3xl font-bold text-primarycol">Food Donation Management</h1>
-                <p class="text-gray-600">Track and manage donated food items from all branches</p>
-            </div>
-            
-            <div class="stats shadow">
-                <div class="stat place-items-center">
-                    <div class="stat-title">Total</div>
-                    <div class="stat-value text-blue-500"><?= $totalDonations ?></div>
-                </div>
-                <div class="stat place-items-center">
-                    <div class="stat-title">Pending</div>
-                    <div class="stat-value text-yellow-500"><?= $totalPendingDonations ?></div>
-                </div>
-                <div class="stat place-items-center">
-                    <div class="stat-title">Completed</div>
-                    <div class="stat-value text-green-500"><?= $totalCompletedDonations ?></div>
-                </div>
-                <div class="stat place-items-center">
-                    <div class="stat-title">Value</div>
-                    <div class="stat-value text-purple-500">₱<?= number_format($totalDonationValue, 2) ?></div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Notification Messages -->
-        <?php if (!empty($successMessage)): ?>
-            <div class="alert alert-success shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span><?= htmlspecialchars($successMessage) ?></span>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (!empty($errorMessage)): ?>
-            <div class="alert alert-error shadow-lg mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span><?= htmlspecialchars($errorMessage) ?></span>
-            </div>
-        <?php endif; ?>
-        
-        <!-- Filters and Search -->
-        <div class="bg-white p-4 rounded-lg shadow mb-6">
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                    <input 
-                        type="text" 
-                        name="search" 
-                        value="<?= htmlspecialchars($searchTerm) ?>" 
-                        placeholder="Search products, staff..."
-                        class="w-full border border-gray-300 rounded-md p-2">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select name="status" class="w-full border border-gray-300 rounded-md p-2">
-                        <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All Statuses</option>
-                        <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
-                        <option value="in-progress" <?= $statusFilter === 'in-progress' ? 'selected' : '' ?>>In Progress</option>
-                        <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
-                        <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Branch</label>
-                    <select name="branch_id" class="w-full border border-gray-300 rounded-md p-2">
-                        <option value="">All Branches</option>
-                        <?php foreach ($branches as $branch): ?>
-                            <option value="<?= $branch['id'] ?>" <?= $branchFilter == $branch['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($branch['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
-                    <div class="flex space-x-2">
-                        <input 
-                            type="date" 
-                            name="date_from" 
-                            value="<?= htmlspecialchars($dateFrom) ?>" 
-                            class="w-full border border-gray-300 rounded-md p-2">
-                        <input 
-                            type="date" 
-                            name="date_to" 
-                            value="<?= htmlspecialchars($dateTo) ?>" 
-                            class="w-full border border-gray-300 rounded-md p-2">
+    <div class="flex flex-col w-full overflow-y-auto">
+        <!-- Page Header -->
+        <div class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold text-primarycol">Food Donations Management</h1>
+                        <p class="text-gray-500 text-sm mt-1">Manage all food items available for donation</p>
                     </div>
                 </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Expiry Status</label>
-                    <select name="expiry_status" class="w-full border border-gray-300 rounded-md p-2">
-                        <option value="all" <?= isset($_GET['expiry_status']) && $_GET['expiry_status'] === 'all' ? 'selected' : '' ?>>All Items</option>
-                        <option value="expired" <?= isset($_GET['expiry_status']) && $_GET['expiry_status'] === 'expired' ? 'selected' : '' ?>>Expired Items</option>
-                        <option value="expiring_soon" <?= isset($_GET['expiry_status']) && $_GET['expiry_status'] === 'expiring_soon' ? 'selected' : '' ?>>Expiring Soon (3 days)</option>
-                        <option value="valid" <?= isset($_GET['expiry_status']) && $_GET['expiry_status'] === 'valid' ? 'selected' : '' ?>>Valid Items</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-end space-x-2">
-                    <button type="submit" class="bg-primarycol text-white px-4 py-2 rounded-md">
-                        Apply Filters
-                    </button>
-                    <button type="button" id="resetFilters" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md">
-                        Reset
-                    </button>
-                </div>
-            </form>
+            </div>
+        </div>
+
+        <!-- Filters and Search -->
+        <div class="bg-white border-t border-gray-200 shadow-sm">
+            <div class="max-w-7xl mx-auto py-3 px-4 sm:px-6 lg:px-8">
+                <form method="GET" action="" class="flex flex-col sm:flex-row gap-4 justify-between">
+                    <div class="flex gap-2 items-center">
+                        <div class="dropdown">
+                            <div tabindex="0" role="button" class="btn btn-sm m-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                                Filter
+                            </div>
+                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                <li class="menu-title">Status</li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="status" class="radio radio-sm" 
+                                               value="all" <?= ($status === 'all' || empty($status)) ? 'checked' : '' ?>>
+                                        <span>All</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="status" class="radio radio-sm" 
+                                               value="pending" <?= ($status === 'pending') ? 'checked' : '' ?>>
+                                        <span>Available</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="status" class="radio radio-sm" 
+                                               value="requested" <?= ($status === 'requested') ? 'checked' : '' ?>>
+                                        <span>Requested</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="status" class="radio radio-sm" 
+                                               value="approved" <?= ($status === 'approved') ? 'checked' : '' ?>>
+                                        <span>Approved</span>
+                                    </label>
+                                </li>
+                                
+                                <div class="divider my-1"></div>
+                                <li class="menu-title">Categories</li>
+                                <?php foreach ($categories as $cat): ?>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="category" class="radio radio-sm" 
+                                               value="<?= htmlspecialchars($cat) ?>" 
+                                               <?= ($category === $cat) ? 'checked' : '' ?>>
+                                        <span><?= htmlspecialchars($cat) ?></span>
+                                    </label>
+                                </li>
+                                <?php endforeach; ?>
+                                
+                                <div class="divider my-1"></div>
+                                <li class="menu-title">Expiry Date</li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="expiry" class="radio radio-sm" 
+                                               value="today" <?= ($expiryFilter === 'today') ? 'checked' : '' ?>>
+                                        <span>Today</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="expiry" class="radio radio-sm" 
+                                               value="tomorrow" <?= ($expiryFilter === 'tomorrow') ? 'checked' : '' ?>>
+                                        <span>Tomorrow</span>
+                                    </label>
+                                </li>
+                                <li>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="expiry" class="radio radio-sm" 
+                                               value="this_week" <?= ($expiryFilter === 'this_week') ? 'checked' : '' ?>>
+                                        <span>This Week</span>
+                                    </label>
+                                </li>
+                                <li class="mt-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-full">Apply</button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="dropdown">
+                            <div tabindex="0" role="button" class="btn btn-sm m-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                                </svg>
+                                Sort
+                            </div>
+                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="newest" <?= ($sort === 'newest' || empty($sort)) ? 'checked' : '' ?>>
+                                    <span>Newest First</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="expiry" <?= ($sort === 'expiry') ? 'checked' : '' ?>>
+                                    <span>Expiry Date (Soonest)</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="quantity" <?= ($sort === 'quantity') ? 'checked' : '' ?>>
+                                    <span>Quantity (Highest)</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="name" <?= ($sort === 'name') ? 'checked' : '' ?>>
+                                    <span>Name (A-Z)</span>
+                                </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="requests" <?= ($sort === 'requests') ? 'checked' : '' ?>>
+                                    <span>Most Requested</span>
+                                </label></li>
+                                <li class="mt-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-full">Apply</button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                            </svg>
+                        </div>
+                        <input type="search" id="search" name="search" value="<?= htmlspecialchars($search) ?>" class="block w-full p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500" placeholder="Search food items...">
+                        <button type="submit" class="absolute end-2.5 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-primarycol text-white rounded-md hover:bg-fourth">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Food Items Grid -->
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <?php
+    // Filter only pending/available items for display
+    $availableItems = array_filter($donationItems, function($item) {
+        return $item['donation_status'] === 'pending';
+    });
+    
+    if (empty($availableItems)): ?>
+        <div class="text-center py-12">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
+            </svg>
+            <h3 class="mt-2 text-lg font-medium text-gray-900">No available donation items found</h3>
+            <p class="mt-1 text-sm text-gray-500">There are currently no items available for donation.</p>
+        </div>
+    <?php else: ?>
+        <?php
+        // Group items by branch
+        $itemsByBranch = [];
+        foreach ($availableItems as $item) {
+            $branchId = $item['branch_id'];
+            if (!isset($itemsByBranch[$branchId])) {
+                $itemsByBranch[$branchId] = [
+                    'name' => $item['branch_name'],
+                    'address' => $item['branch_address'],
+                    'items' => []
+                ];
+            }
+            $itemsByBranch[$branchId]['items'][] = $item;
+        }
+        
+        // Sort branches by name
+        uasort($itemsByBranch, function($a, $b) {
+            return strcmp($a['name'], $b['name']);
+        });
+        
+        // Display count of available items
+        $totalAvailableItems = count($availableItems);
+        ?>
+        
+        <div class="mb-4">
+            <h3 class="text-lg font-semibold text-primarycol">Available Food Donations (<?= $totalAvailableItems ?>)</h3>
         </div>
         
-        <!-- Donation List -->
-        <div class="bg-white shadow-md rounded-lg p-6">
-            <div class="overflow-x-auto">
-                <table class="table w-full">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Branch</th>
-                            <th>Qty</th>
-                            <th>Value</th>
-                            <th>Date</th>
-                            <th>Expiry</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($donations)): ?>
+        <?php foreach ($itemsByBranch as $branchId => $branch): ?>
+            <div class="mb-8">
+                <div class="bg-sec p-4 rounded-lg mb-4">
+                    <h3 class="text-xl font-bold text-primarycol"><?= htmlspecialchars($branch['name']) ?></h3>
+                    <p class="text-gray-600 text-sm"><?= htmlspecialchars($branch['address']) ?></p>
+                </div>
+                
+                <div class="overflow-x-auto bg-white shadow-md rounded-lg">
+                    <table class="table table-zebra w-full">
+                        <thead>
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-gray-500">
-                                    No donation records found.
-                                </td>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Quantity</th>
+                                <th>Expiry</th>
+                                <th class="text-center">NGO Requests</th>
+                                <th>Actions</th>
                             </tr>
-                        <?php else: ?>
-                            <?php foreach ($donations as $donation): ?>
-                                <tr class="hover">
-                                    <td>
-                                        <div>
-                                            <div class="font-bold"><?= htmlspecialchars($donation['product_name']) ?></div>
-                                            <div class="text-sm opacity-50"><?= htmlspecialchars($donation['product_category']) ?></div>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($branch['items'] as $item): ?>
+                                <?php
+                                $expiryDate = !empty($item['expiry_date']) ? $item['expiry_date'] : $item['waste_date'];
+                                $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
+                                $expiryClass = $daysUntilExpiry <= 1 ? 'text-red-600 font-bold' : ($daysUntilExpiry <= 3 ? 'text-amber-600 font-bold' : '');
+                                ?>
+                                <tr>
+                                    <td class="min-w-[200px]">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="avatar">
+                                                <div class="w-12 h-12 rounded">
+                                                    <?php
+                                                    if (!empty($item['image'])) {
+                                                        $imagePath = $item['image'];
+                                                        if (strpos($imagePath, '../../') === 0) {
+                                                            $imagePath = substr($imagePath, 6);
+                                                            echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                        } else {
+                                                            echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                        }
+                                                    } else {
+                                                        echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                    }
+                                                    ?>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="font-bold"><?= htmlspecialchars($item['product_name']) ?></div>
+                                                <?php if (!empty($item['batch_number'])): ?>
+                                                    <div class="text-xs text-gray-500">Batch: <?= htmlspecialchars($item['batch_number']) ?></div>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </td>
+                                    <td><?= htmlspecialchars($item['category']) ?></td>
+                                    <td><?= htmlspecialchars($item['available_quantity']) ?> units</td>
                                     <td>
-                                        <?= htmlspecialchars($donation['branch_name']) ?>
-                                        <br/>
-                                        <span class="badge badge-ghost badge-sm">
-                                            <?= htmlspecialchars($donation['staff_name']) ?>
-                                        </span>
+                                        <div class="<?= $expiryClass ?>"><?= date('M d, Y', strtotime($expiryDate)) ?></div>
+                                        <div class="text-xs"><?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?> left</div>
                                     </td>
-                                    <td><?= htmlspecialchars($donation['waste_quantity']) ?></td>
-                                    <td>₱<?= number_format($donation['waste_value'], 2) ?></td>
-                                    <td>
-                                        <?= date('M d, Y', strtotime($donation['waste_date'])) ?>
-                                        <br/>
-                                        <span class="text-xs text-gray-500">
-                                            <?= date('h:i A', strtotime($donation['waste_date'])) ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <?php if (!empty($donation['expiry_date'])): ?>
-                                            <?php
-                                            $today = time();
-                                            $expiryTimestamp = strtotime($donation['expiry_date']);
-                                            $daysUntilExpiry = round(($expiryTimestamp - $today) / 86400);
-                                            
-                                            if ($expiryTimestamp < $today): ?>
-                                                <span class="badge badge-error">Expired</span>
-                                            <?php elseif ($daysUntilExpiry <= 3): ?>
-                                                <span class="badge badge-warning"><?= $daysUntilExpiry ?> days</span>
-                                            <?php else: ?>
-                                                <span class="badge badge-success">Valid</span>
-                                            <?php endif; ?>
-                                            <div class="text-xs mt-1">
-                                                <?= date('M d, Y', $expiryTimestamp) ?>
-                                            </div>
+                                    <td class="text-center">
+                                        <?php if ($item['request_count'] > 0): ?>
+                                            <span class="badge badge-accent"><?= $item['request_count'] ?> request<?= $item['request_count'] > 1 ? 's' : '' ?></span>
                                         <?php else: ?>
-                                            <span class="badge badge-ghost">Not set</span>
+                                            <span class="text-gray-400">No requests</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php
-                                        switch ($donation['donation_status'] ?? 'pending') {
-                                            case 'pending':
-                                                echo '<span class="badge badge-warning">Pending</span>';
-                                                break;
-                                            case 'in-progress':
-                                                echo '<span class="badge badge-info">In Progress</span>';
-                                                break;
-                                            case 'completed':
-                                                echo '<span class="badge badge-success">Completed</span>';
-                                                break;
-                                            case 'cancelled':
-                                                echo '<span class="badge badge-error">Cancelled</span>';
-                                                break;
-                                            default:
-                                                echo '<span class="badge badge-warning">Pending</span>';
-                                        }
-                                        ?>
-                                    </td>
-                                    <td>
-                                        <div class="flex space-x-2">
-                                            <button 
-                                                class="update-status-btn btn btn-sm bg-primarycol text-white"
-                                                data-id="<?= $donation['waste_id'] ?>"
-                                                data-status="<?= htmlspecialchars($donation['donation_status'] ?? 'pending') ?>"
-                                                data-notes="<?= htmlspecialchars($donation['admin_notes'] ?? '') ?>"
-                                            >
-                                                Update
-                                            </button>
-                                            <button 
-                                                class="view-details-btn btn btn-sm btn-ghost"
-                                                data-id="<?= $donation['waste_id'] ?>"
-                                            >
-                                                Details
-                                            </button>
-                                        </div>
+                                        <button class="btn btn-xs btn-outline" 
+                                                onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
+                                            View Details
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</div>
+
     </div>
-    
-    <!-- Status Update Modal -->
-    <dialog id="statusModal" class="modal">
-        <div class="modal-box">
-            <h3 class="font-bold text-lg mb-4">Update Donation Status</h3>
-            <form method="POST">
-                <input type="hidden" id="donationId" name="donation_id">
-                
-                <div class="form-control mb-4">
-                    <label class="label">
-                        <span class="label-text">Status</span>
-                    </label>
-                    <select id="statusSelect" name="new_status" class="select select-bordered w-full">
-                        <option value="pending">Pending</option>
-                        <option value="in-progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
-                
-                <div class="form-control mb-4">
-                    <label class="label">
-                        <span class="label-text">Admin Notes</span>
-                    </label>
-                    <textarea 
-                        id="adminNotes"
-                        name="admin_notes" 
-                        rows="3"
-                        class="textarea textarea-bordered h-24"
-                        placeholder="Add notes about this donation (optional)"
-                    ></textarea>
-                </div>
-                
-                <div class="modal-action">
-                    <button type="button" class="btn" onclick="document.getElementById('statusModal').close()">
-                        Cancel
-                    </button>
-                    <button type="submit" name="update_status" class="btn btn-primary bg-primarycol">
-                        Update Status
-                    </button>
-                </div>
+
+    <!-- Product Details Modal -->
+    <dialog id="productDetailsModal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
             </form>
+            <h3 id="modalProductTitle" class="text-lg font-bold text-primarycol mb-2"></h3>
+            
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="md:w-1/3">
+                    <div class="bg-gray-100 rounded-lg overflow-hidden h-48 md:h-64">
+                        <img id="modalProductImage" src="" alt="Product" class="w-full h-full object-cover">
+                    </div>
+                    
+                    <div class="mt-4 flex flex-col gap-2">
+                        <div>
+                            <span class="text-sm text-gray-600">Category:</span>
+                            <span id="modalProductCategory" class="font-medium"></span>
+                        </div>
+                        <div>
+                            <span class="text-sm text-gray-600">Available Quantity:</span>
+                            <span id="modalProductQuantity" class="font-medium"></span>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-600">Expires On:</div>
+                            <div id="modalProductExpiry" class="font-medium"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-600">Status:</div>
+                            <div id="modalProductStatus" class="font-medium"></div>
+                        </div>
+                        <div id="modalBatchInfo" class="hidden">
+                            <div class="text-sm text-gray-600">Batch Number:</div>
+                            <div id="modalBatchNumber" class="font-medium"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="md:w-2/3">
+                    <div class="mb-6">
+                        <h4 class="font-medium text-gray-900">Branch Information</h4>
+                        <div class="mt-1 space-y-1">
+                            <p id="modalBranchName" class="font-medium"></p>
+                            <p id="modalBranchAddress" class="text-gray-600"></p>
+                            <p id="modalBranchLocation" class="text-gray-600"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 pt-4" id="requestsSection">
+                        <h4 class="font-medium text-gray-900">Item Details</h4>
+                        <div id="requestsInfo" class="mt-2">
+                            <p class="text-gray-600">This item is available for donation and currently has no requests.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn">Close</button>
+                </form>
+            </div>
         </div>
     </dialog>
+
+    <script>
+    let currentProductDetails = null;
     
-    <!-- Details Modal -->
-    <?php foreach ($donations as $donation): ?>
-        <dialog id="details_modal_<?= $donation['waste_id'] ?>" class="modal">
-            <div class="modal-box">
-                <h3 class="font-bold text-lg mb-4">Donation Details #<?= $donation['waste_id'] ?></h3>
-                
-                <div class="bg-sec rounded-lg p-4 mb-4">
-                    <h4 class="font-semibold text-primarycol mb-2">Product Information</h4>
-                    <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['product_name']) ?></p>
-                    <p><span class="font-medium">Category:</span> <?= htmlspecialchars($donation['product_category']) ?></p>
-                    <p><span class="font-medium">Quantity:</span> <?= $donation['waste_quantity'] ?></p>
-                    <p><span class="font-medium">Value:</span> ₱<?= number_format($donation['waste_value'], 2) ?></p>
-                </div>
-                
-                <div class="bg-sec rounded-lg p-4 mb-4">
-                    <h4 class="font-semibold text-primarycol mb-2">Branch Information</h4>
-                    <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['branch_name']) ?></p>
-                    <p><span class="font-medium">Staff:</span> <?= htmlspecialchars($donation['staff_name']) ?></p>
-                </div>
-                
-                <div class="bg-sec rounded-lg p-4 mb-4">
-                    <h4 class="font-semibold text-primarycol mb-2">Donation Information</h4>
-                    <p><span class="font-medium">Date:</span> <?= date('M d, Y h:i A', strtotime($donation['waste_date'])) ?></p>
-                    <p><span class="font-medium">Reason:</span> <?= htmlspecialchars($donation['waste_reason']) ?></p>
-                    <p><span class="font-medium">Status:</span> <?= ucfirst(htmlspecialchars($donation['donation_status'] ?? 'pending')) ?></p>
+    // View product details
+    function viewProductDetails(item) {
+        currentProductDetails = item;
+        
+        // Set modal content
+        document.getElementById('modalProductTitle').textContent = item.product_name;
+        
+        // Set image with improved path handling
+        const modalImage = document.getElementById('modalProductImage');
+        if (item.image && item.image.length > 0) {
+            if (item.image.startsWith('../../')) {
+                // The path already has ../../, so don't add it again
+                modalImage.src = item.image;
+            } else if (item.image.startsWith('uploads/')) {
+                // Path starts with uploads/
+                modalImage.src = '../../' + item.image;
+            } else {
+                // Default case, assume it needs the full path prefix
+                modalImage.src = '../../uploads/products/' + item.image;
+            }
+        } else {
+            modalImage.src = '../../assets/images/placeholder-food.jpg';
+        }
+        
+        // Set other details
+        document.getElementById('modalProductCategory').textContent = item.category;
+        document.getElementById('modalProductQuantity').textContent = item.available_quantity + ' units';
+        
+        // Set expiry date
+        const expiryDate = item.expiry_date || item.waste_date;
+        document.getElementById('modalProductExpiry').textContent = formatDate(expiryDate);
+        
+        // Set status
+        const statusText = {
+            'pending': 'Available for donation',
+            'requested': 'Requested by NGO(s)',
+            'approved': 'Approved for donation'
+        };
+        document.getElementById('modalProductStatus').textContent = statusText[item.donation_status] || item.donation_status;
+        
+        // Set batch info if available
+        if (item.batch_number) {
+            document.getElementById('modalBatchNumber').textContent = item.batch_number;
+            document.getElementById('modalBatchInfo').classList.remove('hidden');
+        } else {
+            document.getElementById('modalBatchInfo').classList.add('hidden');
+        }
+        
+        // Set location details
+        document.getElementById('modalBranchName').textContent = item.branch_name;
+        document.getElementById('modalBranchAddress').textContent = item.branch_address;
+        document.getElementById('modalBranchLocation').textContent = item.branch_location || '';
+        
+        // Update requests section title based on donation status
+        const requestsSection = document.getElementById('requestsSection');
+        const requestsInfo = document.getElementById('requestsInfo');
+        
+        if (item.donation_status === 'pending') {
+            requestsSection.querySelector('h4').textContent = "Item Details";
+            requestsInfo.innerHTML = '<p class="text-gray-600">This item is available for donation and currently has no requests.</p>';
+        } else if (item.request_count > 0) {
+            requestsSection.querySelector('h4').textContent = "Donation Requests";
+            requestsInfo.innerHTML = '<div class="flex items-center gap-2"><span class="loading loading-spinner loading-xs"></span> Loading requests...</div>';
+            loadDonationRequests(item.waste_id);
+        } else {
+            requestsSection.querySelector('h4').textContent = "Donation Status";
+            requestsInfo.innerHTML = '<p class="text-gray-600">This item has been ' + item.donation_status + ' but has no active requests.</p>';
+        }
+        
+        // Open modal
+        document.getElementById('productDetailsModal').showModal();
+    }
+    
+    // Load donation requests for an item
+    function loadDonationRequests(wasteId) {
+        const requestsContainer = document.getElementById('requestsInfo');
+        
+        // Use fetch API to get requests data
+        fetch(`get_donation_requests.php?waste_id=${wasteId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.requests && data.requests.length > 0) {
+                    let html = '<div class="overflow-x-auto">';
+                    html += '<table class="table table-xs">';
+                    html += '<thead><tr><th>NGO</th><th>Requested</th><th>Quantity</th><th>Status</th></tr></thead>';
+                    html += '<tbody>';
                     
-                    <?php if (!empty($donation['expiry_date'])): ?>
-                        <p>
-                            <span class="font-medium">Expiry Date:</span> 
-                            <?= date('M d, Y', strtotime($donation['expiry_date'])) ?>
-                            
-                            <?php
-                            $today = time();
-                            $expiryTimestamp = strtotime($donation['expiry_date']);
-                            $daysUntilExpiry = round(($expiryTimestamp - $today) / 86400);
-                            
-                            if ($expiryTimestamp < $today): ?>
-                                <span class="badge badge-error ml-2">Expired</span>
-                            <?php elseif ($daysUntilExpiry <= 3): ?>
-                                <span class="badge badge-warning ml-2">Expires in <?= $daysUntilExpiry ?> days</span>
-                            <?php else: ?>
-                                <span class="badge badge-success ml-2">Valid</span>
-                            <?php endif; ?>
-                        </p>
-                    <?php endif; ?>
-                </div>
-                
-                <?php if (!empty($donation['notes'])): ?>
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                        <h4 class="font-semibold text-blue-800 mb-2">Staff Notes</h4>
-                        <p><?= nl2br(htmlspecialchars($donation['notes'])) ?></p>
-                    </div>
-                <?php endif; ?>
-                
-                <?php if (!empty($donation['admin_notes'])): ?>
-                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                        <h4 class="font-semibold text-yellow-800 mb-2">Admin Notes</h4>
-                        <p><?= nl2br(htmlspecialchars($donation['admin_notes'])) ?></p>
-                    </div>
-                <?php endif; ?>
-                
-                <div class="modal-action">
-                    <button class="btn" onclick="document.getElementById('details_modal_<?= $donation['waste_id'] ?>').close()">
-                        Close
-                    </button>
-                    <button 
-                        class="update-status-btn btn btn-primary bg-primarycol"
-                        data-id="<?= $donation['waste_id'] ?>"
-                        data-status="<?= htmlspecialchars($donation['donation_status'] ?? 'pending') ?>"
-                        data-notes="<?= htmlspecialchars($donation['admin_notes'] ?? '') ?>"
-                    >
-                        Update Status
-                    </button>
-                </div>
-            </div>
-        </dialog>
-    <?php endforeach; ?>
-
-<script>
-    $(document).ready(function() {
-        // Sidebar toggling
-        $('#toggleSidebar').on('click', function() {
-            $('#sidebar').toggleClass('-translate-x-full');
+                    data.requests.forEach(req => {
+                        html += `<tr>
+                            <td>${req.organization_name}</td>
+                            <td>${formatDateTime(req.request_date)}</td>
+                            <td>${req.quantity_requested} units</td>
+                            <td><span class="badge ${getStatusBadgeClass(req.status)}">${req.status}</span></td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    requestsContainer.innerHTML = html;
+                } else {
+                    requestsContainer.innerHTML = '<p class="text-gray-500">No donation requests found for this item.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching requests:', error);
+                requestsContainer.innerHTML = '<div class="text-gray-500">No requests data available.</div>';
+            });
+    }
+    
+    // Helper functions
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            weekday: 'long',
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric'
         });
-
-        $('#closeSidebar').on('click', function() {
-            $('#sidebar').addClass('-translate-x-full');
+    }
+    
+    function formatDateTime(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
         });
-        
-        // Auto-hide notification after 5 seconds
-        setTimeout(function() {
-            $('.notification').fadeOut();
-        }, 5000);
-        
-        // Show modal for status update
-        $('.update-status-btn').on('click', function() {
-            const donationId = $(this).data('id');
-            const status = $(this).data('status');
-            const notes = $(this).data('notes') || '';
-            
-            $('#donationId').val(donationId);
-            $('#statusSelect').val(status);
-            $('#adminNotes').val(notes);
-            document.getElementById('statusModal').showModal();
-        });
-        
-        // View details button
-        $('.view-details-btn').on('click', function() {
-            const id = $(this).data('id');
-            document.getElementById('details_modal_' + id).showModal();
-        });
-        
-        // Reset filters
-        $('#resetFilters').on('click', function() {
-            window.location.href = 'foods.php';
-        });
-    });
+    }
+    
+    function getStatusBadgeClass(status) {
+        switch (status) {
+            case 'approved': return 'bg-green-100 text-green-800';
+            case 'pending': return 'bg-amber-100 text-amber-800';
+            case 'rejected': return 'bg-red-100 text-red-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
 </script>
 </body>
 </html>

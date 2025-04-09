@@ -23,15 +23,15 @@ $prod_per_page = 10;
 
 // Build the query with filters
 $countQuery = "SELECT COUNT(*) FROM product_waste pw 
-               JOIN products p ON pw.product_id = p.id
+               JOIN product_info p ON pw.product_id = p.id
                JOIN users u ON pw.staff_id = u.id
                WHERE pw.branch_id = ?";
                
-// Fixed query - removed p.quantity reference which causes the error
+// Fixed query - using product_info instead of products
 $dataQuery = "SELECT pw.*, p.name as product_name, p.category,
               CONCAT(u.fname, ' ', u.lname) as staff_name
               FROM product_waste pw
-              JOIN products p ON pw.product_id = p.id
+              JOIN product_info p ON pw.product_id = p.id
               JOIN users u ON pw.staff_id = u.id
               WHERE pw.branch_id = ?";
 
@@ -237,8 +237,8 @@ $(document).ready(function() {
   <div class="flex-1 p-6 overflow-auto space-y-12">
     <!-- Branch Header -->
     <div class="bg-sec p-4 rounded-lg shadow mb-6">
-      <h1 class="text-3xl font-bold text-primarycol"><?= htmlspecialchars($branchName) ?> Product Waste Data</h1>
-      <p class="text-gray-600">Showing branch-specific product waste records</p>
+      <h1 class="text-3xl font-bold text-primarycol"><?= htmlspecialchars($branchName) ?> Product Excess Data</h1>
+      <p class="text-gray-600">Showing branch-specific product excess records</p>
     </div>
     
     <!-- Filter Section - Enhanced with direct search form -->
@@ -342,11 +342,10 @@ $(document).ready(function() {
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">ID</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Product</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Category</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Waste Date</th>
+              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Record Date</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Quantity</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Value</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Reason</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Production Stage</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Disposal Method</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Staff</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Notes</th>
@@ -363,7 +362,6 @@ $(document).ready(function() {
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['waste_quantity']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm font-medium text-gray-700">₱<?= htmlspecialchars(number_format($item['waste_value'], 2)) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['waste_reason'])) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['production_stage'])) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['disposal_method'])) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['staff_name']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['notes'] ?: 'N/A') ?></td>
@@ -371,7 +369,7 @@ $(document).ready(function() {
               <?php endforeach; ?>
             <?php else: ?>
               <tr>
-                <td colspan="11" class="py-4 px-6 text-center text-gray-500">No product waste records found matching your criteria.</td>
+                <td colspan="10" class="py-4 px-6 text-center text-gray-500">No product waste records found matching your criteria.</td>
               </tr>
             <?php endif; ?>
           </tbody>

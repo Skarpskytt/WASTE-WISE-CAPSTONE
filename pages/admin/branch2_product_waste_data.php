@@ -23,15 +23,15 @@ $prod_per_page = 10;
 
 // Build the query with filters
 $countQuery = "SELECT COUNT(*) FROM product_waste pw 
-               JOIN products p ON pw.product_id = p.id
+               JOIN product_info p ON pw.product_id = p.id
                JOIN users u ON pw.staff_id = u.id
                WHERE pw.branch_id = ?";
 
-// Fixed query - matching your product_waste table structure
+// Fixed query - using product_info instead of products
 $dataQuery = "SELECT pw.*, p.name as product_name, p.category,
               CONCAT(u.fname, ' ', u.lname) as staff_name
               FROM product_waste pw
-              JOIN products p ON pw.product_id = p.id
+              JOIN product_info p ON pw.product_id = p.id
               JOIN users u ON pw.staff_id = u.id
               WHERE pw.branch_id = ?";
 
@@ -348,7 +348,6 @@ function getPaginationUrl($page) {
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Quantity</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Value</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Reason</th>
-              <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Production Stage</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Disposal Method</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Staff</th>
               <th class="py-2 px-4 border-b-2 border-gray-200 text-left text-sm font-semibold text-gray-700">Notes</th>
@@ -365,7 +364,6 @@ function getPaginationUrl($page) {
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['waste_quantity']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm font-medium text-gray-700">₱<?= htmlspecialchars(number_format($item['waste_value'], 2)) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['waste_reason'])) ?></td>
-                  <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['production_stage'])) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars(ucfirst($item['disposal_method'])) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['staff_name']) ?></td>
                   <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700"><?= htmlspecialchars($item['notes'] ?: 'N/A') ?></td>
@@ -373,7 +371,7 @@ function getPaginationUrl($page) {
               <?php endforeach; ?>
             <?php else: ?>
               <tr>
-                <td colspan="11" class="py-4 px-6 text-center text-gray-500">No product waste records found matching your criteria.</td>
+                <td colspan="10" class="py-4 px-6 text-center text-gray-500">No product waste records found matching your criteria.</td>
               </tr>
             <?php endif; ?>
           </tbody>

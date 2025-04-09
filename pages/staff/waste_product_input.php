@@ -2,6 +2,10 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
+// Add this at the top with other includes
+require_once '../../includes/automation/DonationDistributor.php';
+use App\Automation\DonationDistributor;
+
 // Check for staff access
 checkAuth(['staff']);
 
@@ -104,7 +108,7 @@ if (isset($_POST['submitwaste'])) {
     
     // Add these new variables for donation metadata
     $donationPriority = ($disposalMethod === 'donation' && isset($_POST['donation_priority'])) ? $_POST['donation_priority'] : 'normal';
-    $autoApproval = ($disposalMethod === 'donation' && isset($_POST['auto_approval'])) ? (int)$_POST['auto_approval'] : 0;
+    $autoApproval = ($disposalMethod === 'donation') ? 1 : 0;  // Force auto-approval for all donations
     $pickupInstructions = ($disposalMethod === 'donation' && isset($_POST['pickup_instructions'])) ? trim($_POST['pickup_instructions']) : '';
 
     // Validate required fields
@@ -127,8 +131,10 @@ if (isset($_POST['submitwaste'])) {
                         ", disposalMethod=" . (isset($_POST['disposal_method']) ? $_POST['disposal_method'] : 'not set') .
                         ", productionStage=" . (isset($_POST['production_stage']) ? $_POST['production_stage'] : 'not set');
     } else {
+        $transactionStarted = false; // Add this tracking variable
         try {
             $pdo->beginTransaction();
+            $transactionStarted = true; // Mark that we've started a transaction
             
             // 1. Insert waste record
             $stmt = $pdo->prepare("
@@ -149,6 +155,7 @@ if (isset($_POST['submitwaste'])) {
                 $wasteValue, $wasteReason, $disposalMethod, $notes, 
                 $branchId, $donationStatus, $donationPriority, $autoApproval, $pickupInstructions
             ]);
+            $lastInsertId = $pdo->lastInsertId();
             
             // 2. Update product stock quantity
             $updateStmt = $pdo->prepare("
@@ -177,7 +184,7 @@ if (isset($_POST['submitwaste'])) {
                     ");
                     
                     $message = "New donation available: " . $productName . " (" . $wasteQuantity . " units)";
-                    $link = "/capstone/WASTE-WISE-CAPSTONE/pages/ngo/food_browse.php";
+                    $link = "../ngo/food_browse.php";
                     $notifyStmt->execute([$message, $link]);
                 } catch (PDOException $e) {
                     // Log notification error but don't stop the process
@@ -199,18 +206,27 @@ if (isset($_POST['submitwaste'])) {
                 $ngoStmt->execute();
                 $ngos = $ngoStmt->fetchAll(PDO::FETCH_ASSOC);
                 
-                // Get branch details for the email
+                // Get branch details
                 $branchStmt = $pdo->prepare("SELECT name, address FROM branches WHERE id = ?");
                 $branchStmt->execute([$branchId]);
                 $branchDetails = $branchStmt->fetch(PDO::FETCH_ASSOC);
+                
+                // Use the existing EmailService class
+                require_once '../../includes/mail/EmailService.php';
+                $emailService = new \App\Mail\EmailService();
+                
+                // Get product name for email
+                $productNameStmt = $pdo->prepare("SELECT name FROM product_info WHERE id = ?");
+                $productNameStmt->execute([$productId]);
+                $productName = $productNameStmt->fetchColumn();
                 
                 foreach ($ngos as $ngo) {
                     $ngoName = !empty($ngo['organization_name']) ? $ngo['organization_name'] : $ngo['fname'] . ' ' . $ngo['lname'];
                     $ngoEmail = $ngo['email'];
                     
-                    // Build email content
-                    $subject = "New Donation Available: $productName";
-                    $message = "
+                    try {
+                        // Create a simple HTML email body
+                        $emailBody = "
                         <html>
                         <head><title>New Donation Available</title></head>
                         <body>
@@ -224,18 +240,35 @@ if (isset($_POST['submitwaste'])) {
                                 <li><strong>Location:</strong> {$branchDetails['address']}</li>
                                 <li><strong>Priority:</strong> " . ucfirst($donationPriority) . "</li>
                             </ul>
-                            <p><a href='http://yourwebsite.com/capstone/WASTE-WISE-CAPSTONE/pages/ngo/food_browse.php'>Click here</a> to browse and request this donation.</p>
                             <p>Thank you for your partnership in reducing food waste!</p>
                         </body>
-                        </html>
-                    ";
-                    
-                    // Set email headers for HTML content
-                    $headers = "MIME-Version: 1.0\r\n";
-                    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-                    
-                    // Send the email
-                    mail($ngoEmail, $subject, $message, $headers);
+                        </html>";
+                        
+                        // Use the now-public sendEmail method
+                        $emailService->sendEmail(
+                            $ngoEmail,
+                            "New Donation Available: $productName",
+                            $emailBody
+                        );
+                    } catch (Exception $e) {
+                        // Log email error but don't stop the process
+                        error_log("Failed to send email notification: " . $e->getMessage());
+                    }
+                }
+            }
+
+            // If it's a donation, distribute it automatically 
+            if ($disposalMethod === 'donation') {
+                $distributor = new DonationDistributor($pdo);
+                $distribution = $distributor->distributeNewDonation($lastInsertId);
+                
+                // You can log distribution results or show to user if needed
+                if ($distribution['success']) {
+                    $successDetails = "Donation was automatically distributed to " . count($distribution['allocations']) . " NGOs";
+                } else {
+                    // If distribution failed for some reason
+                    // The donation will remain in pending status
+                    error_log("Failed to auto-distribute donation ID $lastInsertId: " . ($distribution['message'] ?? 'Unknown reason'));
                 }
             }
 
@@ -246,7 +279,10 @@ if (isset($_POST['submitwaste'])) {
             exit;
             
         } catch (PDOException $e) {
-            $pdo->rollBack();
+            // Only rollback if we successfully started a transaction
+            if ($transactionStarted && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $errorMessage = "Error recording waste: " . $e->getMessage();
         }
     }
@@ -682,6 +718,7 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <input type="hidden" name="product_value" value="<?= htmlspecialchars($product['price_per_unit']) ?>">
                                     <input type="hidden" name="available_stock" value="<?= htmlspecialchars($product['available_quantity']) ?>">
                                     <input type="hidden" data-days-until-expiry="<?= htmlspecialchars($product['days_until_expiry']) ?>" value="<?= htmlspecialchars($product['days_until_expiry']) ?>">
+                                    <input type="hidden" name="auto_approval" value="1">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <!-- Basic waste info -->
@@ -810,17 +847,6 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                                     <option value="high">High Priority (Expiring Soon)</option>
                                                     <option value="urgent">Urgent (Expires in 3 days)</option>
                                                 </select>
-                                            </div>
-                                            
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-1">
-                                                    Auto-Approval
-                                                </label>
-                                                <select name="auto_approval" class="w-full border border-gray-300 rounded-md p-2">
-                                                    <option value="0">Require Admin Approval</option>
-                                                    <option value="1">Auto-Approve Requests</option>
-                                                </select>
-                                                <p class="text-xs text-gray-500 mt-1">Auto-approval will instantly approve NGO requests</p>
                                             </div>
                                             
                                             <div class="col-span-2">

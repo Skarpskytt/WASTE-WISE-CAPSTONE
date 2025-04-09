@@ -234,6 +234,9 @@ switch ($sort) {
     case 'name':
         $sql .= " ORDER BY p.name ASC";
         break;
+    case 'branch':
+        $sql .= " ORDER BY b.name ASC, p.name ASC";
+        break;
     case 'newest':
     default:
         $sql .= " ORDER BY pw.created_at DESC";
@@ -383,6 +386,11 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                            value="name" <?= ($sort === 'name') ? 'checked' : '' ?>>
                                     <span>Name (A-Z)</span>
                                 </label></li>
+                                <li><label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sort" class="radio radio-sm" 
+                                           value="branch" <?= ($sort === 'branch') ? 'checked' : '' ?>>
+                                    <span>Branch (A-Z)</span>
+                                </label></li>
                                 <li class="mt-2">
                                     <button type="submit" class="btn btn-sm btn-primary w-full">Apply</button>
                                 </li>
@@ -413,96 +421,200 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <p class="mt-1 text-sm text-gray-500">There are currently no items available for donation. Please check back later.</p>
                 </div>
             <?php else: ?>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    <?php foreach ($donationItems as $item): ?>
-                        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
-                            <figure class="h-48 bg-gray-100 relative">
-                                <?php 
-                                // Fix the image path handling
-                                if (!empty($item['image'])) {
-                                    // Remove the leading '../../' if it exists in the database path
-                                    $imagePath = $item['image'];
-                                    if (strpos($imagePath, '../../') === 0) {
-                                        // The path already has ../../, so don't add it again
-                                        $imagePath = substr($imagePath, 6); // Remove the ../../
-                                        echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
-                                    } else {
-                                        // No prefix, add the path as normal
-                                        echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
-                                    }
-                                } else {
-                                    echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
-                                }
-                                ?>
-                                
-                                <!-- Expiry badge -->
-                                <?php
-                                $expiryDate = !empty($item['expiry_date']) ? $item['expiry_date'] : $item['waste_date'];
-                                $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
-                                $expiryClass = $daysUntilExpiry <= 1 ? 'bg-red-500' : ($daysUntilExpiry <= 3 ? 'bg-amber-500' : 'bg-green-500');
-                                ?>
-                                <div class="absolute top-2 right-2">
-                                    <span class="badge <?= $expiryClass ?> text-white border-none">
-                                        Expires in <?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?>
-                                    </span>
+                <?php 
+                // Group items by branch if sort by branch is selected
+                if ($sort === 'branch') {
+                    $groupedItems = [];
+                    foreach ($donationItems as $item) {
+                        $branchId = $item['branch_id'];
+                        if (!isset($groupedItems[$branchId])) {
+                            $groupedItems[$branchId] = [
+                                'branch_name' => $item['branch_name'],
+                                'branch_address' => $item['branch_address'],
+                                'items' => []
+                            ];
+                        }
+                        $groupedItems[$branchId]['items'][] = $item;
+                    }
+                    
+                    // Display grouped items
+                    foreach ($groupedItems as $branchId => $branchData): 
+                    ?>
+                        <div class="mb-8">
+                            <div class="flex items-center mb-4">
+                                <h3 class="text-xl font-semibold text-primarycol"><?= htmlspecialchars($branchData['branch_name']) ?></h3>
+                                <div class="ml-3 px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">
+                                    <?= count($branchData['items']) ?> items
                                 </div>
-                            </figure>
-                            <div class="card-body p-4">
-                                <div class="flex justify-between items-start">
-                                    <h2 class="card-title text-lg"><?= htmlspecialchars($item['product_name']) ?></h2>
-                                    <span class="badge badge-sm bg-sec text-primarycol border-none"><?= htmlspecialchars($item['category']) ?></span>
-                                </div>
-                                <div class="text-sm text-gray-600 mt-1">
-                                    <div class="flex justify-between">
-                                        <span>Available:</span>
-                                        <span class="font-medium"><?= htmlspecialchars($item['available_quantity']) ?> units</span>
+                            </div>
+                            <p class="text-gray-600 mb-4"><?= htmlspecialchars($branchData['branch_address']) ?></p>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                <?php foreach ($branchData['items'] as $item): ?>
+                                    <!-- Item card - same as original -->
+                                    <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+                                        <figure class="h-48 bg-gray-100 relative">
+                                            <?php 
+                                            if (!empty($item['image'])) {
+                                                $imagePath = $item['image'];
+                                                if (strpos($imagePath, '../../') === 0) {
+                                                    $imagePath = substr($imagePath, 6);
+                                                    echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                                } else {
+                                                    echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                                }
+                                            } else {
+                                                echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                            }
+                                            ?>
+                                            
+                                            <!-- Expiry badge -->
+                                            <?php
+                                            $expiryDate = !empty($item['expiry_date']) ? $item['expiry_date'] : $item['waste_date'];
+                                            $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
+                                            $expiryClass = $daysUntilExpiry <= 1 ? 'bg-red-500' : ($daysUntilExpiry <= 3 ? 'bg-amber-500' : 'bg-green-500');
+                                            ?>
+                                            <div class="absolute top-2 right-2">
+                                                <span class="badge <?= $expiryClass ?> text-white border-none">
+                                                    Expires in <?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?>
+                                                </span>
+                                            </div>
+                                        </figure>
+                                        <div class="card-body p-4">
+                                            <div class="flex justify-between items-start">
+                                                <h2 class="card-title text-lg"><?= htmlspecialchars($item['product_name']) ?></h2>
+                                                <span class="badge badge-sm bg-sec text-primarycol border-none"><?= htmlspecialchars($item['category']) ?></span>
+                                            </div>
+                                            <div class="text-sm text-gray-600 mt-1">
+                                                <div class="flex justify-between">
+                                                    <span>Available:</span>
+                                                    <span class="font-medium"><?= htmlspecialchars($item['available_quantity']) ?> units</span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span>Expiry Date:</span>
+                                                    <span class="font-medium"><?= date('M d, Y', strtotime($expiryDate)) ?></span>
+                                                </div>
+                                            </div>
+                                            <div class="card-actions justify-between mt-4 items-center">
+                                                <div class="form-control">
+                                                    <label class="input-group input-group-xs">
+                                                        <span>Qty</span>
+                                                        <input type="number" min="1" max="<?= $item['available_quantity'] ?>" value="1" 
+                                                               class="input input-xs input-bordered w-16 item-quantity" 
+                                                               data-item-id="<?= $item['waste_id'] ?>">
+                                                    </label>
+                                                </div>
+                                                <div class="flex gap-2">
+                                                    <button class="btn btn-sm btn-outline" 
+                                                            onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
+                                                        View
+                                                    </button>
+                                                    <button class="btn btn-sm bg-primarycol text-white hover:bg-fourth" 
+                                                           onclick="addToCart({
+                                                               waste_id: <?= $item['waste_id'] ?>,
+                                                               product_id: <?= $item['product_id'] ?>,
+                                                               branch_id: <?= $item['branch_id'] ?>, 
+                                                               name: '<?= htmlspecialchars(addslashes($item['product_name'])) ?>', 
+                                                               max: <?= $item['available_quantity'] ?>
+                                                           }, this)">
+                                                        Add to Basket
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="flex justify-between">
-                                        <span>Expiry Date:</span>
-                                        <span class="font-medium"><?= date('M d, Y', strtotime($expiryDate)) ?></span>
-                                    </div>
-                                    <div class="flex justify-between">
-                                        <span>Location:</span>
-                                        <span class="font-medium"><?= htmlspecialchars($item['branch_name']) ?></span>
-                                    </div>
-                                </div>
-                                <div class="card-actions justify-between mt-4 items-center">
-                                    <div class="form-control">
-                                        <label class="input-group input-group-xs">
-                                            <span>Qty</span>
-                                            <input type="number" min="1" max="<?= $item['available_quantity'] ?>" value="1" 
-                                                   class="input input-xs input-bordered w-16 item-quantity" 
-                                                   data-item-id="<?= $item['waste_id'] ?>">
-                                        </label>
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <button class="btn btn-sm btn-outline" 
-                                                onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
-                                            View
-                                        </button>
-                                        <button class="btn btn-sm bg-primarycol text-white hover:bg-fourth" 
-                                               onclick="addToCart({
-                                                   waste_id: <?= $item['waste_id'] ?>,
-                                                   product_id: <?= $item['product_id'] ?>,
-                                                   branch_id: <?= $item['branch_id'] ?>, 
-                                                   name: '<?= htmlspecialchars(addslashes($item['product_name'])) ?>', 
-                                                   max: <?= $item['available_quantity'] ?>
-                                               }, this)">
-                                            Add to Cart
-                                        </button>
-                                    </div>
-                                </div>
+                                <?php endforeach; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                </div>
+                <?php } else { ?>
+                    <!-- Default display (not grouped by branch) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <?php foreach ($donationItems as $item): ?>
+                            <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+                                <figure class="h-48 bg-gray-100 relative">
+                                    <?php 
+                                    if (!empty($item['image'])) {
+                                        $imagePath = $item['image'];
+                                        if (strpos($imagePath, '../../') === 0) {
+                                            $imagePath = substr($imagePath, 6);
+                                            echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                        } else {
+                                            echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                        }
+                                    } else {
+                                        echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '" class="object-cover h-full w-full">';
+                                    }
+                                    ?>
+                                    
+                                    <!-- Expiry badge -->
+                                    <?php
+                                    $expiryDate = !empty($item['expiry_date']) ? $item['expiry_date'] : $item['waste_date'];
+                                    $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
+                                    $expiryClass = $daysUntilExpiry <= 1 ? 'bg-red-500' : ($daysUntilExpiry <= 3 ? 'bg-amber-500' : 'bg-green-500');
+                                    ?>
+                                    <div class="absolute top-2 right-2">
+                                        <span class="badge <?= $expiryClass ?> text-white border-none">
+                                            Expires in <?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?>
+                                        </span>
+                                    </div>
+                                </figure>
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-start">
+                                        <h2 class="card-title text-lg"><?= htmlspecialchars($item['product_name']) ?></h2>
+                                        <span class="badge badge-sm bg-sec text-primarycol border-none"><?= htmlspecialchars($item['category']) ?></span>
+                                    </div>
+                                    <div class="text-sm text-gray-600 mt-1">
+                                        <div class="flex justify-between">
+                                            <span>Available:</span>
+                                            <span class="font-medium"><?= htmlspecialchars($item['available_quantity']) ?> units</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Expiry Date:</span>
+                                            <span class="font-medium"><?= date('M d, Y', strtotime($expiryDate)) ?></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Location:</span>
+                                            <span class="font-medium"><?= htmlspecialchars($item['branch_name']) ?></span>
+                                        </div>
+                                    </div>
+                                    <div class="card-actions justify-between mt-4 items-center">
+                                        <div class="form-control">
+                                            <label class="input-group input-group-xs">
+                                                <span>Qty</span>
+                                                <input type="number" min="1" max="<?= $item['available_quantity'] ?>" value="1" 
+                                                       class="input input-xs input-bordered w-16 item-quantity" 
+                                                       data-item-id="<?= $item['waste_id'] ?>">
+                                            </label>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-sm btn-outline" 
+                                                    onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
+                                                View
+                                            </button>
+                                            <button class="btn btn-sm bg-primarycol text-white hover:bg-fourth" 
+                                                   onclick="addToCart({
+                                                       waste_id: <?= $item['waste_id'] ?>,
+                                                       product_id: <?= $item['product_id'] ?>,
+                                                       branch_id: <?= $item['branch_id'] ?>, 
+                                                       name: '<?= htmlspecialchars(addslashes($item['product_name'])) ?>', 
+                                                       max: <?= $item['available_quantity'] ?>
+                                                   }, this)">
+                                                Add to Basket
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php } ?>
             <?php endif; ?>
         </div>
-    </div>
 
-    <!-- Cart Drawer -->
+    <!-- Donation Basket Drawer -->
     <div id="cartDrawer" class="fixed top-0 right-0 z-50 h-screen p-4 overflow-y-auto bg-white w-80 dark:bg-gray-800 transform translate-x-full transition-transform duration-300 ease-in-out shadow-lg">
-        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Your Donation Request</h3>
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Your Donation Basket</h3>
         <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 absolute top-2.5 right-2.5 flex items-center justify-center" onclick="toggleCart()">
             <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14">
                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
@@ -518,15 +630,15 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             <form method="POST" action="">
                 <div id="cartItems" class="divide-y divide-gray-100 mb-4">
-                    <!-- Cart items will be added here via JavaScript -->
+                    <!-- Basket items will be added here via JavaScript -->
                     <div class="py-3 flex justify-between items-center text-gray-500">
-                        Your cart is empty
+                        Your basket is empty
                     </div>
                 </div>
 
                 <div class="py-2 border-t border-gray-200">
                     <button type="button" id="clearCartBtn" onclick="clearCart()" class="w-full btn btn-sm btn-outline mt-2 mb-2" disabled>
-                        Clear Cart
+                        Clear Basket
                     </button>
                     <button type="submit" name="submit_request" id="requestItemsBtn" class="w-full btn btn-sm bg-primarycol text-white hover:bg-fourth" disabled>
                         Request All Items
@@ -589,7 +701,7 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </label>
                             </div>
                             <button id="modalAddToCartBtn" class="btn bg-primarycol text-white hover:bg-fourth">
-                                Add to Cart
+                                Add to Basket
                             </button>
                         </div>
                     </div>
@@ -705,11 +817,11 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
             // Check if adding would exceed daily limit
             let currentTotal = cart.reduce((sum, cartItem) => sum + parseInt(cartItem.quantity), 0);
             if (currentTotal + parseInt(item.quantity) > remainingLimit) {
-                alert(`You can only request up to ${dailyLimit} items per day. You currently have ${currentTotal} items in your cart and ${remainingLimit} items remaining in your daily limit.`);
+                alert(`You can only request up to ${dailyLimit} items per day. You currently have ${currentTotal} items in your basket and ${remainingLimit} items remaining in your daily limit.`);
                 return false;
             }
             
-            // Check if item is already in cart
+            // Check if item is already in basket
             const existingItemIndex = cart.findIndex(cartItem => cartItem.waste_id === item.waste_id);
             
             if (existingItemIndex !== -1) {
@@ -757,7 +869,7 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 button.classList.add('btn-success');
                 
                 setTimeout(() => {
-                    button.textContent = 'Add to Cart';
+                    button.textContent = 'Add to Basket';
                     button.classList.remove('btn-success');
                 }, 1000);
             }
@@ -806,7 +918,7 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
             if (cart.length === 0) {
                 cartItemsContainer.innerHTML = `
                     <div class="py-3 flex justify-between items-center text-gray-500">
-                        Your cart is empty
+                        Your basket is empty
                     </div>
                 `;
                 return;
