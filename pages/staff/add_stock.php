@@ -26,7 +26,7 @@ unset($_SESSION['success_message']);
 $productsStmt = $pdo->prepare("
     SELECT id, name, category
     FROM product_info 
-    WHERE branch_id = ?
+    WHERE branch_id = ? AND (status != 'archived' OR status IS NULL)
     GROUP BY name, category
     ORDER BY name ASC
 ");
@@ -62,7 +62,7 @@ $productsQuery = $pdo->prepare("
         END as stock_priority
     FROM product_info pi
     LEFT JOIN product_stock ps ON pi.id = ps.product_info_id
-    WHERE pi.branch_id = :branchId
+    WHERE pi.branch_id = :branchId AND (pi.status != 'archived' OR pi.status IS NULL)
     GROUP BY pi.id, pi.name, pi.category, pi.price_per_unit, pi.image, pi.unit_type, pi.pieces_per_box, pi.shelf_life_days
     ORDER BY stock_priority ASC, total_stock DESC, pi.name ASC
     LIMIT :limit OFFSET :offset
@@ -78,7 +78,7 @@ $allProducts = $productsQuery->fetchAll(PDO::FETCH_ASSOC);
 $countQuery = $pdo->prepare("
     SELECT COUNT(DISTINCT pi.id) as total
     FROM product_info pi
-    WHERE pi.branch_id = ?
+    WHERE pi.branch_id = ? AND (pi.status != 'archived' OR pi.status IS NULL)
 ");
 $countQuery->execute([$branchId]);
 $totalProducts = $countQuery->fetch(PDO::FETCH_ASSOC)['total'];

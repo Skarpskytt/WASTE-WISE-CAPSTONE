@@ -612,8 +612,8 @@ if (isset($_SESSION['request_confirmation'])) {
                                                         value="1" min="1" max="<?= $item['quantity_available'] ?>" />
                                                     <span class="text-xs text-gray-500">of <?= $item['quantity_available'] ?></span>
                                                 </div>
-                                                <button class="btn btn-sm btn-primary" 
-                                                        onclick="addToCart(<?= htmlspecialchars(json_encode([
+                                                <button class="btn btn-sm bg-primarycol text-white hover:bg-fourth" 
+                                                        onclick="addToBasket(<?= htmlspecialchars(json_encode([
                                                             'donation_id' => $item['donation_id'],
                                                             'waste_id' => $item['waste_id'],
                                                             'product_id' => $item['product_id'],
@@ -624,7 +624,10 @@ if (isset($_SESSION['request_confirmation'])) {
                                                             'expiry_date' => $expiryDate,
                                                             'auto_approval' => $item['auto_approval']
                                                         ])) ?>, this)">
-                                                    Add to Cart
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                    </svg>
+                                                    Add to Basket
                                                 </button>
                                             </div>
                                         </div>
@@ -646,9 +649,9 @@ if (isset($_SESSION['request_confirmation'])) {
     </div>
 
     <!-- Donation Basket Drawer -->
-    <div id="cartDrawer" class="fixed top-0 right-0 z-50 h-screen p-4 overflow-y-auto bg-white w-80 dark:bg-gray-800 transform translate-x-full transition-transform duration-300 ease-in-out shadow-lg">
+    <div id="basketDrawer" class="fixed top-0 right-0 z-50 h-screen p-4 overflow-y-auto bg-white w-80 dark:bg-gray-800 transform translate-x-full transition-transform duration-300 ease-in-out shadow-lg">
         <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Your Donation Basket</h3>
-        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 absolute top-2.5 right-2.5 flex items-center justify-center" onclick="toggleCart()">
+        <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 absolute top-2.5 right-2.5 flex items-center justify-center" onclick="toggleBasket()">
             <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14">
                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
             </svg>
@@ -658,16 +661,16 @@ if (isset($_SESSION['request_confirmation'])) {
         <div class="mt-8">
             <div class="flex justify-between items-center py-2 border-y border-gray-200 mb-4">
                 <span class="font-medium">Selected Items</span>
-                <span class="text-sm text-gray-500">Daily Limit: <span id="cartCount">0</span>/<?= $dailyLimit ?></span>
+                <span class="text-sm text-gray-500">Daily Limit: <span id="basketCount">0</span>/<?= $dailyLimit ?></span>
             </div>
             
             <form method="POST" action="" id="donationRequestForm">
                 <input type="hidden" name="pickup_date" id="pickup_date_input">
                 <input type="hidden" name="pickup_time" id="pickup_time_input">
                 <input type="hidden" name="ngo_notes" id="ngo_notes_input">
-                <input type="hidden" name="items" id="cart_items_input">
+                <input type="hidden" name="items" id="basket_items_input">
                 
-                <div id="cartItems" class="divide-y divide-gray-100 mb-4">
+                <div id="basketItems" class="divide-y divide-gray-100 mb-4">
                     <!-- Basket items will be added here via JavaScript -->
                     <div class="py-3 flex justify-between items-center text-gray-500">
                         Your basket is empty
@@ -675,12 +678,12 @@ if (isset($_SESSION['request_confirmation'])) {
                 </div>
 
                 <div class="py-2 border-t border-gray-200">
-                    <button type="button" id="clearCartBtn" onclick="clearCart()" class="w-full btn btn-sm btn-outline mt-2 mb-2" disabled>
+                    <button type="button" id="clearBasketBtn" onclick="clearBasket()" class="w-full btn btn-sm btn-outline mt-2 mb-2" disabled>
                         Clear Basket
                     </button>
                     <button type="button" id="requestItemsBtn" class="w-full btn btn-sm bg-primarycol text-white hover:bg-fourth" 
                             onclick="showRequestConfirmation()" disabled>
-                        Request All Items
+                        Request Selected Items
                     </button>
                     <p class="text-xs text-gray-500 mt-2 text-center">
                         Items will be reserved for pickup at their respective branches
@@ -763,203 +766,269 @@ if (isset($_SESSION['request_confirmation'])) {
                     <button class="btn">Cancel</button>
                 </form>
                 <button id="finalSubmitBtn" class="btn bg-primarycol text-white hover:bg-fourth" onclick="submitDonationRequest()">
-                    Confirm Request
+                    Submit Donation Request
                 </button>
             </div>
         </div>
     </dialog>
 
     <script>
-        // Donation cart functionality
-        let cart = [];
-        const dailyLimit = <?= $dailyLimit ?>;
-        const remainingLimit = <?= $remainingLimit ?>;
+    // Donation basket functionality
+    let basket = [];
+    const dailyLimit = <?= $dailyLimit ?>;
+    const remainingLimit = <?= $remainingLimit ?>;
 
-        // Toggle cart drawer
-        function toggleCart() {
-            const drawer = document.getElementById('cartDrawer');
-            drawer.classList.toggle('translate-x-full');
+    // Toggle basket drawer
+    function toggleBasket() {
+        const drawer = document.getElementById('basketDrawer');
+        drawer.classList.toggle('translate-x-full');
+    }
+
+    // Add item to basket
+    function addToBasket(item, button) {
+        const quantityInput = button.closest('.card-actions').querySelector('.item-quantity');
+        const quantity = parseInt(quantityInput.value);
+        
+        if (isNaN(quantity) || quantity <= 0) {
+            alert('Please enter a valid quantity');
+            return;
         }
-
-        // Add item to cart
-        function addToCart(item, button) {
-            const quantityInput = button.closest('.card-actions').querySelector('.item-quantity');
-            const quantity = parseInt(quantityInput.value);
-            
-            if (isNaN(quantity) || quantity <= 0) {
-                alert('Please enter a valid quantity');
+        
+        if (quantity > item.quantity_available) {
+            alert('Requested quantity exceeds available amount');
+            return;
+        }
+        
+        // Check if adding this item would exceed daily limit
+        const currentBasketTotal = basket.reduce((total, item) => total + item.quantity, 0);
+        if (currentBasketTotal + quantity > remainingLimit) {
+            alert(`You can only request ${remainingLimit} more items today. Please adjust the quantity.`);
+            return;
+        }
+        
+        // Check if item already in basket
+        const existingItemIndex = basket.findIndex(i => i.donation_id === item.donation_id);
+        
+        if (existingItemIndex > -1) {
+            const newQuantity = basket[existingItemIndex].quantity + quantity;
+            if (newQuantity > item.quantity_available) {
+                alert('Total requested quantity exceeds available amount');
                 return;
             }
+            basket[existingItemIndex].quantity = newQuantity;
             
-            if (quantity > item.quantity_available) {
-                alert('Requested quantity exceeds available amount');
-                return;
-            }
-            
-            // Check if adding this item would exceed daily limit
-            const currentCartTotal = cart.reduce((total, item) => total + item.quantity, 0);
-            if (currentCartTotal + quantity > remainingLimit) {
-                alert(`You can only request ${remainingLimit} more items today. Please adjust the quantity.`);
-                return;
-            }
-            
-            // Check if item already in cart
-            const existingItemIndex = cart.findIndex(i => i.donation_id === item.donation_id);
-            
-            if (existingItemIndex > -1) {
-                const newQuantity = cart[existingItemIndex].quantity + quantity;
-                if (newQuantity > item.quantity_available) {
-                    alert('Total requested quantity exceeds available amount');
-                    return;
-                }
-                cart[existingItemIndex].quantity = newQuantity;
-            } else {
-                cart.push({
-                    ...item,
-                    quantity: quantity
-                });
-            }
-            
-            updateCartUI();
-            toggleCart();
-        }
-
-        // Remove item from cart
-        function removeFromCart(index) {
-            cart.splice(index, 1);
-            updateCartUI();
-        }
-
-        // Clear entire cart
-        function clearCart() {
-            cart = [];
-            updateCartUI();
-        }
-
-        // Update cart UI
-        function updateCartUI() {
-            const cartContainer = document.getElementById('cartItems');
-            const cartCountElement = document.getElementById('cartCount');
-            const clearCartBtn = document.getElementById('clearCartBtn');
-            const requestItemsBtn = document.getElementById('requestItemsBtn');
-            
-            // Update cart items count
-            const totalItems = cart.reduce((total, item) => total + item.quantity, 0);
-            cartCountElement.textContent = totalItems;
-            
-            // Enable/disable buttons
-            clearCartBtn.disabled = cart.length === 0;
-            requestItemsBtn.disabled = cart.length === 0;
-            
-            // Clear cart container
-            cartContainer.innerHTML = '';
-            
-            if (cart.length === 0) {
-                cartContainer.innerHTML = `
-                    <div class="py-3 flex justify-between items-center text-gray-500">
-                        Your basket is empty
-                    </div>
-                `;
-                return;
-            }
-            
-            // Add items to cart
-            cart.forEach((item, index) => {
-                const itemElement = document.createElement('div');
-                itemElement.className = 'py-3';
-                itemElement.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h5 class="text-sm font-medium">${item.product_name}</h5>
-                            <p class="text-xs text-gray-600 mt-1">
-                                ${item.quantity} units · ${item.branch_name}
-                            </p>
-                        </div>
-                        <button onclick="removeFromCart(${index})" class="text-gray-400 hover:text-red-600">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                `;
-                cartContainer.appendChild(itemElement);
-            });
-        }
-
-        // Show request confirmation dialog
-        function showRequestConfirmation() {
-            // Populate confirmation dialog with cart items
-            const confirmItemsList = document.getElementById('confirmItemsList');
-            confirmItemsList.innerHTML = '';
-            
-            cart.forEach(item => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${item.product_name}</td>
-                    <td>${item.quantity}</td>
-                    <td>${item.branch_name}</td>
-                    <td>${new Date(item.expiry_date).toLocaleDateString()}</td>
-                `;
-                confirmItemsList.appendChild(row);
+            // Show success feedback
+            button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg> Updated`;
+        } else {
+            basket.push({
+                ...item,
+                quantity: quantity
             });
             
-            // Show the modal
-            const modal = document.getElementById('requestConfirmationModal');
-            modal.showModal();
+            // Show success feedback
+            button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg> Added`;
         }
+        
+        // Reset button after delay
+        setTimeout(() => {
+            button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg> Add to Basket`;
+        }, 2000);
+        
+        updateBasketUI();
+        
+        // Briefly flash the basket icon to draw attention
+        const basketIcon = document.getElementById('basketToggle');
+        if (basketIcon) {
+            basketIcon.classList.add('animate-pulse', 'text-primarycol');
+            setTimeout(() => {
+                basketIcon.classList.remove('animate-pulse', 'text-primarycol');
+            }, 1000);
+        }
+        
+        // Open the basket drawer if it's the first item
+        if (basket.length === 1) {
+            toggleBasket();
+        }
+    }
 
-        // Submit donation request
-        function submitDonationRequest() {
-            // Get form values
-            const pickupDate = document.getElementById('confirmPickupDate').value;
-            const pickupTime = document.getElementById('confirmPickupTime').value;
-            const ngoNotes = document.getElementById('confirmNotes').value;
-            
-            // Validate pickup date/time
-            if (!pickupDate || !pickupTime) {
-                alert('Please select pickup date and time');
-                return;
-            }
-            
-            // Validate pickup date is not in the past
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const selectedDate = new Date(pickupDate);
-            if (selectedDate < today) {
-                alert('Please select a pickup date in the future');
-                return;
-            }
-            
-            // Set form input values
-            document.getElementById('pickup_date_input').value = pickupDate;
-            document.getElementById('pickup_time_input').value = pickupTime;
-            document.getElementById('ngo_notes_input').value = ngoNotes;
-            document.getElementById('cart_items_input').value = JSON.stringify(cart);
-            
-            // Show loading state on button
-            const submitBtn = document.getElementById('finalSubmitBtn');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = `
-                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
+    // Remove item from basket
+    function removeFromBasket(index) {
+        basket.splice(index, 1);
+        updateBasketUI();
+    }
+
+    // Clear entire basket
+    function clearBasket() {
+        basket = [];
+        updateBasketUI();
+    }
+
+    // Add this function to update the basket count in the navbar
+    function updateNavBasketCount() {
+        const navBasketCount = document.getElementById('nav-basket-count');
+        if (navBasketCount) {
+            const totalItems = basket.reduce((total, item) => total + item.quantity, 0);
+            navBasketCount.textContent = totalItems;
+            navBasketCount.style.display = totalItems > 0 ? 'flex' : 'none';
+        }
+    }
+
+    // Update the updateBasketUI function to also call updateNavBasketCount
+    const originalUpdateBasketUI = updateBasketUI;
+    updateBasketUI = function() {
+        originalUpdateBasketUI();
+        updateNavBasketCount();
+    };
+
+    // Update basket UI
+    function updateBasketUI() {
+        const basketContainer = document.getElementById('basketItems');
+        const basketCountElement = document.getElementById('basketCount');
+        const clearBasketBtn = document.getElementById('clearBasketBtn');
+        const requestItemsBtn = document.getElementById('requestItemsBtn');
+        
+        // Update basket items count
+        const totalItems = basket.reduce((total, item) => total + item.quantity, 0);
+        basketCountElement.textContent = totalItems;
+        
+        // Enable/disable buttons
+        clearBasketBtn.disabled = basket.length === 0;
+        requestItemsBtn.disabled = basket.length === 0;
+        
+        // Clear basket container
+        basketContainer.innerHTML = '';
+        
+        if (basket.length === 0) {
+            basketContainer.innerHTML = `
+                <div class="py-3 flex justify-between items-center text-gray-500">
+                    Your basket is empty
+                </div>
             `;
-            
-            // Submit the form
-            document.getElementById('donationRequestForm').submit();
+            return;
+        }
+        
+        // Add items to basket
+        basket.forEach((item, index) => {
+            const itemElement = document.createElement('div');
+            itemElement.className = 'py-3';
+            itemElement.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h5 class="text-sm font-medium">${item.product_name}</h5>
+                        <p class="text-xs text-gray-600 mt-1">
+                            ${item.quantity} units · ${item.branch_name}
+                        </p>
+                        <p class="text-xs text-gray-500">
+                            Expires: ${new Date(item.expiry_date).toLocaleDateString()}
+                        </p>
+                    </div>
+                    <button onclick="removeFromBasket(${index})" class="text-gray-400 hover:text-red-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            `;
+            basketContainer.appendChild(itemElement);
+        });
+        
+        // Update hidden input with basket items
+        document.getElementById('basket_items_input').value = JSON.stringify(basket);
+    }
+
+    // Submit donation request
+    function submitDonationRequest() {
+        // Get form values
+        const pickupDate = document.getElementById('confirmPickupDate').value;
+        const pickupTime = document.getElementById('confirmPickupTime').value;
+        const ngoNotes = document.getElementById('confirmNotes').value;
+        
+        // Validate pickup date/time
+        if (!pickupDate || !pickupTime) {
+            alert('Please select pickup date and time');
+            return;
+        }
+        
+        // Validate pickup date is not in the past
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(pickupDate);
+        if (selectedDate < today) {
+            alert('Please select a pickup date in the future');
+            return;
+        }
+        
+        // Set form input values
+        document.getElementById('pickup_date_input').value = pickupDate;
+        document.getElementById('pickup_time_input').value = pickupTime;
+        document.getElementById('ngo_notes_input').value = ngoNotes;
+        document.getElementById('basket_items_input').value = JSON.stringify(basket);
+        
+        // Show loading state on button
+        const submitBtn = document.getElementById('finalSubmitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Processing...
+        `;
+        
+        // Submit the form
+        document.getElementById('donationRequestForm').submit();
+    }
+
+    // Initialize navigation elements to work with basket
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up basket toggle button in nav
+        const basketToggle = document.getElementById('basketToggle');
+        if (basketToggle) {
+            basketToggle.addEventListener('click', function(e) {
+                e.preventDefault(); // Prevent default link behavior
+                toggleBasket();
+            });
         }
 
-        // Close confirmation banner
-        document.addEventListener('DOMContentLoaded', function() {
-            const dismissBtn = document.getElementById('dismissConfirmation');
-            if (dismissBtn) {
-                dismissBtn.addEventListener('click', function() {
-                    document.getElementById('requestConfirmationBanner').classList.add('hidden');
-                });
-            }
+        // Close confirmation banner if it exists
+        const dismissBtn = document.getElementById('dismissConfirmation');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', function() {
+                document.getElementById('requestConfirmationBanner').classList.add('hidden');
+            });
+        }
+        
+        // Initialize the basket count in the navbar
+        updateNavBasketCount();
+    });
+
+    // Show request confirmation dialog
+    function showRequestConfirmation() {
+        // Populate confirmation dialog with basket items
+        const confirmItemsList = document.getElementById('confirmItemsList');
+        confirmItemsList.innerHTML = '';
+        
+        basket.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.product_name}</td>
+                <td>${item.quantity}</td>
+                <td>${item.branch_name}</td>
+                <td>${new Date(item.expiry_date).toLocaleDateString()}</td>
+            `;
+            confirmItemsList.appendChild(row);
         });
-    </script>
+        
+        // Show the modal
+        const modal = document.getElementById('requestConfirmationModal');
+        modal.showModal();
+    }
+</script>
 </body>
 </html>

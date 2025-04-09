@@ -133,7 +133,11 @@ $recentDonationsQuery = $pdo->prepare("
         dr.status,
         CASE WHEN dp.id IS NOT NULL THEN 1 ELSE 0 END as is_received,
         p.name as product_name,
-        b.name as branch_name
+        b.name as branch_name,
+        (SELECT CASE WHEN EXISTS (
+            SELECT 1 FROM donation_prepared prep 
+            WHERE prep.ngo_request_id = dr.id
+        ) THEN 1 ELSE 0 END) as is_prepared
     FROM ngo_donation_requests dr
     LEFT JOIN donated_products dp ON dr.id = dp.donation_request_id AND dp.ngo_id = ?
     JOIN product_info p ON dr.product_id = p.id
@@ -299,10 +303,10 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
                 <?php else: ?>
                     <div class="space-y-4">
                         <?php foreach($recentDonations as $donation): ?>
-                            <div class="border-l-4 p-3 <?= getStatusColor($donation['status'], $donation['is_received']) ?>">
+                            <div class="border-l-4 p-3 <?= getStatusColor($donation['status'], $donation['is_received'], $donation['is_prepared']) ?>">
                                 <div class="flex justify-between">
                                     <span class="font-semibold"><?= htmlspecialchars($donation['product_name']) ?></span>
-                                    <span class="text-sm"><?= getStatusBadge($donation['status'], $donation['is_received']) ?></span>
+                                    <span class="text-sm"><?= getStatusBadge($donation['status'], $donation['is_received'], $donation['is_prepared']) ?></span>
                                 </div>
                                 <p class="text-sm">Qty: <?= $donation['quantity'] ?> from <?= htmlspecialchars($donation['branch_name']) ?></p>
                                 <p class="text-xs text-gray-500 mt-1">
@@ -443,14 +447,16 @@ $impactPeopleCount = $receivedDonations['quantity'] * 4;
 
 <?php
 // Helper functions for status colors and badges
-function getStatusColor($status, $isReceived) {
+function getStatusColor($status, $isReceived, $isPrepared = 0) {
     if ($isReceived) {
         return 'border-green-500 bg-green-50';
     }
     
     switch ($status) {
         case 'approved':
-            return 'border-blue-500 bg-blue-50';
+            return $isPrepared ? 
+                'border-blue-500 bg-blue-50' : 
+                'border-yellow-500 bg-yellow-50';
         case 'pending':
             return 'border-yellow-500 bg-yellow-50';
         case 'rejected':
@@ -460,14 +466,16 @@ function getStatusColor($status, $isReceived) {
     }
 }
 
-function getStatusBadge($status, $isReceived) {
+function getStatusBadge($status, $isReceived, $isPrepared = 0) {
     if ($isReceived) {
         return '<span class="badge badge-sm badge-success">Received</span>';
     }
     
     switch ($status) {
         case 'approved':
-            return '<span class="badge badge-sm badge-info">Ready for Pickup</span>';
+            return $isPrepared ? 
+                '<span class="badge badge-sm badge-info">Ready for Pickup</span>' : 
+                '<span class="badge badge-sm badge-warning">Processing</span>';
         case 'pending':
             return '<span class="badge badge-sm badge-warning">Pending</span>';
         case 'rejected':

@@ -61,6 +61,10 @@ $stmt = $pdo->prepare("
         ndr.received_at,
         p.name as product_name,
         p.category,
+        (SELECT ps.expiry_date FROM product_stock ps 
+         WHERE ps.product_info_id = ndr.product_id 
+         AND ps.branch_id = ndr.branch_id
+         ORDER BY ps.expiry_date ASC LIMIT 1) as expiry_date, /* Get earliest expiry date */
         b.name as branch_name,
         b.address as branch_address,
         dp.id as prepared_id,
@@ -495,6 +499,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                             <th>ID</th>
                             <th>Product</th>
                             <th>Quantity</th>
+                            <th>Expiry Date</th> <!-- Add this column header -->
                             <th>Branch</th>
                             <th>Pickup Date</th>
                             <th>Status</th>
@@ -504,7 +509,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <tbody>
                         <?php if (count($donations) === 0): ?>
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-gray-500">
+                                <td colspan="9" class="text-center py-4 text-gray-500"> <!-- Update colspan to match new column count -->
                                     No donation history found.
                                 </td>
                             </tr>
@@ -523,6 +528,24 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                     <td><?= $donation['id'] ?></td>
                                     <td><?= htmlspecialchars($donation['product_name']) ?></td>
                                     <td><?= $donation['quantity_requested'] ?></td>
+                                    <td>
+                                        <?php if (!empty($donation['expiry_date'])): ?>
+                                            <?= date('M d, Y', strtotime($donation['expiry_date'])) ?>
+                                            <?php 
+                                                // Add warning for soon-to-expire items
+                                                $expiryDate = new DateTime($donation['expiry_date']);
+                                                $today = new DateTime();
+                                                $daysUntilExpiry = $today->diff($expiryDate)->days;
+                                                
+                                                if ($expiryDate < $today): ?>
+                                                    <span class="badge badge-error text-white">Expired</span>
+                                                <?php elseif ($daysUntilExpiry <= 7): ?>
+                                                    <span class="badge badge-warning">Soon</span>
+                                                <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="text-gray-400">Not specified</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><?= htmlspecialchars($donation['branch_name']) ?></td>
                                     <td><?= date('M d, Y', strtotime($donation['pickup_date'])) ?> 
                                         <?= date('h:i A', strtotime($donation['pickup_time'])) ?></td>
@@ -668,6 +691,19 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <p><span class="font-medium">Name:</span> <?= htmlspecialchars($donation['product_name']) ?></p>
                     <p><span class="font-medium">Category:</span> <?= htmlspecialchars($donation['category']) ?></p>
                     <p><span class="font-medium">Quantity Requested:</span> <?= $donation['quantity_requested'] ?></p>
+                    <?php if (!empty($donation['expiry_date'])): ?>
+                        <p><span class="font-medium">Expiry Date:</span> <?= date('M d, Y', strtotime($donation['expiry_date'])) ?>
+                        <?php 
+                            // Add warning indicator for expired or soon-to-expire items
+                            $expiryDate = new DateTime($donation['expiry_date']);
+                            $today = new DateTime();
+                            if ($expiryDate < $today): ?>
+                                <span class="badge badge-error text-white ml-2">Expired</span>
+                            <?php elseif ($today->diff($expiryDate)->days <= 7): ?>
+                                <span class="badge badge-warning ml-2">Expires soon</span>
+                            <?php endif; ?>
+                        </p>
+                    <?php endif; ?>
                 </div>
                 
                 <div class="bg-sec rounded-lg p-4 mb-4">

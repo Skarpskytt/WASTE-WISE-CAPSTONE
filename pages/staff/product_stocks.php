@@ -24,7 +24,7 @@ $algorithm = isset($_GET['algorithm']) ? $_GET['algorithm'] : 'fefo'; // Default
 $showZeroQuantity = isset($_GET['zero_qty']) ? $_GET['zero_qty'] === '1' : false;
 
 // Build the WHERE clause for filters
-$whereClause = "WHERE ps.branch_id = :branchId";
+$whereClause = "WHERE ps.branch_id = :branchId AND (ps.archived_at IS NULL OR ps.is_archived = 0)";
 $params = [':branchId' => $branchId];
 
 // Only filter out zero quantity items if the showZeroQuantity flag is false
@@ -201,6 +201,7 @@ $fefoSql = "
     WHERE ps.branch_id = ? 
     AND ps.quantity > 0
     AND ps.expiry_date >= CURRENT_DATE()
+    AND (ps.archived_at IS NULL AND ps.is_archived = 0)
     ORDER BY urgency_score DESC, ps.expiry_date ASC, stock_value DESC
     LIMIT 8
 ";
@@ -235,6 +236,7 @@ $fifoSql = "
     WHERE ps.branch_id = ? 
     AND ps.quantity > 0
     AND ps.expiry_date >= CURRENT_DATE()
+    AND (ps.archived_at IS NULL AND ps.is_archived = 0)
     ORDER BY aging_score DESC, ps.production_date ASC, stock_value DESC
     LIMIT 8
 ";
@@ -342,7 +344,7 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                                   THEN pi.category ELSE NULL END) as categories_at_risk
             FROM product_stock ps
             JOIN product_info pi ON ps.product_info_id = pi.id
-            WHERE ps.branch_id = ? AND ps.quantity > 0
+            WHERE ps.branch_id = ? AND ps.quantity > 0 AND (ps.archived_at IS NULL AND ps.is_archived = 0)
         ";
         $riskStmt = $pdo->prepare($riskSql);
         $riskStmt->execute([$branchId]);
@@ -359,7 +361,7 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                 SUM(ps.quantity * pi.price_per_unit) as category_value
             FROM product_stock ps
             JOIN product_info pi ON ps.product_info_id = pi.id
-            WHERE ps.branch_id = ? AND ps.quantity > 0
+            WHERE ps.branch_id = ? AND ps.quantity > 0 AND (ps.archived_at IS NULL AND ps.is_archived = 0)
             GROUP BY pi.category
             ORDER BY at_risk_items DESC
         ";
@@ -810,6 +812,11 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                                         <div class="flex justify-end space-x-2">
                                             <a href="view_stock.php?id=<?= $stock['id'] ?>" class="text-primarycol hover:text-fourth">
                                                 View
+                                            </a>
+                                            <a href="archive_stock.php?id=<?= $stock['id'] ?>" 
+                                               onclick="return confirm('Are you sure you want to archive this stock item?')"
+                                               class="text-gray-600 hover:text-gray-800">
+                                                Archive
                                             </a>
                                             <?php if ($daysUntilExpiry <= 3 && $daysUntilExpiry >= 0): ?>
                                                 <a href="waste_product_input.php?stock_id=<?= $stock['id'] ?>&action=donate" 
