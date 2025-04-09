@@ -2,9 +2,6 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-// Add this at the top with other includes
-require_once '../../includes/automation/DonationDistributor.php';
-use App\Automation\DonationDistributor;
 
 // Check for staff access
 checkAuth(['staff']);
@@ -102,13 +99,19 @@ if (isset($_POST['submitwaste'])) {
     $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
     $branchId = $_SESSION['branch_id'];
     
-    // Product value calculation
-    $costPerUnit = isset($_POST['product_value']) && is_numeric($_POST['product_value']) ? (float)$_POST['product_value'] : 0;
-    $wasteValue = $wasteQuantity * $costPerUnit;
+    // Product value calculation - FIXED
+    $costPerUnit = isset($_POST['product_value']) && is_numeric($_POST['product_value']) ? floatval($_POST['product_value']) : 0;
+    $wasteQuantity = isset($_POST['waste_quantity']) && is_numeric($_POST['waste_quantity']) ? floatval($_POST['waste_quantity']) : 0;
+
+    // Make sure we're storing the exact value - not doubled
+    $wasteValue = $costPerUnit * $wasteQuantity;
+
+    // Add debugging information
+    error_log("Waste Value Calculation: $wasteQuantity units × ₱$costPerUnit per unit = ₱$wasteValue total");
     
     // Add these new variables for donation metadata
     $donationPriority = ($disposalMethod === 'donation' && isset($_POST['donation_priority'])) ? $_POST['donation_priority'] : 'normal';
-    $autoApproval = ($disposalMethod === 'donation') ? 1 : 0;  // Force auto-approval for all donations
+    $autoApproval = ($disposalMethod === 'donation' && isset($_POST['auto_approval'])) ? intval($_POST['auto_approval']) : 0;
     $pickupInstructions = ($disposalMethod === 'donation' && isset($_POST['pickup_instructions'])) ? trim($_POST['pickup_instructions']) : '';
 
     // Validate required fields
@@ -131,10 +134,14 @@ if (isset($_POST['submitwaste'])) {
                         ", disposalMethod=" . (isset($_POST['disposal_method']) ? $_POST['disposal_method'] : 'not set') .
                         ", productionStage=" . (isset($_POST['production_stage']) ? $_POST['production_stage'] : 'not set');
     } else {
-        $transactionStarted = false; // Add this tracking variable
         try {
+            // Start fresh with no transaction conflicts
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            
+            // Now begin a new transaction
             $pdo->beginTransaction();
-            $transactionStarted = true; // Mark that we've started a transaction
             
             // 1. Insert waste record
             $stmt = $pdo->prepare("
@@ -147,15 +154,52 @@ if (isset($_POST['submitwaste'])) {
             
             // When executing the INSERT query, format the date properly
             $formattedDate = date('Y-m-d H:i:s', strtotime($wasteDate));
-            // Then use $formattedDate in your SQL insert statement
-            $donationStatus = ($disposalMethod === 'donation') ? 'pending' : NULL;
-
+            
+            // Determine donation status based on auto-approval setting before execution
+            $donationStatus = NULL; // Default for non-donation items
+            
+            if ($disposalMethod === 'donation') {
+                // Set status based on auto-approval flag
+                if ($autoApproval === 1) {
+                    $donationStatus = 'approved'; // Auto-approved
+                } else {
+                    $donationStatus = 'pending'; // Default for manual approval
+                }
+            }
+            
+            // Execute INSERT only once with the correct status
             $stmt->execute([
                 $productId, $stockId, $userId, $formattedDate, $wasteQuantity, 
                 $wasteValue, $wasteReason, $disposalMethod, $notes, 
                 $branchId, $donationStatus, $donationPriority, $autoApproval, $pickupInstructions
             ]);
             $lastInsertId = $pdo->lastInsertId();
+            
+            // Create notification for NGOs if auto-approved
+            if ($disposalMethod === 'donation' && $autoApproval === 1) {
+                try {
+                    // Get product name for the notification
+                    $productNameStmt = $pdo->prepare("SELECT name FROM product_info WHERE id = ?");
+                    $productNameStmt->execute([$productId]);
+                    $productName = $productNameStmt->fetchColumn();
+                    
+                    // Insert notification
+                    $notifyStmt = $pdo->prepare("
+                        INSERT INTO notifications (
+                            target_role, message, notification_type, link, is_read, created_at, branch_id
+                        ) VALUES (
+                            'ngo', ?, 'donation_approved', ?, 0, NOW(), ?
+                        )
+                    ");
+                    
+                    $message = "New donation automatically approved: " . $productName . " (" . $wasteQuantity . " units)";
+                    $link = "../ngo/food_browse.php";
+                    $notifyStmt->execute([$message, $link, $branchId]);
+                } catch (PDOException $e) {
+                    // Log notification error but don't stop the process
+                    error_log("Failed to create auto-approval notification: " . $e->getMessage());
+                }
+            }
             
             // 2. Update product stock quantity
             $updateStmt = $pdo->prepare("
@@ -165,6 +209,11 @@ if (isset($_POST['submitwaste'])) {
             ");
             
             $updateStmt->execute([$wasteQuantity, $stockId, $branchId]);
+            
+            // Commit the essential database changes first
+            $pdo->commit();
+            
+            // Now handle notifications outside the transaction
             
             // Create notification for NGOs about new donation
             if ($disposalMethod === 'donation') {
@@ -177,113 +226,71 @@ if (isset($_POST['submitwaste'])) {
                     // Insert notification
                     $notifyStmt = $pdo->prepare("
                         INSERT INTO notifications (
-                            target_role, message, notification_type, link, is_read
+                            target_role, message, notification_type, link, is_read, created_at, branch_id
                         ) VALUES (
-                            'ngo', ?, 'new_donation', ?, 0
+                            'ngo', ?, 'new_donation', ?, 0, NOW(), ?
                         )
                     ");
                     
                     $message = "New donation available: " . $productName . " (" . $wasteQuantity . " units)";
                     $link = "../ngo/food_browse.php";
-                    $notifyStmt->execute([$message, $link]);
+                    $notifyStmt->execute([$message, $link, $branchId]);
                 } catch (PDOException $e) {
                     // Log notification error but don't stop the process
                     error_log("Failed to create notification: " . $e->getMessage());
                 }
             }
 
-            // Add this after creating the notification in the database
+            // REMOVING THE DONATION DISTRIBUTOR CODE
+            // No more donation distribution code here
 
-            // Send email notifications to NGOs about new donations
+            // If this is a donation, also add to donation_products table
             if ($disposalMethod === 'donation') {
-                // Get all active NGOs
-                $ngoStmt = $pdo->prepare("
-                    SELECT u.email, u.fname, u.lname, np.organization_name 
-                    FROM users u 
-                    JOIN ngo_profiles np ON u.id = np.user_id 
-                    WHERE np.status = 'approved'
-                ");
-                $ngoStmt->execute();
-                $ngos = $ngoStmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                // Get branch details
-                $branchStmt = $pdo->prepare("SELECT name, address FROM branches WHERE id = ?");
-                $branchStmt->execute([$branchId]);
-                $branchDetails = $branchStmt->fetch(PDO::FETCH_ASSOC);
-                
-                // Use the existing EmailService class
-                require_once '../../includes/mail/EmailService.php';
-                $emailService = new \App\Mail\EmailService();
-                
-                // Get product name for email
-                $productNameStmt = $pdo->prepare("SELECT name FROM product_info WHERE id = ?");
-                $productNameStmt->execute([$productId]);
-                $productName = $productNameStmt->fetchColumn();
-                
-                foreach ($ngos as $ngo) {
-                    $ngoName = !empty($ngo['organization_name']) ? $ngo['organization_name'] : $ngo['fname'] . ' ' . $ngo['lname'];
-                    $ngoEmail = $ngo['email'];
+                try {
+                    // Get expiry date from the stock record
+                    $expiryDateQuery = $pdo->prepare("SELECT expiry_date FROM product_stock WHERE id = ?");
+                    $expiryDateQuery->execute([$stockId]);
+                    $expiryDate = $expiryDateQuery->fetchColumn() ?: date('Y-m-d', strtotime('+3 days'));
                     
-                    try {
-                        // Create a simple HTML email body
-                        $emailBody = "
-                        <html>
-                        <head><title>New Donation Available</title></head>
-                        <body>
-                            <h2>New Donation Available</h2>
-                            <p>Dear $ngoName,</p>
-                            <p>A new donation is available for request:</p>
-                            <ul>
-                                <li><strong>Product:</strong> $productName</li>
-                                <li><strong>Quantity:</strong> $wasteQuantity units</li>
-                                <li><strong>Branch:</strong> {$branchDetails['name']}</li>
-                                <li><strong>Location:</strong> {$branchDetails['address']}</li>
-                                <li><strong>Priority:</strong> " . ucfirst($donationPriority) . "</li>
-                            </ul>
-                            <p>Thank you for your partnership in reducing food waste!</p>
-                        </body>
-                        </html>";
-                        
-                        // Use the now-public sendEmail method
-                        $emailService->sendEmail(
-                            $ngoEmail,
-                            "New Donation Available: $productName",
-                            $emailBody
-                        );
-                    } catch (Exception $e) {
-                        // Log email error but don't stop the process
-                        error_log("Failed to send email notification: " . $e->getMessage());
-                    }
+                    $donationStmt = $pdo->prepare("
+                        INSERT INTO donation_products
+                        (product_id, waste_id, branch_id, quantity_available, expiry_date, 
+                         auto_approval, donation_priority, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'available')
+                    ");
+                    
+                    $donationStmt->execute([
+                        $productId,
+                        $lastInsertId,
+                        $branchId,
+                        $wasteQuantity,
+                        $expiryDate,
+                        $autoApproval,
+                        $donationPriority
+                    ]);
+                    
+                    error_log("Created donation product from waste ID: $lastInsertId");
+                } catch (PDOException $e) {
+                    error_log("Error creating donation product: " . $e->getMessage());
                 }
             }
 
-            // If it's a donation, distribute it automatically 
-            if ($disposalMethod === 'donation') {
-                $distributor = new DonationDistributor($pdo);
-                $distribution = $distributor->distributeNewDonation($lastInsertId);
-                
-                // You can log distribution results or show to user if needed
-                if ($distribution['success']) {
-                    $successDetails = "Donation was automatically distributed to " . count($distribution['allocations']) . " NGOs";
-                } else {
-                    // If distribution failed for some reason
-                    // The donation will remain in pending status
-                    error_log("Failed to auto-distribute donation ID $lastInsertId: " . ($distribution['message'] ?? 'Unknown reason'));
-                }
-            }
-
-            $pdo->commit();
-            
             // Redirect with success message
             header("Location: waste_product_input.php?success=1");
             exit;
             
         } catch (PDOException $e) {
-            // Only rollback if we successfully started a transaction
-            if ($transactionStarted && $pdo->inTransaction()) {
+            // Rollback only if we're in a transaction
+            if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             $errorMessage = "Error recording waste: " . $e->getMessage();
+        } catch (Exception $e) {
+            // Handle any other exceptions
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $errorMessage = "Error processing request: " . $e->getMessage();
         }
     }
 }
@@ -718,7 +725,6 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                     <input type="hidden" name="product_value" value="<?= htmlspecialchars($product['price_per_unit']) ?>">
                                     <input type="hidden" name="available_stock" value="<?= htmlspecialchars($product['available_quantity']) ?>">
                                     <input type="hidden" data-days-until-expiry="<?= htmlspecialchars($product['days_until_expiry']) ?>" value="<?= htmlspecialchars($product['days_until_expiry']) ?>">
-                                    <input type="hidden" name="auto_approval" value="1">
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <!-- Basic waste info -->
@@ -849,6 +855,17 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                                                 </select>
                                             </div>
                                             
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                    Auto-Approval
+                                                </label>
+                                                <select name="auto_approval" class="w-full border border-gray-300 rounded-md p-2">
+                                                    <option value="1" selected>Yes - Auto-approve for NGO distribution</option>
+                                                    <option value="0">No - Manual approval required</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Auto-approved donations are immediately available to NGOs</p>
+                                            </div>
+                                            
                                             <div class="col-span-2">
                                                 <label class="block text-sm font-medium text-gray-700 mb-1">
                                                     Pickup Instructions (for NGOs)
@@ -921,8 +938,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Set auto-approval to 1
-        const autoApproval = targetForm.querySelector('select[name="auto_approval"]');
-        if (autoApproval) autoApproval.value = '1';
+        const autoApprovalSelect = targetForm.querySelector('select[name="auto_approval"]');
+        if (autoApprovalSelect) {
+            autoApprovalSelect.value = '1';
+            // Ensure any change events are triggered
+            const event = new Event('change');
+            autoApprovalSelect.dispatchEvent(event);
+        }
         
         // Set priority to urgent for products expiring in 3 days or less
         const daysUntilExpiryField = targetForm.querySelector('input[data-days-until-expiry]');

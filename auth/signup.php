@@ -310,67 +310,104 @@ $session = SessionHandler::getInstance($pdo);
           <div class="space-y-3 p-3 border border-gray-200 rounded-md bg-gray-50 verification-section">
             <h3 class="font-medium text-gray-700 text-sm">Verification Documents</h3>
             
-            <!-- Government ID Upload -->
-            <div>
-              <label for="gov_id" class="block text-sm font-medium text-gray-700">Upload Government ID</label>
-              <div class="mt-1 file-upload-area px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                <div class="space-y-1 text-center">
-                  <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <div class="flex text-sm text-gray-600 justify-center">
-                    <label for="gov_id" class="relative cursor-pointer bg-white rounded-md font-medium text-primarycol hover:text-primarycol/80">
-                      <span>Upload ID</span>
-                      <input id="gov_id" name="gov_id" type="file" accept="image/*,.pdf" class="sr-only" required>
-                    </label>
-                    <p class="pl-1">or drag and drop</p>
-                  </div>
-                  <p class="text-xs text-gray-500">Valid government ID (PNG, JPG, PDF up to 5MB)</p>
-                </div>
-              </div>
-              <div id="gov_id_preview" class="mt-2 hidden">
-                <div class="flex items-center p-2 bg-white rounded-md border">
-                  <span id="gov_id_filename" class="text-sm text-gray-700 flex-grow"></span>
-                  <button type="button" onclick="clearFileInput('gov_id')" class="text-red-500 hover:text-red-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414z" clip-rule="evenodd" />
-                    </svg>
-                  </button>
-                </div>  
-              </div>
-            </div>
-            
-            <!-- Selfie Capture -->
-            <div class="mt-4">
-              <label class="block text-sm font-medium text-gray-700">Take a Selfie</label>
-              <div class="mt-1">
-                <!-- Camera feed will be shown here -->
-                <div id="camera-container" class="bg-gray-200 rounded-md overflow-hidden relative" style="height: 150px;">
-                  <video id="video" class="w-full h-full object-cover hidden" autoplay playsinline></video>
-                  <canvas id="canvas" class="w-full h-full object-cover hidden"></canvas>
-                  <div id="start-camera" class="absolute inset-0 flex items-center justify-center bg-gray-200 cursor-pointer">
-                    <div class="text-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <p class="mt-1 text-sm text-gray-500">Click to activate camera</p>
-                    </div>
-                  </div>
-                </div>
-                <!-- Hidden input to store the captured image -->
-                <input type="hidden" name="selfie_data" id="selfie_data">
-                <div class="mt-2 flex justify-center space-x-2">
-                  <button type="button" id="capture-button" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-black hover:bg-sec hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" style="display:none;">
-                    Take Photo
-                  </button>
-                  <button type="button" id="retake-button" class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" style="display:none;">
-                    Retake
-                  </button>
-                </div>
-                <div id="selfie-status" class="mt-1 text-xs text-gray-500"></div>
-              </div>
-            </div>
+            <!-- Government ID Upload - Modified for front and back -->
+<div>
+  <label class="block text-sm font-medium text-gray-700">Upload Government ID</label>
+  
+  <!-- Front of ID Upload -->
+  <div>
+    <label for="gov_id_front" class="block text-sm text-gray-600 mb-1">Front of ID</label>
+    <div class="mt-1 file-upload-area px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+      <div class="space-y-1 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="flex text-sm text-gray-600 justify-center">
+          <label for="gov_id_front" class="relative cursor-pointer bg-white rounded-md font-medium text-primarycol hover:text-primarycol/80">
+            <span>Upload Front</span>
+            <input id="gov_id_front" name="gov_id_front" type="file" accept="image/*,.pdf" class="sr-only" required>
+          </label>
+          <p class="pl-1">or drag and drop</p>
+        </div>
+        <p class="text-xs text-gray-500">Valid government ID - front side (PNG, JPG, PDF up to 5MB)</p>
+      </div>
+    </div>
+    <div id="gov_id_front_preview" class="mt-2 hidden">
+      <div class="flex items-center p-2 bg-white rounded-md border">
+        <span id="gov_id_front_filename" class="text-sm text-gray-700 flex-grow"></span>
+        <button type="button" onclick="clearFileInput('gov_id_front')" class="text-red-500 hover:text-red-700">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>  
+    </div>
+  </div>
+  
+  <!-- Back of ID Upload -->
+  <div class="mt-3">
+    <label for="gov_id_back" class="block text-sm text-gray-600 mb-1">Back of ID</label>
+    <div class="mt-1 file-upload-area px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+      <div class="space-y-1 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="flex text-sm text-gray-600 justify-center">
+          <label for="gov_id_back" class="relative cursor-pointer bg-white rounded-md font-medium text-primarycol hover:text-primarycol/80">
+            <span>Upload Back</span>
+            <input id="gov_id_back" name="gov_id_back" type="file" accept="image/*,.pdf" class="sr-only" required>
+          </label>
+          <p class="pl-1">or drag and drop</p>
+        </div>
+        <p class="text-xs text-gray-500">Valid government ID - back side (PNG, JPG, PDF up to 5MB)</p>
+      </div>
+    </div>
+    <div id="gov_id_back_preview" class="mt-2 hidden">
+      <div class="flex items-center p-2 bg-white rounded-md border">
+        <span id="gov_id_back_filename" class="text-sm text-gray-700 flex-grow"></span>
+        <button type="button" onclick="clearFileInput('gov_id_back')" class="text-red-500 hover:text-red-700">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>  
+    </div>
+  </div>
+</div>
+
+<!-- Selfie Capture - Updated instructions -->
+<div class="mt-4">
+  <label class="block text-sm font-medium text-gray-700">Take a Selfie with your ID</label>
+  <p class="text-xs text-gray-500 mb-2">Hold your ID next to your face in the photo for verification purposes.</p>
+  <div class="mt-1">
+    <!-- Camera feed will be shown here -->
+    <div id="camera-container" class="bg-gray-200 rounded-md overflow-hidden relative" style="height: 150px;">
+      <video id="video" class="w-full h-full object-cover hidden" autoplay playsinline></video>
+      <canvas id="canvas" class="w-full h-full object-cover hidden"></canvas>
+      <div id="start-camera" class="absolute inset-0 flex items-center justify-center bg-gray-200 cursor-pointer">
+        <div class="text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p class="mt-1 text-sm text-gray-500">Click to activate camera</p>
+        </div>
+      </div>
+    </div>
+    <!-- Hidden input to store the captured image -->
+    <input type="hidden" name="selfie_data" id="selfie_data">
+    <div class="mt-2 flex justify-center space-x-2">
+      <button type="button" id="capture-button" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-black hover:bg-sec hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" style="display:none;">
+        Take Photo
+      </button>
+      <button type="button" id="retake-button" class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" style="display:none;">
+        Retake
+      </button>
+    </div>
+    <div id="selfie-status" class="mt-1 text-xs text-gray-500"></div>
+    <p class="text-xs italic text-gray-500 mt-2">Note: Please ensure both your face and your ID are clearly visible in the selfie.</p>
+  </div>
+</div>
           </div>
           
           <!-- Terms and Submit -->
@@ -390,7 +427,7 @@ $session = SessionHandler::getInstance($pdo);
   </div>
   
   <!-- Terms and Conditions Modal -->
-  <div id="termsModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+  <div id="termsModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
       <div class="p-4 border-b flex justify-between items-center">
         <h3 class="text-lg font-semibold text-gray-900">Terms and Conditions</h3>
@@ -474,20 +511,23 @@ $session = SessionHandler::getInstance($pdo);
       }
     }
 
-    // Update individual requirement indicators
+    // Replace the updateRequirement function with this fixed version
     function updateRequirement(id, isValid) {
       const el = document.getElementById(id);
       if(el) {
         const icon = el.querySelector('.requirement-icon');
+        
         if(icon) {
           if (isValid) {
+            // Set the text content and apply classes properly
             icon.textContent = '✅';
-            icon.className = 'requirement-icon requirement-met';
-            el.className = 'requirement requirement-met';
+            el.classList.add('requirement-met');
+            el.classList.remove('requirement-unmet');
           } else {
+            // Reset to default state
             icon.textContent = '⭕';
-            icon.className = 'requirement-icon requirement-unmet';
-            el.className = 'requirement';
+            el.classList.remove('requirement-met');
+            el.classList.add('requirement-unmet');
           }
         }
       }
@@ -520,7 +560,7 @@ $session = SessionHandler::getInstance($pdo);
 
     // Wait for DOM to be loaded before adding event listeners
     document.addEventListener('DOMContentLoaded', function() {
-      // Form validation
+      // Remove duplicate form variable declaration and declaration of duplicate handlers
       const form = document.querySelector('form');
       const passwordInput = document.getElementById('password');
       const confirmPasswordInput = document.getElementById('conpassword');
@@ -530,9 +570,9 @@ $session = SessionHandler::getInstance($pdo);
         checkPasswordStrength(passwordInput.value);
       }
       
-      // Validate form before submission
+      // Single form submission handler to avoid duplicates
       if (form) {
-        form.addEventListener('submit', function(event) {
+        form.onsubmit = function(event) {
           const password = passwordInput.value;
           const confirmPassword = confirmPasswordInput.value;
           
@@ -548,7 +588,7 @@ $session = SessionHandler::getInstance($pdo);
               backgroundColor: "#EF4444",
               stopOnFocus: true
             }).showToast();
-            return;
+            return false;
           }
           
           // Check password complexity
@@ -568,9 +608,60 @@ $session = SessionHandler::getInstance($pdo);
               backgroundColor: "#EF4444",
               stopOnFocus: true
             }).showToast();
+            return false;
           }
-        });
+          
+          // Check if selfie is captured
+          const selfieData = document.getElementById('selfie_data');
+          if (!selfieData.value) {
+            event.preventDefault();
+            Toastify({
+              text: "❌ Please take a selfie with your ID for verification",
+              duration: 3000,
+              close: true,
+              gravity: "top",
+              position: "center",
+              backgroundColor: "#EF4444"
+            }).showToast();
+            return false;
+          }
+          
+          // Check if government ID front is uploaded
+          const govIdFront = document.getElementById('gov_id_front');
+          if (govIdFront && !govIdFront.files[0]) {
+            event.preventDefault();
+            Toastify({
+              text: "❌ Please upload the front of your government ID",
+              duration: 3000,
+              close: true,
+              gravity: "top",
+              position: "center",
+              backgroundColor: "#EF4444"
+            }).showToast();
+            return false;
+          }
+          
+          // Check if government ID back is uploaded
+          const govIdBack = document.getElementById('gov_id_back');
+          if (govIdBack && !govIdBack.files[0]) {
+            event.preventDefault();
+            Toastify({
+              text: "❌ Please upload the back of your government ID",
+              duration: 3000,
+              close: true,
+              gravity: "top",
+              position: "center",
+              backgroundColor: "#EF4444"
+            }).showToast();
+            return false;
+          }
+          
+          // Continue with form submission
+          return true;
+        };
       }
+      
+      // Rest of your initialization code...
 
       // Role selector functionality
       const roleSelect = document.getElementById('role');
@@ -703,7 +794,7 @@ $session = SessionHandler::getInstance($pdo);
             
             // Request camera access with explicit error handling
             try {
-              stream = await navigator.mediaDevices.getUserMedia({ 
+              window.cameraStream = await navigator.mediaDevices.getUserMedia({ 
                 video: { 
                   width: { ideal: 200 },  // Reduced size
                   height: { ideal: 200 }, // Reduced size
@@ -725,7 +816,7 @@ $session = SessionHandler::getInstance($pdo);
             }
             
             // Camera access successful
-            video.srcObject = stream;
+            video.srcObject = window.cameraStream;
             video.classList.remove('hidden');
             startButton.classList.add('hidden');
             captureButton.style.display = 'inline-flex';
@@ -737,9 +828,9 @@ $session = SessionHandler::getInstance($pdo);
             };
           } catch (err) {
             console.error('Camera access error:', err);
-            selfieStatus.textContent = err.message || 'Could not access camera. Please ensure camera permissions are granted.';
+            selfieStatus.innerHTML = (err.message || 'Could not access camera. Please ensure camera permissions are granted.') + 
+                                     ' <button type="button" class="text-blue-600 underline" onclick="startCameraRetry()">Retry</button>';
             selfieStatus.className = 'mt-1 text-xs text-red-600';
-            selfieStatus.innerHTML += ' <button class="text-blue-600 underline" onclick="startCameraRetry()">Retry</button>';
           }
         });
       }
@@ -884,6 +975,117 @@ $session = SessionHandler::getInstance($pdo);
           stream = null;
         }
       });
+
+      // File input handlers for the front and back ID uploads
+      // Front of ID file input change event
+      const govIdFrontInput = document.getElementById('gov_id_front');
+      if (govIdFrontInput) {
+        govIdFrontInput.addEventListener('change', function() {
+          const file = this.files[0];
+          if (file) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+              Toastify({
+                text: "❌ File size exceeds 5MB limit",
+                duration: 3000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#EF4444"
+              }).showToast();
+              this.value = '';
+              return;
+            }
+            
+            document.getElementById('gov_id_front_filename').textContent = file.name;
+            document.getElementById('gov_id_front_preview').classList.remove('hidden');
+          } else {
+            document.getElementById('gov_id_front_preview').classList.add('hidden');
+          }
+        });
+      }
+      
+      // Back of ID file input change event
+      const govIdBackInput = document.getElementById('gov_id_back');
+      if (govIdBackInput) {
+        govIdBackInput.addEventListener('change', function() {
+          const file = this.files[0];
+          if (file) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+              Toastify({
+                text: "❌ File size exceeds 5MB limit",
+                duration: 3000,
+                close: true,
+                gravity: "top",
+                position: "center",
+                backgroundColor: "#EF4444"
+              }).showToast();
+              this.value = '';
+              return;
+            }
+            
+            document.getElementById('gov_id_back_filename').textContent = file.name;
+            document.getElementById('gov_id_back_preview').classList.remove('hidden');
+          } else {
+            document.getElementById('gov_id_back_preview').classList.add('hidden');
+          }
+        });
+      }
+      
+      // Update form submission validation for new ID fields
+      if (form) {
+        const originalSubmitHandler = form.onsubmit;
+        form.onsubmit = function(event) {
+          // Check if selfie is captured
+          const selfieData = document.getElementById('selfie_data');
+          if (!selfieData.value) {
+            event.preventDefault();
+            Toastify({
+              text: "❌ Please take a selfie with your ID for verification",
+              duration: 3000,
+              close: true,
+              gravity: "top",
+              position: "center",
+              backgroundColor: "#EF4444"
+            }).showToast();
+            return false;
+          }
+          
+          // Check if government ID front is uploaded
+          const govIdFront = document.getElementById('gov_id_front');
+          if (govIdFront && !govIdFront.files[0]) {
+            event.preventDefault();
+            Toastify({
+              text: "❌ Please upload the front of your government ID",
+              duration: 3000,
+              close: true,
+              gravity: "top",
+              position: "center",
+              backgroundColor: "#EF4444"
+            }).showToast();
+            return false;
+          }
+          
+          // Check if government ID back is uploaded
+          const govIdBack = document.getElementById('gov_id_back');
+          if (govIdBack && !govIdBack.files[0]) {
+            event.preventDefault();
+            Toastify({
+              text: "❌ Please upload the back of your government ID",
+              duration: 3000,
+              close: true,
+              gravity: "top",
+              position: "center",
+              backgroundColor: "#EF4444"
+            }).showToast();
+            return false;
+          }
+          
+          // If we have the original handler, call it
+          if (typeof originalSubmitHandler === 'function') {
+            return originalSubmitHandler.call(this, event);
+          }
+        };
+      }
     });
 
     // Error notifications
@@ -930,6 +1132,139 @@ $session = SessionHandler::getInstance($pdo);
         }).showToast();
         <?php unset($_SESSION['pending_approval']); ?>
     <?php endif; ?>
+  </script>
+  <script>
+    // Add this as a global function outside of document.ready
+    window.startCameraRetry = function() {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const startButton = document.getElementById('start-camera');
+      const captureButton = document.getElementById('capture-button');
+      const retakeButton = document.getElementById('retake-button');
+      const selfieStatus = document.getElementById('selfie-status');
+      
+      // Get the global stream variable
+      let stream = window.cameraStream;
+      
+      // More aggressive cleanup of video streams
+      if (stream) {
+        try {
+          stream.getTracks().forEach(track => {
+            console.log('Stopping track:', track.kind);
+            track.stop();
+          });
+        } catch (e) {
+          console.error('Error stopping tracks:', e);
+        }
+        window.cameraStream = null;
+      }
+      
+      // Also clear video source object
+      if (video.srcObject) {
+        try {
+          const tracks = video.srcObject.getTracks();
+          tracks.forEach(track => {
+            console.log('Releasing track:', track.kind);
+            track.stop();
+          });
+        } catch (e) {
+          console.error('Error clearing video source:', e);
+        }
+        video.srcObject = null;
+      }
+      
+      // Reset UI state
+      video.classList.add('hidden');
+      canvas.classList.add('hidden');
+      startButton.classList.remove('hidden');
+      captureButton.style.display = 'none';
+      retakeButton.style.display = 'none';
+      
+      // Update status with more helpful information
+      selfieStatus.innerHTML = 'Preparing camera for retry... <span class="text-xs">(releasing resources)</span>';
+      
+      // Try camera with a longer delay and show countdown
+      let countdown = 3;
+      const countdownTimer = setInterval(() => {
+        selfieStatus.innerHTML = `Retrying in ${countdown} seconds...`;
+        countdown--;
+        
+        if (countdown < 0) {
+          clearInterval(countdownTimer);
+          selfieStatus.textContent = 'Accessing camera...';
+          startButton.click();
+        }
+      }, 1000);
+    };
+  </script>
+  <script>
+    // Add this at the top of your script section
+    window.cameraStream = null;
+
+    // Then modify your camera activation code
+    // Single camera access event listener
+    if (startButton) {
+      startButton.addEventListener('click', async function() {
+        try {
+          // First check if camera is available
+          const cameraAvailable = await checkCameraAvailability();
+          if (!cameraAvailable) {
+            throw new Error('No camera detected on your device. Please connect a camera and try again.');
+          }
+          
+          // Clear previous errors
+          selfieStatus.textContent = 'Starting camera...';
+          selfieStatus.className = 'mt-1 text-xs text-gray-500';
+          
+          console.log('Attempting to access camera...');
+          
+          // Check for camera support
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera API not supported in this browser');
+          }
+          
+          // Request camera access with explicit error handling
+          try {
+            window.cameraStream = await navigator.mediaDevices.getUserMedia({ 
+              video: { 
+                width: { ideal: 200 },  // Reduced size
+                height: { ideal: 200 }, // Reduced size
+                facingMode: "user"
+              }
+            });
+            console.log('Camera access granted');
+          } catch (cameraError) {
+            console.error('Camera access specific error:', cameraError.name, cameraError.message);
+            if (cameraError.name === 'NotAllowedError') {
+              throw new Error('Camera access denied. Please allow camera access in your browser settings and try again.');
+            } else if (cameraError.name === 'NotFoundError') {
+              throw new Error('No camera found. Please connect a camera and try again.');
+            } else if (cameraError.name === 'NotReadableError') {
+              throw new Error('Camera is already in use by another application. Please: <br>1. Close other applications using your camera (Zoom, Teams, etc.)<br>2. Close other browser tabs that might be using the camera<br>3. Try restarting your browser');
+            } else {
+              throw cameraError;
+            }
+          }
+          
+          // Camera access successful
+          video.srcObject = window.cameraStream;
+          video.classList.remove('hidden');
+          startButton.classList.add('hidden');
+          captureButton.style.display = 'inline-flex';
+          
+          video.onloadedmetadata = function() {
+            video.play();
+            selfieStatus.textContent = 'Position your face and click "Take Photo"';
+            selfieStatus.className = 'mt-1 text-xs text-green-600';
+          };
+        } catch (err) {
+          console.error('Camera access error:', err);
+          selfieStatus.innerHTML = (err.message || 'Could not access camera. Please ensure camera permissions are granted.') + 
+                                   ' <button type="button" class="text-blue-600 underline" onclick="startCameraRetry()">Retry</button>';
+          selfieStatus.className = 'mt-1 text-xs text-red-600';
+        }
+      });
+    }
   </script>
 </body>
 </html>

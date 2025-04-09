@@ -289,13 +289,7 @@ function getPaginationUrl($page) {
         <!-- Export Options -->
         <div class="flex items-center space-x-2 ml-auto">
           <div class="text-sm font-medium text-gray-700">Export as:</div>
-          <a href="javascript:void(0)" onclick="printPage()" 
-             class="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow-sm inline-flex items-center text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z" />
-            </svg>
-            Print
-          </a>
+       
           <a href="generate_pdf.php?branch_id=<?= $branchId ?>&data_type=product&search=<?= urlencode($search) ?>&start_date=<?= urlencode($start_date) ?>&end_date=<?= urlencode($end_date) ?>" 
              class="py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-md shadow-sm inline-flex items-center text-sm">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">

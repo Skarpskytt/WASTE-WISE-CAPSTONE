@@ -23,6 +23,7 @@ $stmt = $pdo->prepare("
         ndr.product_id,
         ndr.branch_id,
         ndr.waste_id,
+        ndr.donation_product_id, /* Add this field */
         ndr.quantity_requested,
         ndr.request_date,
         ndr.pickup_date,
@@ -36,13 +37,16 @@ $stmt = $pdo->prepare("
         u.email as ngo_email,
         u.phone as ngo_phone,
         ndr.ngo_id,
-        pw.waste_date as expiry_date
+        dp.expiry_date, /* Use donation_products table for expiry */
+        dp.quantity_available
     FROM 
         ngo_donation_requests ndr
     JOIN 
         product_info pi ON ndr.product_id = pi.id
     JOIN 
         product_waste pw ON ndr.waste_id = pw.id
+    LEFT JOIN
+        donation_products dp ON ndr.donation_product_id = dp.id /* Join with donation_products */
     JOIN 
         users u ON ndr.ngo_id = u.id
     LEFT JOIN
@@ -287,6 +291,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_request_ids'], $
                     )
                 ");
                 
+                // Check if the user is an NGO
+                $checkNgoStmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+                $checkNgoStmt->execute([$ngoId]);
+                $userRole = $checkNgoStmt->fetchColumn();
+
+                if ($userRole !== 'ngo') {
+                    throw new Exception("Only NGOs can receive donation requests.");
+                }
+
                 // Format product names nicely
                 $productList = count($productNames) > 3 
                     ? implode(', ', array_slice($productNames, 0, 3)) . " and " . (count($productNames) - 3) . " more"
@@ -294,7 +307,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_request_ids'], $
                 
                 $message = "{$successCount} items ({$productList}) are now ready for pickup!";
                 $notifyStmt->execute([$ngoId, $message]);
-                
                 // Send bulk email notification
                 try {
                     $emailService = new EmailService();

@@ -63,6 +63,7 @@ $baseQuery = "
         pi.name as product_name,
         pi.category,
         pi.image,
+        pi.price_per_unit,  /* Add this line to get the unit price */
         COALESCE(np.organization_name, u.organization_name, CONCAT(u.fname, ' ', u.lname)) as ngo_name,
         u.email as ngo_email,
         u.phone as ngo_phone,
@@ -464,9 +465,6 @@ krsort($donationsByDate);
                                                 ?>
                                                 <span class="status-badge <?= $statusClass ?>"><?= $statusText ?></span>
                                                 
-                                                <?php if ($donation['auto_approval']): ?>
-                                                    <span class="status-badge bg-green-100 text-green-800 ml-1">Auto-Approved</span>
-                                                <?php endif; ?>
                                             </div>
                                             <div>
                                                 <span class="font-medium"><?= htmlspecialchars($donation['product_name']) ?></span>
@@ -494,7 +492,27 @@ krsort($donationsByDate);
                                             <div class="flex">
                                                 <div class="w-16 h-16 bg-gray-100 rounded overflow-hidden mr-3 flex-shrink-0">
                                                     <?php if (!empty($donation['image'])): ?>
-                                                        <img src="<?= htmlspecialchars('../../assets/uploads/products/' . $donation['image']) ?>" 
+                                                        <?php
+                                                        // Determine proper image path based on what's stored
+                                                        $imagePath = "../../assets/images/default-product.jpg";
+                                                        
+                                                        if (!empty($donation['image'])) {
+                                                            if (strpos($donation['image'], '/') !== false) {
+                                                                // Path already has directory structure
+                                                                if (strpos($donation['image'], '../../') === 0) {
+                                                                    $imagePath = $donation['image'];
+                                                                } else if (strpos($donation['image'], 'assets/') === 0) {
+                                                                    $imagePath = '../../' . $donation['image'];
+                                                                } else {
+                                                                    $imagePath = $donation['image'];
+                                                                }
+                                                            } else {
+                                                                // Just a filename, use the uploads folder
+                                                                $imagePath = "../../uploads/products/" . $donation['image'];
+                                                            }
+                                                        }
+                                                        ?>
+                                                        <img src="<?= htmlspecialchars($imagePath) ?>" 
                                                              alt="<?= htmlspecialchars($donation['product_name']) ?>"
                                                              class="w-full h-full object-cover"
                                                              onerror="this.src='../../assets/images/default-product.jpg'">
@@ -511,7 +529,7 @@ krsort($donationsByDate);
                                                     </div>
                                                     <div class="text-sm">
                                                         <span class="font-medium">Value:</span> 
-                                                        ₱<?= number_format($donation['waste_value'], 2) ?>
+                                                        ₱<?= number_format($donation['price_per_unit'] * $donation['quantity_requested'], 2) ?>
                                                     </div>
                                                     <div class="text-sm">
                                                         <span class="font-medium">Requested:</span> 

@@ -7,9 +7,6 @@ checkAuth(['admin']);
 
 $pdo = getPDO();
 
-// Auto-handle expired products
-// Logic for handling expired products could be added here
-
 // Get categories for filter
 $categoriesQuery = $pdo->query("SELECT DISTINCT category FROM product_info ORDER BY category");
 $categories = $categoriesQuery->fetchAll(PDO::FETCH_COLUMN);
@@ -22,69 +19,66 @@ $status = isset($_GET['status']) ? trim($_GET['status']) : 'all';
 $sort = isset($_GET['sort']) ? trim($_GET['sort']) : 'newest';
 
 $params = [];
+
+// UPDATED QUERY: Remove batch_number field from the query since it doesn't exist
 $sql = "
     SELECT 
-        pw.id as waste_id, 
-        p.id as product_id, 
-        p.name as product_name, 
-        p.category, 
-        pw.waste_quantity as available_quantity,
-        ps.expiry_date, 
-        p.image, 
-        b.id as branch_id, 
-        b.name as branch_name, 
-        b.address as branch_address,
-        b.location as branch_location,
-        pw.waste_date, 
-        pw.waste_value,
-        ps.batch_number,
-        pw.donation_status,
-        pw.created_at,
-        (SELECT COUNT(*) FROM ngo_donation_requests ndr WHERE ndr.waste_id = pw.id) as request_count
-    FROM product_waste pw
-    JOIN product_info p ON pw.product_id = p.id
-    JOIN branches b ON pw.branch_id = b.id
-    LEFT JOIN product_stock ps ON pw.stock_id = ps.id
-    WHERE pw.disposal_method = 'donation' 
-    AND pw.archived = 0
+        dp.id AS donation_id,
+        pw.id AS waste_id, 
+        pi.id AS product_id,
+        b.id AS branch_id,
+        pi.name AS product_name, 
+        pi.category,
+        pi.image,
+        pi.price_per_unit,
+        b.name AS branch_name,
+        b.address AS branch_address,
+        b.location AS branch_location,
+        dp.quantity_available,
+        dp.expiry_date,
+        pw.waste_date,
+        pw.auto_approval,
+        dp.status AS donation_status,
+        dp.creation_date,
+        dp.donation_priority,
+        (SELECT COUNT(*) FROM ngo_donation_requests ndr WHERE ndr.waste_id = pw.id) AS request_count
+    FROM donation_products dp
+    JOIN product_waste pw ON dp.waste_id = pw.id
+    JOIN product_info pi ON dp.product_id = pi.id
+    JOIN branches b ON dp.branch_id = b.id
+    WHERE dp.quantity_available > 0
 ";
 
-// Filter by donation status
+// Filter by donation status (available, fully_allocated, expired)
 if ($status != 'all') {
-    $sql .= " AND pw.donation_status = ?";
+    $sql .= " AND dp.status = ?";
     $params[] = $status;
 }
 
 if (!empty($search)) {
-    $sql .= " AND (p.name LIKE ? OR p.category LIKE ?)";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
+    $sql .= " AND (pi.name LIKE ? OR pi.category LIKE ? OR b.name LIKE ?)";
+    $searchParam = "%$search%";
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $params[] = $searchParam;
 }
 
 if (!empty($category)) {
-    $sql .= " AND p.category = ?";
+    $sql .= " AND pi.category = ?";
     $params[] = $category;
 }
 
 // Apply expiry date filter
 if (!empty($expiryFilter)) {
-    $today = date('Y-m-d');
-    $tomorrow = date('Y-m-d', strtotime('+1 day'));
-    $weekLater = date('Y-m-d', strtotime('+7 days'));
-    
     switch ($expiryFilter) {
         case 'today':
-            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) = ?";
-            $params[] = $today;
+            $sql .= " AND DATE(dp.expiry_date) = CURDATE()";
             break;
         case 'tomorrow':
-            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) = ?";
-            $params[] = $tomorrow;
+            $sql .= " AND DATE(dp.expiry_date) = DATE_ADD(CURDATE(), INTERVAL 1 DAY)";
             break;
         case 'this_week':
-            $sql .= " AND DATE(COALESCE(ps.expiry_date, pw.waste_date)) BETWEEN ? AND ?";
-            $params[] = $today;
-            $params[] = $weekLater;
+            $sql .= " AND DATE(dp.expiry_date) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)";
             break;
     }
 }
@@ -92,20 +86,20 @@ if (!empty($expiryFilter)) {
 // Apply sorting
 switch ($sort) {
     case 'expiry':
-        $sql .= " ORDER BY COALESCE(ps.expiry_date, pw.waste_date) ASC";
+        $sql .= " ORDER BY dp.expiry_date ASC";
         break;
     case 'quantity':
-        $sql .= " ORDER BY pw.waste_quantity DESC";
+        $sql .= " ORDER BY dp.quantity_available DESC";
         break;
     case 'name':
-        $sql .= " ORDER BY p.name ASC";
+        $sql .= " ORDER BY pi.name ASC";
         break;
     case 'requests':
         $sql .= " ORDER BY request_count DESC";
         break;
     case 'newest':
     default:
-        $sql .= " ORDER BY pw.created_at DESC";
+        $sql .= " ORDER BY dp.creation_date DESC";
         break;
 }
 
@@ -118,11 +112,10 @@ $donationItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $statsQuery = $pdo->query("
     SELECT 
         COUNT(*) as total_items,
-        SUM(CASE WHEN donation_status = 'pending' THEN 1 ELSE 0 END) as pending_items,
-        SUM(CASE WHEN donation_status = 'requested' THEN 1 ELSE 0 END) as requested_items,
-        SUM(CASE WHEN donation_status = 'approved' THEN 1 ELSE 0 END) as approved_items
-    FROM product_waste
-    WHERE disposal_method = 'donation' AND archived = 0
+        SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available_items,
+        SUM(CASE WHEN status = 'fully_allocated' THEN 1 ELSE 0 END) as allocated_items,
+        SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) as expired_items
+    FROM donation_products
 ");
 $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
 ?>
@@ -163,7 +156,15 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                 <div class="flex items-center justify-between">
                     <div>
                         <h1 class="text-2xl font-bold text-primarycol">Food Donations Management</h1>
-                        <p class="text-gray-500 text-sm mt-1">Manage all food items available for donation</p>
+                        <p class="text-gray-500 text-sm mt-1">Manage food items available for donation to NGOs</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="stats shadow">
+                            <div class="stat py-2 px-4">
+                                <div class="stat-title text-xs">Available Items</div>
+                                <div class="stat-value text-lg text-primarycol"><?= $stats['available_items'] ?? 0 ?></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -193,22 +194,15 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                                 <li>
                                     <label class="flex items-center gap-2 cursor-pointer">
                                         <input type="radio" name="status" class="radio radio-sm" 
-                                               value="pending" <?= ($status === 'pending') ? 'checked' : '' ?>>
+                                               value="available" <?= ($status === 'available') ? 'checked' : '' ?>>
                                         <span>Available</span>
                                     </label>
                                 </li>
                                 <li>
                                     <label class="flex items-center gap-2 cursor-pointer">
                                         <input type="radio" name="status" class="radio radio-sm" 
-                                               value="requested" <?= ($status === 'requested') ? 'checked' : '' ?>>
-                                        <span>Requested</span>
-                                    </label>
-                                </li>
-                                <li>
-                                    <label class="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="status" class="radio radio-sm" 
-                                               value="approved" <?= ($status === 'approved') ? 'checked' : '' ?>>
-                                        <span>Approved</span>
+                                               value="fully_allocated" <?= ($status === 'fully_allocated') ? 'checked' : '' ?>>
+                                        <span>Fully Allocated</span>
                                     </label>
                                 </li>
                                 
@@ -307,132 +301,186 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
 
         <!-- Food Items Grid -->
         <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-    <?php
-    // Filter only pending/available items for display
-    $availableItems = array_filter($donationItems, function($item) {
-        return $item['donation_status'] === 'pending';
-    });
-    
-    if (empty($availableItems)): ?>
-        <div class="text-center py-12">
-            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
-            </svg>
-            <h3 class="mt-2 text-lg font-medium text-gray-900">No available donation items found</h3>
-            <p class="mt-1 text-sm text-gray-500">There are currently no items available for donation.</p>
-        </div>
-    <?php else: ?>
-        <?php
-        // Group items by branch
-        $itemsByBranch = [];
-        foreach ($availableItems as $item) {
-            $branchId = $item['branch_id'];
-            if (!isset($itemsByBranch[$branchId])) {
-                $itemsByBranch[$branchId] = [
-                    'name' => $item['branch_name'],
-                    'address' => $item['branch_address'],
-                    'items' => []
-                ];
+            <?php
+            // Filter only available items by default if no status is selected
+            $displayItems = $donationItems;
+            if ($status === 'all' || empty($status)) {
+                // Show all items regardless of status
+            } else {
+                $displayItems = array_filter($donationItems, function($item) use ($status) {
+                    return $item['donation_status'] === $status;
+                });
             }
-            $itemsByBranch[$branchId]['items'][] = $item;
-        }
-        
-        // Sort branches by name
-        uasort($itemsByBranch, function($a, $b) {
-            return strcmp($a['name'], $b['name']);
-        });
-        
-        // Display count of available items
-        $totalAvailableItems = count($availableItems);
-        ?>
-        
-        <div class="mb-4">
-            <h3 class="text-lg font-semibold text-primarycol">Available Food Donations (<?= $totalAvailableItems ?>)</h3>
-        </div>
-        
-        <?php foreach ($itemsByBranch as $branchId => $branch): ?>
-            <div class="mb-8">
-                <div class="bg-sec p-4 rounded-lg mb-4">
-                    <h3 class="text-xl font-bold text-primarycol"><?= htmlspecialchars($branch['name']) ?></h3>
-                    <p class="text-gray-600 text-sm"><?= htmlspecialchars($branch['address']) ?></p>
+            
+            if (empty($displayItems)): ?>
+                <div class="text-center py-12">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
+                    </svg>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900">No donation items found</h3>
+                    <p class="mt-1 text-sm text-gray-500">There are currently no items available for donation matching your criteria.</p>
+                </div>
+            <?php else: ?>
+                <?php
+                // Group items by branch
+                $itemsByBranch = [];
+                foreach ($displayItems as $item) {
+                    $branchId = $item['branch_id'];
+                    if (!isset($itemsByBranch[$branchId])) {
+                        $itemsByBranch[$branchId] = [
+                            'name' => $item['branch_name'],
+                            'address' => $item['branch_address'],
+                            'items' => []
+                        ];
+                    }
+                    $itemsByBranch[$branchId]['items'][] = $item;
+                }
+                
+                // Sort branches by name
+                uasort($itemsByBranch, function($a, $b) {
+                    return strcmp($a['name'], $b['name']);
+                });
+                
+                // Display count of available items
+                $totalDisplayItems = count($displayItems);
+                $statusLabel = ($status === 'all' || empty($status)) ? 'All' : ucfirst(str_replace('_', ' ', $status));
+                ?>
+                
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-primarycol"><?= $statusLabel ?> Food Donations (<?= $totalDisplayItems ?>)</h3>
                 </div>
                 
-                <div class="overflow-x-auto bg-white shadow-md rounded-lg">
-                    <table class="table table-zebra w-full">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Category</th>
-                                <th>Quantity</th>
-                                <th>Expiry</th>
-                                <th class="text-center">NGO Requests</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($branch['items'] as $item): ?>
-                                <?php
-                                $expiryDate = !empty($item['expiry_date']) ? $item['expiry_date'] : $item['waste_date'];
-                                $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
-                                $expiryClass = $daysUntilExpiry <= 1 ? 'text-red-600 font-bold' : ($daysUntilExpiry <= 3 ? 'text-amber-600 font-bold' : '');
-                                ?>
-                                <tr>
-                                    <td class="min-w-[200px]">
-                                        <div class="flex items-center space-x-3">
-                                            <div class="avatar">
-                                                <div class="w-12 h-12 rounded">
-                                                    <?php
-                                                    if (!empty($item['image'])) {
-                                                        $imagePath = $item['image'];
-                                                        if (strpos($imagePath, '../../') === 0) {
-                                                            $imagePath = substr($imagePath, 6);
-                                                            echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
-                                                        } else {
-                                                            echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
-                                                        }
-                                                    } else {
-                                                        echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '">';
-                                                    }
-                                                    ?>
+                <?php foreach ($itemsByBranch as $branchId => $branch): ?>
+                    <div class="mb-8">
+                        <div class="bg-sec p-4 rounded-lg mb-4">
+                            <h3 class="text-xl font-bold text-primarycol"><?= htmlspecialchars($branch['name']) ?></h3>
+                            <p class="text-gray-600 text-sm"><?= htmlspecialchars($branch['address']) ?></p>
+                        </div>
+                        
+                        <div class="overflow-x-auto bg-white shadow-md rounded-lg">
+                            <table class="table table-zebra w-full">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th>Quantity</th>
+                                        <th>Expiry</th>
+                                        <th class="text-center">Auto-Approve</th>
+                                        <th class="text-center">Priority</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($branch['items'] as $item): ?>
+                                        <?php
+                                        $expiryDate = $item['expiry_date'] ?? $item['waste_date'];
+                                        $daysUntilExpiry = ceil((strtotime($expiryDate) - time()) / (60 * 60 * 24));
+                                        $expiryClass = $daysUntilExpiry <= 1 ? 'text-red-600 font-bold' : ($daysUntilExpiry <= 3 ? 'text-amber-600 font-bold' : '');
+                                        
+                                        // Status badge class
+                                        $statusClass = '';
+                                        $statusLabel = '';
+                                        
+                                        switch ($item['donation_status']) {
+                                            case 'available':
+                                                $statusClass = 'bg-green-100 text-green-800';
+                                                $statusLabel = 'Available';
+                                                break;
+                                            case 'fully_allocated':
+                                                $statusClass = 'bg-blue-100 text-blue-800';
+                                                $statusLabel = 'Fully Allocated';
+                                                break;
+                                            case 'expired':
+                                                $statusClass = 'bg-red-100 text-red-800';
+                                                $statusLabel = 'Expired';
+                                                break;
+                                            default:
+                                                $statusClass = 'bg-gray-100 text-gray-800';
+                                                $statusLabel = $item['donation_status'];
+                                        }
+                                        ?>
+                                        <tr>
+                                            <td class="min-w-[200px]">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="avatar">
+                                                        <div class="w-12 h-12 rounded">
+                                                            <?php
+                                                            if (!empty($item['image'])) {
+                                                                $imagePath = $item['image'];
+                                                                if (strpos($imagePath, '../../') === 0) {
+                                                                    // Path already has structure
+                                                                    echo '<img src="' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                                } else if (strpos($imagePath, 'assets/') === 0) {
+                                                                    // Just a path starting with assets/
+                                                                    echo '<img src="../../' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                                } else {
+                                                                    // Just a filename
+                                                                    echo '<img src="../../uploads/products/' . htmlspecialchars($imagePath) . '" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                                }
+                                                            } else {
+                                                                echo '<img src="../../assets/images/placeholder-food.jpg" alt="' . htmlspecialchars($item['product_name']) . '">';
+                                                            }
+                                                            ?>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-bold"><?= htmlspecialchars($item['product_name']) ?></div>
+                                                        <div class="text-xs">
+                                                            <span class="badge badge-sm <?= $statusClass ?>"><?= $statusLabel ?></span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div>
-                                                <div class="font-bold"><?= htmlspecialchars($item['product_name']) ?></div>
-                                                <?php if (!empty($item['batch_number'])): ?>
-                                                    <div class="text-xs text-gray-500">Batch: <?= htmlspecialchars($item['batch_number']) ?></div>
+                                            </td>
+                                            <td><?= htmlspecialchars($item['category']) ?></td>
+                                            <td><?= htmlspecialchars($item['quantity_available']) ?> units</td>
+                                            <td>
+                                                <div class="<?= $expiryClass ?>"><?= date('M d, Y', strtotime($expiryDate)) ?></div>
+                                                <div class="text-xs"><?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?> left</div>
+                                            </td>
+                                            <td class="text-center">
+                                                <?php if ($item['auto_approval']): ?>
+                                                    <span class="badge badge-success badge-sm">Yes</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-ghost badge-sm">No</span>
                                                 <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td><?= htmlspecialchars($item['category']) ?></td>
-                                    <td><?= htmlspecialchars($item['available_quantity']) ?> units</td>
-                                    <td>
-                                        <div class="<?= $expiryClass ?>"><?= date('M d, Y', strtotime($expiryDate)) ?></div>
-                                        <div class="text-xs"><?= $daysUntilExpiry ?> day<?= $daysUntilExpiry !== 1 ? 's' : '' ?> left</div>
-                                    </td>
-                                    <td class="text-center">
-                                        <?php if ($item['request_count'] > 0): ?>
-                                            <span class="badge badge-accent"><?= $item['request_count'] ?> request<?= $item['request_count'] > 1 ? 's' : '' ?></span>
-                                        <?php else: ?>
-                                            <span class="text-gray-400">No requests</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-xs btn-outline" 
-                                                onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
-                                            View Details
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
-</div>
-
+                                            </td>
+                                            <td class="text-center">
+                                                <?php 
+                                                $priorityClass = '';
+                                                switch ($item['donation_priority']) {
+                                                    case 'urgent':
+                                                        $priorityClass = 'badge-error';
+                                                        break;
+                                                    case 'high':
+                                                        $priorityClass = 'badge-warning';
+                                                        break;
+                                                    default:
+                                                        $priorityClass = 'badge-info';
+                                                }
+                                                ?>
+                                                <span class="badge <?= $priorityClass ?> badge-sm"><?= ucfirst($item['donation_priority']) ?></span>
+                                            </td>
+                                            <td>
+                                                <div class="flex gap-1">
+                                                    <button class="btn btn-xs btn-outline" 
+                                                            onclick="viewProductDetails(<?= htmlspecialchars(json_encode($item)) ?>)">
+                                                        View
+                                                    </button>
+                                                    <button class="btn btn-xs btn-primary" 
+                                                            onclick="editDonation(<?= $item['donation_id'] ?>)">
+                                                        Edit
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Product Details Modal -->
@@ -466,9 +514,9 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                             <div class="text-sm text-gray-600">Status:</div>
                             <div id="modalProductStatus" class="font-medium"></div>
                         </div>
-                        <div id="modalBatchInfo" class="hidden">
-                            <div class="text-sm text-gray-600">Batch Number:</div>
-                            <div id="modalBatchNumber" class="font-medium"></div>
+                        <div>
+                            <div class="text-sm text-gray-600">Priority Level:</div>
+                            <div id="modalPriority" class="font-medium"></div>
                         </div>
                     </div>
                 </div>
@@ -478,14 +526,26 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                         <div class="mt-1 space-y-1">
                             <p id="modalBranchName" class="font-medium"></p>
                             <p id="modalBranchAddress" class="text-gray-600"></p>
-                            <p id="modalBranchLocation" class="text-gray-600"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 pt-4 mb-4">
+                        <h4 class="font-medium text-gray-900">Visibility Settings</h4>
+                        <div class="flex flex-col mt-2 gap-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Auto-approval:</span>
+                                <span id="modalAutoApproval" class="font-medium"></span>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                Auto-approved donations are immediately approved for NGO pickup without requiring staff review.
+                            </p>
                         </div>
                     </div>
                     
                     <div class="border-t border-gray-200 pt-4" id="requestsSection">
-                        <h4 class="font-medium text-gray-900">Item Details</h4>
+                        <h4 class="font-medium text-gray-900">NGO Requests</h4>
                         <div id="requestsInfo" class="mt-2">
-                            <p class="text-gray-600">This item is available for donation and currently has no requests.</p>
+                            <p class="text-gray-600">Loading NGO requests data...</p>
                         </div>
                     </div>
                 </div>
@@ -496,6 +556,73 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
                     <button class="btn">Close</button>
                 </form>
             </div>
+        </div>
+    </dialog>
+    
+    <!-- Edit Donation Modal -->
+    <dialog id="editDonationModal" class="modal">
+        <div class="modal-box max-w-2xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            </form>
+            <h3 class="text-lg font-bold text-primarycol mb-4">Edit Donation Settings</h3>
+            
+            <form id="editDonationForm" method="POST" action="update_donation.php">
+                <input type="hidden" id="edit_donation_id" name="donation_id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-medium">Donation Priority</span>
+                        </label>
+                        <select id="edit_priority" name="donation_priority" class="select select-bordered w-full">
+                            <option value="normal">Normal</option>
+                            <option value="high">High Priority</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                        <label class="label">
+                            <span class="label-text-alt">Higher priority items appear more prominently to NGOs</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-medium">Auto-Approval</span>
+                        </label>
+                        <select id="edit_auto_approval" name="auto_approval" class="select select-bordered w-full">
+                            <option value="1">Yes - Auto-approve for NGOs</option>
+                            <option value="0">No - Manual approval required</option>
+                        </select>
+                        <label class="label">
+                            <span class="label-text-alt">Auto-approved items don't need admin review</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-control mb-4">
+                    <label class="label">
+                        <span class="label-text font-medium">Pickup Instructions</span>
+                    </label>
+                    <textarea id="edit_instructions" name="pickup_instructions" class="textarea textarea-bordered" rows="3" placeholder="Special handling or pickup instructions for NGOs"></textarea>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-medium">Status</span>
+                    </label>
+                    <select id="edit_status" name="status" class="select select-bordered w-full">
+                        <option value="available">Available</option>
+                        <option value="fully_allocated">Fully Allocated</option>
+                    </select>
+                </div>
+                
+                <div class="modal-action">
+                    <form method="dialog">
+                        <button class="btn">Cancel</button>
+                    </form>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
         </div>
     </dialog>
 
@@ -513,13 +640,10 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
         const modalImage = document.getElementById('modalProductImage');
         if (item.image && item.image.length > 0) {
             if (item.image.startsWith('../../')) {
-                // The path already has ../../, so don't add it again
                 modalImage.src = item.image;
-            } else if (item.image.startsWith('uploads/')) {
-                // Path starts with uploads/
+            } else if (item.image.startsWith('assets/')) {
                 modalImage.src = '../../' + item.image;
             } else {
-                // Default case, assume it needs the full path prefix
                 modalImage.src = '../../uploads/products/' + item.image;
             }
         } else {
@@ -528,123 +652,170 @@ $stats = $statsQuery->fetch(PDO::FETCH_ASSOC);
         
         // Set other details
         document.getElementById('modalProductCategory').textContent = item.category;
-        document.getElementById('modalProductQuantity').textContent = item.available_quantity + ' units';
+        document.getElementById('modalProductQuantity').textContent = item.quantity_available + ' units';
         
         // Set expiry date
         const expiryDate = item.expiry_date || item.waste_date;
-        document.getElementById('modalProductExpiry').textContent = formatDate(expiryDate);
+        const daysUntilExpiry = Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+        document.getElementById('modalProductExpiry').innerHTML = 
+            formatDate(expiryDate) + 
+            `<span class="text-sm text-${daysUntilExpiry <= 3 ? 'red' : daysUntilExpiry <= 7 ? 'amber' : 'green'}-600 ml-2">
+                (${daysUntilExpiry} days left)
+            </span>`;
         
         // Set status
-        const statusText = {
-            'pending': 'Available for donation',
-            'requested': 'Requested by NGO(s)',
-            'approved': 'Approved for donation'
+        const statusLabels = {
+            'available': 'Available for donation',
+            'fully_allocated': 'Fully allocated to NGOs',
+            'expired': 'Expired'
         };
-        document.getElementById('modalProductStatus').textContent = statusText[item.donation_status] || item.donation_status;
+        document.getElementById('modalProductStatus').textContent = statusLabels[item.donation_status] || item.donation_status;
         
-        // Set batch info if available
-        if (item.batch_number) {
-            document.getElementById('modalBatchNumber').textContent = item.batch_number;
-            document.getElementById('modalBatchInfo').classList.remove('hidden');
-        } else {
-            document.getElementById('modalBatchInfo').classList.add('hidden');
-        }
+        // Set priority
+        const priorityLabels = {
+            'normal': 'Normal',
+            'high': 'High Priority',
+            'urgent': 'Urgent'
+        };
+        const priorityColors = {
+            'normal': 'blue',
+            'high': 'amber',
+            'urgent': 'red'
+        };
+        document.getElementById('modalPriority').innerHTML = 
+            `<span class="text-${priorityColors[item.donation_priority] || 'gray'}-600 font-medium">
+                ${priorityLabels[item.donation_priority] || item.donation_priority}
+            </span>`;
         
         // Set location details
         document.getElementById('modalBranchName').textContent = item.branch_name;
         document.getElementById('modalBranchAddress').textContent = item.branch_address;
-        document.getElementById('modalBranchLocation').textContent = item.branch_location || '';
         
-        // Update requests section title based on donation status
-        const requestsSection = document.getElementById('requestsSection');
+        // Set auto-approval status
+        document.getElementById('modalAutoApproval').innerHTML = 
+            item.auto_approval 
+                ? '<span class="badge badge-success">Yes</span>' 
+                : '<span class="badge badge-ghost">No</span>';
+        
+        // Update NGO requests info
         const requestsInfo = document.getElementById('requestsInfo');
         
-        if (item.donation_status === 'pending') {
-            requestsSection.querySelector('h4').textContent = "Item Details";
-            requestsInfo.innerHTML = '<p class="text-gray-600">This item is available for donation and currently has no requests.</p>';
-        } else if (item.request_count > 0) {
-            requestsSection.querySelector('h4').textContent = "Donation Requests";
-            requestsInfo.innerHTML = '<div class="flex items-center gap-2"><span class="loading loading-spinner loading-xs"></span> Loading requests...</div>';
-            loadDonationRequests(item.waste_id);
-        } else {
-            requestsSection.querySelector('h4').textContent = "Donation Status";
-            requestsInfo.innerHTML = '<p class="text-gray-600">This item has been ' + item.donation_status + ' but has no active requests.</p>';
-        }
+        // Load NGO requests for this donation
+        loadNGORequests(item.waste_id);
         
         // Open modal
         document.getElementById('productDetailsModal').showModal();
     }
     
-    // Load donation requests for an item
-    function loadDonationRequests(wasteId) {
-        const requestsContainer = document.getElementById('requestsInfo');
+    // Load NGO requests for a donation
+    function loadNGORequests(wasteId) {
+        const requestsInfo = document.getElementById('requestsInfo');
+        requestsInfo.innerHTML = '<div class="flex items-center gap-2"><span class="loading loading-spinner loading-xs"></span> Loading requests...</div>';
         
-        // Use fetch API to get requests data
-        fetch(`get_donation_requests.php?waste_id=${wasteId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
+        // Fetch NGO requests from server
+        fetch(`get_ngo_requests.php?waste_id=${wasteId}`)
+            .then(response => response.json())
             .then(data => {
                 if (data.requests && data.requests.length > 0) {
                     let html = '<div class="overflow-x-auto">';
-                    html += '<table class="table table-xs">';
-                    html += '<thead><tr><th>NGO</th><th>Requested</th><th>Quantity</th><th>Status</th></tr></thead>';
+                    html += '<table class="table table-xs table-zebra w-full">';
+                    html += '<thead><tr><th>NGO</th><th>Quantity</th><th>Status</th><th>Request Date</th><th>Pickup Date</th></tr></thead>';
                     html += '<tbody>';
                     
                     data.requests.forEach(req => {
+                        const statusClass = {
+                            'pending': 'badge-warning',
+                            'approved': 'badge-success',
+                            'rejected': 'badge-error'
+                        }[req.status] || 'badge-ghost';
+                        
                         html += `<tr>
-                            <td>${req.organization_name}</td>
+                            <td>${req.ngo_name}</td>
+                            <td>${req.quantity_requested}</td>
+                            <td><span class="badge badge-sm ${statusClass}">${req.status}</span></td>
                             <td>${formatDateTime(req.request_date)}</td>
-                            <td>${req.quantity_requested} units</td>
-                            <td><span class="badge ${getStatusBadgeClass(req.status)}">${req.status}</span></td>
+                            <td>${formatDate(req.pickup_date)}</td>
                         </tr>`;
                     });
                     
                     html += '</tbody></table></div>';
-                    requestsContainer.innerHTML = html;
+                    requestsInfo.innerHTML = html;
                 } else {
-                    requestsContainer.innerHTML = '<p class="text-gray-500">No donation requests found for this item.</p>';
+                    requestsInfo.innerHTML = '<p class="text-gray-500">No NGO requests have been made for this item yet.</p>';
                 }
             })
             .catch(error => {
-                console.error('Error fetching requests:', error);
-                requestsContainer.innerHTML = '<div class="text-gray-500">No requests data available.</div>';
+                console.error('Error loading NGO requests:', error);
+                requestsInfo.innerHTML = '<p class="text-red-500">Error loading request data. Please try again.</p>';
+            });
+    }
+    
+    // Edit donation
+    function editDonation(donationId) {
+        // Fetch donation details
+        fetch(`get_donation.php?id=${donationId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const donation = data.donation;
+                    
+                    // Populate form fields
+                    document.getElementById('edit_donation_id').value = donationId;
+                    document.getElementById('edit_priority').value = donation.donation_priority;
+                    document.getElementById('edit_auto_approval').value = donation.auto_approval;
+                    document.getElementById('edit_instructions').value = donation.pickup_instructions || '';
+                    document.getElementById('edit_status').value = donation.status;
+                    
+                    // Show modal
+                    document.getElementById('editDonationModal').showModal();
+                } else {
+                    alert('Error loading donation details: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error loading donation details. Please try again.');
             });
     }
     
     // Helper functions
     function formatDate(dateString) {
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            weekday: 'long',
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric'
-        });
+        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
     }
     
     function formatDateTime(dateString) {
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        const options = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+        return date.toLocaleDateString('en-US', options);
     }
     
-    function getStatusBadgeClass(status) {
-        switch (status) {
-            case 'approved': return 'bg-green-100 text-green-800';
-            case 'pending': return 'bg-amber-100 text-amber-800';
-            case 'rejected': return 'bg-red-100 text-red-800';
-            default: return 'bg-gray-100 text-gray-800';
-        }
-    }
+    // Submit form handler
+    document.getElementById('editDonationForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = this;
+        const formData = new FormData(form);
+        
+        fetch('update_donation.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Donation updated successfully!');
+                document.getElementById('editDonationModal').close();
+                location.reload(); // Refresh the page to show updated data
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating donation. Please try again.');
+        });
+    });
 </script>
 </body>
 </html>

@@ -22,12 +22,12 @@ $branchName = $branchStmt->fetchColumn() ?: "Branch $branchId";
 
 // Build the query based on data type
 if ($dataType == 'product') {
-    // Product waste data query - FIXED: changed user_id to staff_id
+    // Product waste data query - using product_info instead of products
     $dataQuery = "SELECT pw.id, p.name as product_name, p.category, pw.waste_date, 
                   pw.waste_quantity, pw.waste_value, pw.waste_reason, pw.disposal_method,
                   CONCAT(u.fname, ' ', u.lname) as staff_name
                   FROM product_waste pw
-                  JOIN products p ON pw.product_id = p.id
+                  JOIN product_info p ON pw.product_id = p.id
                   JOIN users u ON pw.staff_id = u.id
                   WHERE pw.branch_id = ?";
     

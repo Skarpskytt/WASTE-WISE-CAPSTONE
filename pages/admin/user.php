@@ -63,8 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_ngo'])) {
         
         // Notification for NGO
         $ngoNotification = "Your NGO account has been approved. You can now log in.";
+        $notifStmt = $pdo->prepare("
+            INSERT INTO notifications (user_id, message, is_read, created_at) 
+            VALUES (?, ?, 0, NOW())
+        ");
         $notifStmt->execute([$userId, $ngoNotification]);
-        
         // Send email notification
         $emailService = new EmailService();
         $emailData = [
@@ -435,11 +438,11 @@ $countQuery = "
     WHERE 1=1
 ";
 
-// Base query for fetching users
+// Update the query to select both front and back IDs
 $userQuery = "
     SELECT 
         u.id, u.fname, u.lname, u.email, u.role, u.is_active, u.created_at,
-        u.gov_id_path, u.selfie_path, 
+        u.gov_id_front_path, u.gov_id_back_path, u.selfie_path, 
         np.status as ngo_status, np.organization_name,
         sp.status as staff_status
     FROM users u
@@ -692,26 +695,45 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
   </div>
 </td>
               <td class="py-2 px-4 border-b border-gray-200 text-sm">
-                <div class="flex space-x-2">
-                  <?php if (!empty($user['gov_id_path'])): ?>
-                    <button onclick="viewDocument('<?= htmlspecialchars($user['gov_id_path']) ?>', 'ID Document')" 
-                      class="bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded text-xs">
-                      ID Document
-                    </button>
-                  <?php endif; ?>
-                  
-                  <?php if (!empty($user['selfie_path'])): ?>
-                    <button onclick="viewDocument('<?= htmlspecialchars($user['selfie_path']) ?>', 'Selfie')" 
-                      class="bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded text-xs">
-                      Selfie
-                    </button>
-                  <?php endif; ?>
-                  
-                  <?php if (empty($user['gov_id_path']) && empty($user['selfie_path'])): ?>
-                    <span class="text-gray-400 text-xs">No documents</span>
-                  <?php endif; ?>
-                </div>
-              </td>
+  <div class="flex space-x-2">
+    <?php if (!empty($user['gov_id_front_path'])): ?>
+      <button onclick="viewDocument('<?= htmlspecialchars($user['gov_id_front_path']) ?>', 'ID Document (Front)')" 
+        class="bg-blue-500 text-white hover:bg-blue-600 px-2 py-1 rounded text-xs flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        ID Front
+      </button>
+    <?php endif; ?>
+    
+    <?php if (!empty($user['gov_id_back_path'])): ?>
+      <button onclick="viewDocument('<?= htmlspecialchars($user['gov_id_back_path']) ?>', 'ID Document (Back)')" 
+        class="bg-blue-500 text-white hover:bg-blue-600 px-2 py-1 rounded text-xs flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        ID Back
+      </button>
+    <?php endif; ?>
+    
+    <?php if (!empty($user['selfie_path'])): ?>
+      <button onclick="viewDocument('<?= htmlspecialchars($user['selfie_path']) ?>', 'Selfie')" 
+        class="bg-green-500 text-white hover:bg-green-600 px-2 py-1 rounded text-xs flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        Selfie
+      </button>
+    <?php endif; ?>
+    
+    <?php if (empty($user['gov_id_front_path']) && empty($user['gov_id_back_path']) && empty($user['selfie_path'])): ?>
+      <span class="text-gray-400 text-xs">No documents</span>
+    <?php endif; ?>
+  </div>
+</td>
               <td class="py-2 px-4 border-b border-gray-200 text-sm">
                 <!-- Keep your existing action buttons -->
                 <div class='flex justify-center space-x-2'>
@@ -1000,8 +1022,24 @@ function closeEditModal() {
       <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
     </form>
     <h3 id="document-title" class="font-bold text-lg mb-4">Document Preview</h3>
-    <div class="flex justify-center">
-      <img id="document-image" src="" alt="Document Preview" class="max-h-[70vh] object-contain">
+    <div id="document-container" class="flex justify-center">
+      <!-- Image or PDF will be loaded here -->
+      <div id="loading-indicator" class="text-center p-4">
+        <div class="loading loading-spinner loading-lg"></div>
+        <p>Loading document...</p>
+      </div>
+      <img id="document-image" src="" alt="Document Preview" class="max-h-[70vh] object-contain hidden">
+      <object id="document-pdf" data="" type="application/pdf" class="w-full h-[70vh] hidden">
+        <div class="text-center p-4 bg-gray-100 rounded-md">
+          <p>Unable to display PDF. <a id="download-link" href="" class="text-blue-600 underline" target="_blank">Click here to download</a></p>
+        </div>
+      </object>
+      <div id="error-container" class="text-center p-4 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p class="mt-2">Failed to load document. The file may not exist or is in an unsupported format.</p>
+      </div>
     </div>
   </div>
 </dialog>
@@ -1009,13 +1047,111 @@ function closeEditModal() {
 <!-- Document viewer script -->
 <script>
 function viewDocument(path, type) {
+  console.log("Viewing document:", path, type);
+  
   const modal = document.getElementById('document_modal');
   const title = document.getElementById('document-title');
   const image = document.getElementById('document-image');
+  const pdf = document.getElementById('document-pdf');
+  const downloadLink = document.getElementById('download-link');
+  const loading = document.getElementById('loading-indicator');
+  const error = document.getElementById('error-container');
   
-  // Set modal content
+  // Reset previous content and show loading
+  image.classList.add('hidden');
+  pdf.classList.add('hidden');
+  error.classList.add('hidden');
+  loading.classList.remove('hidden');
+  
   title.textContent = type + ' Preview';
-  image.src = path;
+  
+  // Handle path construction - more robust approach
+  let fullPath = path;
+  
+  // If path contains 'uploads/verification' but doesn't start with '/' or 'http'
+  if (!path.startsWith('/') && 
+      !path.startsWith('http://') && 
+      !path.startsWith('https://')) {
+    
+    // Direct paths from database might be like 'assets/uploads/verification/filename.jpg'
+    fullPath = '../../' + path;
+    console.log("Adjusted path:", fullPath);
+  }
+  
+  // Determine file type with more robust extension checking
+  const fileExtension = path.split('.').pop().toLowerCase();
+  const isImageFile = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(fileExtension);
+  const isPdfFile = fileExtension === 'pdf';
+  
+  console.log("File extension:", fileExtension);
+  console.log("Is image:", isImageFile);
+  console.log("Is PDF:", isPdfFile);
+  
+  // Set download link
+  downloadLink.href = fullPath;
+  
+  // Load the appropriate content with better error handling
+  if (isImageFile) {
+    // For images
+    image.onload = function() {
+      console.log("Image loaded successfully");
+      loading.classList.add('hidden');
+      image.classList.remove('hidden');
+    };
+    
+    image.onerror = function(e) {
+      console.error("Image failed to load:", e);
+      loading.classList.add('hidden');
+      error.classList.remove('hidden');
+    };
+    
+    // Set src after defining handlers
+    image.src = fullPath;
+    
+    // Fallback in case onload/onerror don't fire
+    setTimeout(() => {
+      if (!image.complete || image.naturalHeight === 0) {
+        console.log("Image load timeout - showing error");
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+      }
+    }, 5000); // 5 second timeout
+  } 
+  else if (isPdfFile) {
+    // For PDFs
+    const pdfContainer = document.getElementById('document-pdf');
+    
+    // Set data attribute to load the PDF
+    pdfContainer.onload = function() {
+      console.log("PDF loaded successfully");
+      loading.classList.add('hidden');
+      pdf.classList.remove('hidden');
+    };
+    
+    pdfContainer.onerror = function(e) {
+      console.error("PDF failed to load:", e);
+      loading.classList.add('hidden');
+      error.classList.remove('hidden');
+    };
+    
+    // Set data after defining handlers
+    pdfContainer.data = fullPath;
+    
+    // Fallback for PDF load errors
+    setTimeout(() => {
+      if (loading.classList.contains('hidden') === false) {
+        console.log("PDF load timeout - showing error");
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+      }
+    }, 5000); // 5 second timeout
+  } 
+  else {
+    // For unsupported file types
+    console.log("Unsupported file type: " + fileExtension);
+    loading.classList.add('hidden');
+    error.classList.remove('hidden');
+  }
   
   // Show modal
   modal.showModal();
@@ -1081,9 +1217,13 @@ function viewDocument(path, type) {
     <div id="view_documents_section" class="hidden mt-4 pt-4 border-t">
       <h4 class="font-semibold mb-3">Uploaded Documents</h4>
       <div class="flex flex-wrap gap-4">
-        <div id="view_id_doc" class="hidden">
-          <p class="font-medium mb-1">ID Document</p>
-          <button id="view_id_btn" class="btn btn-sm btn-outline">View ID</button>
+        <div id="view_id_front_doc" class="hidden">
+          <p class="font-medium mb-1">ID Document (Front)</p>
+          <button id="view_id_front_btn" class="btn btn-sm btn-outline">View ID Front</button>
+        </div>
+        <div id="view_id_back_doc" class="hidden">
+          <p class="font-medium mb-1">ID Document (Back)</p>
+          <button id="view_id_back_btn" class="btn btn-sm btn-outline">View ID Back</button>
         </div>
         <div id="view_selfie_doc" class="hidden">
           <p class="font-medium mb-1">Selfie</p>
@@ -1101,7 +1241,20 @@ function viewUser(user) {
   document.getElementById('view_fname').textContent = user.fname;
   document.getElementById('view_lname').textContent = user.lname;
   document.getElementById('view_email').textContent = user.email;
-  document.getElementById('view_role').textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+  
+  // Properly format role for display
+  let formattedRole = user.role;
+  if (user.role === 'branch1_staff') {
+    formattedRole = 'Branch 1 Staff';
+  } else if (user.role === 'branch2_staff') {
+    formattedRole = 'Branch 2 Staff';
+  } else if (user.role === 'ngo') {
+    formattedRole = 'NGO Partner';
+  } else if (user.role === 'admin') {
+    formattedRole = 'Administrator';
+  }
+  
+  document.getElementById('view_role').textContent = formattedRole;
   document.getElementById('view_status').textContent = user.is_active == 1 ? 'Active' : 'Inactive';
   document.getElementById('view_created').textContent = new Date(user.created_at).toLocaleString();
   
@@ -1118,21 +1271,35 @@ function viewUser(user) {
   
   // Handle documents
   const documentsSection = document.getElementById('view_documents_section');
-  const idDocSection = document.getElementById('view_id_doc');
+  const idDocFrontSection = document.getElementById('view_id_front_doc');
+  const idDocBackSection = document.getElementById('view_id_back_doc');
   const selfieDocSection = document.getElementById('view_selfie_doc');
-  const idButton = document.getElementById('view_id_btn');
+  const idFrontButton = document.getElementById('view_id_front_btn');
+  const idBackButton = document.getElementById('view_id_back_btn');
   const selfieButton = document.getElementById('view_selfie_btn');
   
-  if (user.gov_id_path || user.selfie_path) {
+  const hasDocuments = user.gov_id_front_path || user.gov_id_back_path || user.selfie_path;
+  
+  if (hasDocuments) {
     documentsSection.classList.remove('hidden');
     
-    if (user.gov_id_path) {
-      idDocSection.classList.remove('hidden');
-      idButton.onclick = function() { viewDocument(user.gov_id_path, 'ID Document'); };
+    // Handle ID Front
+    if (user.gov_id_front_path) {
+      idDocFrontSection.classList.remove('hidden');
+      idFrontButton.onclick = function() { viewDocument(user.gov_id_front_path, 'ID Document (Front)'); };
     } else {
-      idDocSection.classList.add('hidden');
+      idDocFrontSection.classList.add('hidden');
     }
     
+    // Handle ID Back
+    if (user.gov_id_back_path) {
+      idDocBackSection.classList.remove('hidden');
+      idBackButton.onclick = function() { viewDocument(user.gov_id_back_path, 'ID Document (Back)'); };
+    } else {
+      idDocBackSection.classList.add('hidden');
+    }
+    
+    // Handle Selfie
     if (user.selfie_path) {
       selfieDocSection.classList.remove('hidden');
       selfieButton.onclick = function() { viewDocument(user.selfie_path, 'Selfie'); };

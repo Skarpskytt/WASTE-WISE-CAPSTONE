@@ -33,7 +33,10 @@ $statsStmt = $pdo->prepare("
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN is_received = 1 THEN 1 ELSE 0 END) as received
+        SUM(CASE WHEN is_received = 1 THEN 1 ELSE 0 END) as received,
+        SUM(CASE WHEN status = 'approved' AND EXISTS (
+            SELECT 1 FROM donation_prepared dp WHERE dp.ngo_request_id = ngo_donation_requests.id
+        ) THEN 1 ELSE 0 END) as prepared
     FROM ngo_donation_requests
     WHERE ngo_id = ?
 ");
@@ -59,13 +62,18 @@ $stmt = $pdo->prepare("
         p.name as product_name,
         p.category,
         b.name as branch_name,
-        b.address as branch_address
+        b.address as branch_address,
+        dp.id as prepared_id,
+        dp.prepared_date,
+        dp.staff_notes
     FROM 
         ngo_donation_requests ndr
     JOIN 
         product_info p ON ndr.product_id = p.id
     JOIN 
         branches b ON ndr.branch_id = b.id
+    LEFT JOIN
+        donation_prepared dp ON ndr.id = dp.ngo_request_id
     WHERE 
         ndr.ngo_id = ?
     ORDER BY 
@@ -441,12 +449,16 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <div class="stat-value text-green-500"><?= $donationStats['approved'] ?></div>
                 </div>
                 <div class="stat place-items-center">
+                    <div class="stat-title">Ready</div>
+                    <div class="stat-value text-blue-500"><?= $donationStats['prepared'] ?></div>
+                </div>
+                <div class="stat place-items-center">
                     <div class="stat-title">Pending</div>
                     <div class="stat-value text-yellow-500"><?= $donationStats['pending'] ?></div>
                 </div>
                 <div class="stat place-items-center">
                     <div class="stat-title">Received</div>
-                    <div class="stat-value text-blue-500"><?= $donationStats['received'] ?></div>
+                    <div class="stat-value text-teal-500"><?= $donationStats['received'] ?></div>
                 </div>
             </div>
         </div>
@@ -518,8 +530,10 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                         <?php if ($donation['status'] === 'approved'): ?>
                                             <?php if ($donation['is_received']): ?>
                                                 <span class="badge badge-success">Received</span>
+                                            <?php elseif ($donation['prepared_id']): ?>
+                                                <span class="badge badge-info text-white">Ready for Pickup</span>
                                             <?php else: ?>
-                                                <span class="badge badge-success">Ready for Pickup</span>
+                                                <span class="badge badge-warning">Processing</span>
                                             <?php endif; ?>
                                         <?php elseif ($donation['status'] === 'rejected'): ?>
                                             <span class="badge badge-error">Rejected</span>
@@ -530,7 +544,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ($donation['status'] === 'approved' && !$donation['is_received']): ?>
+                                        <?php if ($donation['status'] === 'approved' && !$donation['is_received'] && $donation['prepared_id']): ?>
                                             <button data-id="<?= $donation['id'] ?>" 
                                                     data-product="<?= htmlspecialchars($donation['product_name']) ?>"
                                                     data-quantity="<?= $donation['quantity_requested'] ?>"
@@ -689,6 +703,17 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                         <p><span class="font-medium">Received On:</span> <?= date('M d, Y h:i A', strtotime($donation['received_at'])) ?></p>
                     </div>
                 <?php endif; ?>
+                
+                <?php if ($donation['prepared_id']): ?>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <h4 class="font-semibold text-blue-800 mb-2">Preparation Details</h4>
+        <p><span class="font-medium">Prepared On:</span> <?= date('M d, Y h:i A', strtotime($donation['prepared_date'])) ?></p>
+        <?php if (!empty($donation['staff_notes'])): ?>
+            <p class="mt-2"><span class="font-medium">Staff Notes:</span></p>
+            <p class="mt-1 pl-2 border-l-4 border-blue-200"><?= nl2br(htmlspecialchars($donation['staff_notes'])) ?></p>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
                 
                 <div class="modal-action">
                     <button class="btn" onclick="document.getElementById('details_modal_<?= $donation['id'] ?>').close()">

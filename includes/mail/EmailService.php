@@ -334,7 +334,7 @@ class EmailService {
      * @param string $htmlBody HTML content for the email
      * @return bool True if email sent successfully, false otherwise
      */
-    private function sendEmail($email, $subject, $htmlBody) {
+    public function sendEmail($email, $subject, $htmlBody) {
         try {
             $this->mailer->clearAddresses();
             $this->mailer->addAddress($email);

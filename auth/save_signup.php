@@ -8,6 +8,11 @@ require_once '../config/session_handler.php';
 use CustomSession\SessionHandler;
 use function CustomSession\initSession;
 
+// Add this near the top of your file to enable detailed error reporting
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Get database connection
 $pdo = getPDO();
 
@@ -71,45 +76,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             throw new Exception('Email already registered.');
         }
 
-        // Update the section that processes role and branch_id:
-
-        // Validate role - allow all branch staff roles and ngo
-        $role = $_POST['role'];
+        // IMPORTANT FIX: Keep the original role value
         if ($role === 'ngo') {
             $branch_id = null;
         } else if (preg_match('/^branch(\d+)_staff$/', $role, $matches)) {
             $branch_id = (int)$matches[1];
-            $role = 'staff'; // Standardize the role to just 'staff'
+            // DO NOT change the role name - keep as branch1_staff or branch2_staff
         } else {
             throw new Exception('Invalid role selected.');
         }
 
-        // Use $branch_id and $role in your database insertion
-
-        // Insert user - set is_active to 0 for all newly created staff accounts
-        // This is key - all staff accounts start as inactive
+        // Insert user with is_active = 0 for new accounts
         $stmt = $pdo->prepare('INSERT INTO users (fname, lname, email, password, role, branch_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 0)');
         $stmt->execute([
             $fname,
             $lname,
             $email,
             password_hash($password, PASSWORD_DEFAULT),
-            $role,
+            $role, // Use the original role value
             $branch_id
         ]);
 
-        // After inserting the user
+        // Get the user ID once
         $user_id = $pdo->lastInsertId();
 
-        if ($role === 'staff') {
-            // Create staff profile with pending status
-            $stmt = $pdo->prepare("INSERT INTO staff_profiles (user_id, status) VALUES (?, 'pending')");
-            $stmt->execute([$user_id]);
-            
-            // Set both session variables for index.php
-            $_SESSION['success'] = "Your staff account has been created successfully.";
-            $_SESSION['pending_approval'] = "Your staff account is pending approval from an administrator.";
-        } elseif ($role === 'ngo') {
+        // Handle role-specific profile creation
+        if ($role === 'ngo') {
             // Handle NGO registration
             $stmt = $pdo->prepare('INSERT INTO ngo_profiles (user_id, organization_name, phone, address, status) VALUES (?, ?, ?, ?, ?)');
             $stmt->execute([
@@ -120,60 +112,155 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 'pending'
             ]);
             
-            // Set both session variables for index.php
             $_SESSION['success'] = "Your NGO account has been created successfully.";
             $_SESSION['pending_approval'] = "Your NGO account is pending approval from an administrator.";
-        } else {
-            $_SESSION['success'] = "Account created successfully. Please login.";
+        } 
+        else if (preg_match('/^branch(\d+)_staff$/', $role)) {
+            // Create staff profile with pending status
+            $stmt = $pdo->prepare("INSERT INTO staff_profiles (user_id, status) VALUES (?, 'pending')");
+            $stmt->execute([$user_id]);
+            
+            $_SESSION['success'] = "Your staff account has been created successfully.";
+            $_SESSION['pending_approval'] = "Your staff account is pending approval from an administrator.";
         }
 
-        // File upload handling
-        $uploads_dir = '../uploads/verification';
+        // File upload handling - ensure directory exists and is writable
+        $govIdFrontPath = null;
+        $govIdBackPath = null;
+        $selfiePath = null;
+
+        // Use relative paths for both file operations and DB storage
+        $uploadDir = '../assets/uploads/verification/';
+        $dbUploadPath = 'assets/uploads/verification/';
+
 
         // Create directory if it doesn't exist
-        if (!file_exists($uploads_dir)) {
-            mkdir($uploads_dir, 0777, true);
-        }
-
-        // Handle Government ID upload
-        if (isset($_FILES['gov_id']) && $_FILES['gov_id']['error'] === UPLOAD_ERR_OK) {
-            $tmp_name = $_FILES['gov_id']['tmp_name'];
-            $gov_id_name = uniqid('gov_id_'.$user_id.'_') . '_' . basename($_FILES['gov_id']['name']);
-            $gov_id_path = $uploads_dir . '/' . $gov_id_name;
-            
-            if (move_uploaded_file($tmp_name, $gov_id_path)) {
-                // Save file path to database
-                $stmt = $pdo->prepare("UPDATE users SET gov_id_path = ? WHERE id = ?");
-                $stmt->execute([$gov_id_path, $user_id]);
-            } else {
-                // Handle upload error
-                throw new Exception("Failed to upload government ID.");
+        if (!file_exists($uploadDir)) {
+            if (!mkdir($uploadDir, 0755, true)) {
+                throw new Exception("Failed to create upload directory. Please contact support.");
             }
         }
 
-        // Handle Selfie upload
-        if (isset($_POST['selfie_data']) && !empty($_POST['selfie_data'])) {
-            // Get the base64 part of the image data
-            $image_parts = explode(";base64,", $_POST['selfie_data']);
-            $image_base64 = isset($image_parts[1]) ? $image_parts[1] : $_POST['selfie_data'];
-            
-            // Generate filename and path
-            $selfie_name = uniqid('selfie_'.$user_id.'_') . '.jpg';
-            $selfie_path = $uploads_dir . '/' . $selfie_name;
-            
-            // Save the file
-            $result = file_put_contents($selfie_path, base64_decode($image_base64));
-            if ($result) {
-                // Save file path to database
-                $stmt = $pdo->prepare("UPDATE users SET selfie_path = ? WHERE id = ?");
-                $stmt->execute([$selfie_path, $user_id]);
-            } else {
-                // Handle save error
-                throw new Exception("Failed to save selfie image.");
+        error_log("Upload directory: $uploadDir");
+        error_log("Directory exists: " . (is_dir($uploadDir) ? "Yes" : "No"));
+        error_log("Directory writable: " . (is_writable($uploadDir) ? "Yes" : "No"));
+
+        $errors = [];
+
+        // Process front ID upload
+        try {
+            if (isset($_FILES['gov_id_front']) && $_FILES['gov_id_front']['error'] === UPLOAD_ERR_OK) {
+                $fileInfo = pathinfo($_FILES['gov_id_front']['name']);
+                $extension = strtolower($fileInfo['extension']);
+                
+                if (in_array($extension, ['jpg', 'jpeg', 'png', 'pdf', 'heic'])) {
+                    $uniqueId = uniqid();
+                    $fileName = 'gov_id_front_' . $user_id . '_' . $uniqueId . '.' . $extension;
+                    $targetPath = $uploadDir . $fileName;
+                    
+                    if (move_uploaded_file($_FILES['gov_id_front']['tmp_name'], $targetPath)) {
+                        // Store relative path in database
+                        $govIdFrontPath = $dbUploadPath . $fileName;
+                        error_log("Front ID uploaded to: $targetPath");
+                        error_log("Front ID DB path: $govIdFrontPath");
+                    } else {
+                        $errors[] = "Failed to upload front ID image. Error: " . error_get_last()['message'];
+                        error_log("Failed to upload front ID: " . error_get_last()['message']);
+                    }
+                } else {
+                    $errors[] = "Front ID: Only JPG, PNG, HEIC or PDF files are allowed.";
+                }
+            } else if (isset($_FILES['gov_id_front'])) {
+                $errors[] = "Front ID upload error code: " . $_FILES['gov_id_front']['error'];
+                error_log("Front ID upload error code: " . $_FILES['gov_id_front']['error']);
             }
+        } catch (Exception $e) {
+            $errors[] = "Front ID upload error: " . $e->getMessage();
+            error_log("Front ID exception: " . $e->getMessage());
         }
 
-        // Update success message
+        // Process back ID upload
+        try {
+            if (isset($_FILES['gov_id_back']) && $_FILES['gov_id_back']['error'] === UPLOAD_ERR_OK) {
+                $fileInfo = pathinfo($_FILES['gov_id_back']['name']);
+                $extension = strtolower($fileInfo['extension']);
+                
+                if (in_array($extension, ['jpg', 'jpeg', 'png', 'pdf', 'heic'])) {
+                    $uniqueId = uniqid();
+                    $fileName = 'gov_id_back_' . $user_id . '_' . $uniqueId . '.' . $extension;
+                    $targetPath = $uploadDir . $fileName;
+                    
+                    if (move_uploaded_file($_FILES['gov_id_back']['tmp_name'], $targetPath)) {
+                        // Store relative path in database
+                        $govIdBackPath = $dbUploadPath . $fileName;
+                        error_log("Back ID uploaded to: $targetPath");
+                        error_log("Back ID DB path: $govIdBackPath");
+                    } else {
+                        $errors[] = "Failed to upload back ID image. Error: " . error_get_last()['message'];
+                        error_log("Failed to upload back ID: " . error_get_last()['message']);
+                    }
+                } else {
+                    $errors[] = "Back ID: Only JPG, PNG, HEIC or PDF files are allowed.";
+                }
+            } else if (isset($_FILES['gov_id_back'])) {
+                $errors[] = "Back ID upload error code: " . $_FILES['gov_id_back']['error'];
+                error_log("Back ID upload error code: " . $_FILES['gov_id_back']['error']);
+            }
+        } catch (Exception $e) {
+            $errors[] = "Back ID upload error: " . $e->getMessage();
+            error_log("Back ID exception: " . $e->getMessage());
+        }
+
+        // Process selfie data (from canvas capture)
+        try {
+            if (!empty($_POST['selfie_data'])) {
+                $img = $_POST['selfie_data'];
+                $img = str_replace('data:image/jpeg;base64,', '', $img);
+                $img = str_replace(' ', '+', $img);
+                $data = base64_decode($img);
+                
+                $fileName = 'selfie_' . $user_id . '_' . uniqid() . '.jpg';
+                $targetPath = $uploadDir . $fileName;
+                
+                if (file_put_contents($targetPath, $data)) {
+                    // Store relative path in database
+                    $selfiePath = $dbUploadPath . $fileName;
+                    error_log("Selfie saved to: $targetPath");
+                    error_log("Selfie DB path: $selfiePath");
+                } else {
+                    $errors[] = "Failed to save selfie image. Error: " . error_get_last()['message'];
+                    error_log("Failed to save selfie: " . error_get_last()['message']);
+                }
+            } else {
+                $errors[] = "Selfie data is empty";
+                error_log("Selfie data is empty");
+            }
+        } catch (Exception $e) {
+            $errors[] = "Selfie upload error: " . $e->getMessage();
+            error_log("Selfie exception: " . $e->getMessage());
+        }
+
+        // Debug paths
+        error_log("Paths before DB update: Front=$govIdFrontPath, Back=$govIdBackPath, Selfie=$selfiePath");
+        
+        // Update user with document paths
+        $stmt = $pdo->prepare("
+            UPDATE users 
+            SET gov_id_front_path = ?, gov_id_back_path = ?, selfie_path = ?
+            WHERE id = ?
+        ");
+        $result = $stmt->execute([$govIdFrontPath, $govIdBackPath, $selfiePath, $user_id]);
+        
+        if (!$result) {
+            error_log("Database update error: " . implode(", ", $stmt->errorInfo()));
+        }
+
+        // Output any errors but still complete registration
+        if (!empty($errors)) {
+            error_log("Upload errors: " . implode('; ', $errors));
+        }
+
+        // Complete transaction
         $pdo->commit();
         
         // Redirect to index.php (main login page) instead of signup.php
@@ -183,6 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } catch (Exception $e) {
         $pdo->rollBack();
         $_SESSION['error'] = $e->getMessage();
+        error_log("Signup error: " . $e->getMessage());
         header('Location: signup.php');
         exit();
     }

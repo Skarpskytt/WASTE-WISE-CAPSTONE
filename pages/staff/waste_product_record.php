@@ -34,7 +34,17 @@ if (isset($_POST['update_waste'])) {
     $productionStage = $_POST['production_stage'] ?? null;
     $notes = $_POST['notes'] ?? null;
     $costPerUnit = $_POST['product_value'] ?? 0;
-    $wasteValue = $wasteQuantity * $costPerUnit;
+    
+    // Get original waste quantity before updating
+    $getOriginalStmt = $pdo->prepare("SELECT waste_value, waste_quantity FROM product_waste WHERE id = ?");
+    $getOriginalStmt->execute([$wasteId]);
+    $original = $getOriginalStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Calculate unit price from original record to ensure consistency
+    $unitPrice = $original['waste_quantity'] > 0 ? ($original['waste_value'] / $original['waste_quantity']) : $costPerUnit;
+
+    // Calculate new waste value using the same unit price
+    $wasteValue = $wasteQuantity * $unitPrice;
     
     try {
         $updateStmt = $pdo->prepare("
