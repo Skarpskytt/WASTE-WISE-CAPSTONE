@@ -1,0 +1,413 @@
+.toast-message {
+  font-family: 'Arial', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-radius: 6px;
+  max-width: 350px;
+}
+
+.password-requirements {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 4px;
+}
+
+.requirement {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.requirement-icon {
+  margin-right: 5px;
+  font-size: 10px;
+  display: inline-block;
+  width: 16px;
+}
+
+.requirement-met {
+  color: #10B981;
+}
+
+.requirement-unmet {
+  color: #6B7280;
+}
+
+.file-upload-area {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Wider form container */
+.form-container {
+  max-width: 1000px;
+  width: 90%;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* Input group for side-by-side fields */
+.input-group {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .input-group {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Remove the form-side class */
+@media (min-width: 1024px) {
+  /* Remove the width constraint that was for the split layout */
+  /* .form-side {
+    width: 60%;
+  }
+  
+  .image-side {
+    flex: 0 0 40%;
+  } */
+}
+
+/* Better spacing for password requirements */
+.password-req-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+/* Terms checkbox alignment */
+.terms-checkbox {
+  align-items: flex-start;
+}
+
+/* Responsive adjustments */
+@media (max-width: 639px) {
+  .password-req-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 800px) {
+  .form-container {
+    font-size: 0.95rem;
+  }
+  
+  .form-container h1.text-3xl {
+    font-size: 1.5rem;
+  }
+}
+
+/* Make form elements more compact */
+.space-y-4.md\:space-y-6 {
+  gap: 0.75rem;
+}
+
+/* Reduce padding on verification documents section */
+.verification-section {
+  padding: 0.75rem;
+}
+
+/* Fix conflicting camera container settings */
+#camera-container {
+  height: 200px;
+  width: 200px; 
+  margin: 0 auto; 
+  position: relative;
+  border-radius: 8px;
+}
+
+#video, #canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+#face-detection-box {
+  position: absolute;
+  border: 2px solid #10B981;
+  border-radius: 4px;
+  display: none;
+  z-index: 10;
+}
+
+/* Enhanced color palette and transitions */
+:root {
+  --primary: #47663B;
+  --secondary: #E8ECD7;
+  --accent: #FF8A00;
+  --dark: #1F4529;
+  --light: #F9FAF5;
+}
+
+body {
+  background: linear-gradient(135deg, var(--secondary) 0%, #ffffff 100%);
+  background-size: 200% 200%;
+  animation: gradientBG 15s ease infinite;
+}
+
+@keyframes gradientBG {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Modern card styling */
+.form-container {
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* Floating label effect for inputs */
+.floating-label {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.floating-label input, 
+.floating-label select,
+.floating-label textarea {
+  height: 56px;
+  padding: 14px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background-color: #f9f9f9;
+}
+
+.floating-label input:focus, 
+.floating-label select:focus,
+.floating-label textarea:focus {
+  border-color: var(--primary);
+  background-color: white;
+  box-shadow: 0 0 0 4px rgba(71, 102, 59, 0.1);
+}
+
+.floating-label label {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  background-color: transparent;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  color: #6B7280;
+}
+
+.floating-label input:focus ~ label,
+.floating-label input:not(:placeholder-shown) ~ label,
+.floating-label select:focus ~ label,
+.floating-label select:not([value=""]):valid ~ label,
+.floating-label textarea:focus ~ label,
+.floating-label textarea:not(:placeholder-shown) ~ label {
+  top: 0;
+  left: 12px;
+  font-size: 12px;
+  padding: 0 4px;
+  background-color: white;
+  color: var(--primary);
+}
+
+/* Step indicator for multi-step form */
+.step-indicator {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.step-indicator::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #e5e7eb;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.step {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: white;
+  border: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #6B7280;
+  position: relative;
+  z-index: 2;
+}
+
+.step.active {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: white;
+}
+
+.step.completed {
+  border-color: var(--primary);
+  background-color: white;
+  color: var(--primary);
+}
+
+/* Improved section styling */
+.form-section {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  margin-bottom: 24px;
+  border-left: 4px solid var(--primary);
+}
+
+.form-section h3 {
+  color: var(--dark);
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.form-section h3 svg {
+  margin-right: 8px;
+  color: var(--primary);
+}
+
+/* Animated button */
+.submit-button {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--dark) 100%);
+  color: white;
+  font-weight: 600;
+  padding: 14px 28px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.1);
+}
+
+.submit-button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(rgba(255,255,255,0.2), rgba(255,255,255,0));
+  transform: translateY(-100%);
+  transition: transform 0.6s ease;
+}
+
+.submit-button:hover::after {
+  transform: translateY(0);
+}
+
+/* Improved file upload styling */
+.modern-file-upload {
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  transition: all 0.2s ease;
+  background-color: #f9f9f9;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.modern-file-upload:hover {
+  border-color: #47663B;
+  background-color: #f5f7f0;
+}
+
+/* Camera container improvements */
+#camera-container {
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+#camera-container:hover {
+  border-color: var(--primary);
+}
+
+#start-camera {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#start-camera:hover {
+  background-color: rgba(71, 102, 59, 0.1);
+}
+
+/* Modern camera buttons */
+.camera-button {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 30px;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.camera-button:hover {
+  background-color: var(--dark);
+  transform: translateY(-2px);
+}
+
+.camera-button svg {
+  margin-right: 8px;
+}
+
+/* Password strength meter */
+.password-strength-meter {
+  height: 6px;
+  border-radius: 3px;
+  margin-top: 10px;
+  background-color: #e5e7eb;
+  position: relative;
+  overflow: hidden;
+}
+
+.password-strength-meter div {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.animated-check {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: dash 1s ease forwards;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}

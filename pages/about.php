@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Homepage | Waste Wise</title>
+  <title>About Us | Waste Wise</title>
   <link rel="icon" type="image/x-icon" href="../assets/images/Logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -165,7 +165,7 @@
                 </a>
               </li>
               <li>
-                <a href="about.php" class="font-medium hover:bg-primarycol hover:text-white rounded-lg transition-all duration-300">
+                <a href="about.php" class="font-medium bg-primarycol text-white rounded-lg">
                   <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
@@ -206,7 +206,7 @@
               </a>
             </li>
             <li>
-              <a href="about.php" class="font-medium hover:text-accent hover:bg-gray-100 rounded-lg transition-all duration-300 flex items-center space-x-2">
+              <a href="about.php" class="font-medium text-accent bg-gray-100 rounded-lg transition-all duration-300 flex items-center space-x-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
@@ -249,166 +249,107 @@
     </nav>
   </header>
 
-  <div class="flex flex-col lg:flex-row h-screen relative overflow-hidden">
+  <!-- About Hero Section -->
+  <div class="relative min-h-[60vh] overflow-hidden">
     <div class="blob top-[-150px] left-[-100px]"></div>
     <div class="blob bottom-[-150px] right-[-100px]"></div>
     
-    <div class="hero bg-gradient-to-br from-sec to-white h-screen flex-1 relative z-10">
-      <div class="hero-content text-center text-black" data-aos="fade-up" data-aos-duration="1000">
-        <div class="max-w-md">
-          <h1 class="text-6xl font-bold mb-6 gradient-text">Wastewise</h1>
-          <p class="py-6 text-lg leading-relaxed">
-            An innovative waste management system designed to help businesses efficiently track, analyze, and reduce waste. By leveraging data analytics and reporting,
-            the system enables organizations to optimize their waste disposal processes, minimize environmental impact, and achieve sustainability goals.
+    <div class="relative min-h-[60vh] overflow-hidden bg-gradient-to-r from-fourth to-primarycol">
+      <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/binding-dark.png')] opacity-10"></div>
+      
+      <div class="container mx-auto px-4 text-center flex flex-col items-center justify-center min-h-[60vh] text-white relative z-10">
+        <h1 class="text-5xl md:text-6xl font-bold mb-6" data-aos="fade-down" data-aos-duration="1000">About WasteWise</h1>
+        <p class="text-xl max-w-3xl mx-auto" data-aos="fade-up" data-aos-delay="200">
+          We're on a mission to transform how businesses manage waste, reduce environmental impact, and create sustainable solutions for excess food products.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Our Story Section -->
+  <div class="py-16 bg-white relative overflow-hidden">
+    <div class="container mx-auto px-4">
+      <div class="flex flex-col md:flex-row items-center gap-12">
+        <div class="md:w-1/2" data-aos="fade-right" data-aos-duration="1000">
+          <img src="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="Our Story" class="rounded-lg shadow-xl w-full transform hover:scale-105 transition duration-500">
+        </div>
+        <div class="md:w-1/2" data-aos="fade-left" data-aos-delay="200">
+          <h2 class="text-4xl font-bold mb-6 gradient-text">Our Story</h2>
+          <p class="text-lg mb-4 text-gray-700">
+            WasteWise began with a simple observation: businesses in the food industry were struggling with excess product management, often resulting in unnecessary waste.
           </p>
-          <button class="btn bg-primarycol hover:bg-accent text-white border-none shadow-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
-            Get Started
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="hidden lg:flex items-center justify-center flex-1 bg-gradient-to-bl from-white to-sec text-black h-screen relative z-10" data-aos="fade-left" data-aos-duration="1200">
-      <img src="../assets/images/titlehehe.png" alt="" class="rounded-xl shadow-2xl transform hover:scale-105 transition duration-500 max-w-[80%] max-h-[80%] object-contain">
-    </div>
-  </div>
-
-  <!-- Features Section -->
-  <div class="bg-white py-20">
-    <div class="container mx-auto px-4">
-      <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 gradient-text" data-aos="fade-up">Our Features</h2>
-      
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
-        <!-- Admin Role -->
-        <div class="bg-gradient-to-br from-white to-sec rounded-xl p-8 shadow-lg card-hover" data-aos="fade-up" data-aos-delay="100">
-          <div class="flex items-center justify-center mb-6">
-            <div class="bg-gradient-to-r from-primarycol to-fourth w-20 h-20 rounded-full flex items-center justify-center shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            </div>
-          </div>
-          <h3 class="text-2xl font-bold text-center mb-4 text-primarycol">Admin Dashboard</h3>
-          <ul class="list-disc pl-6 space-y-3 text-gray-700">
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Smart Recommendation System</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Branch Performance Overview</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Data Analytics & Reports</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Donation Management</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">User & Partnership Management</li>
-          </ul>
-        </div>
-        
-        <!-- Branch Role -->
-        <div class="bg-gradient-to-br from-white to-sec rounded-xl p-8 shadow-lg card-hover" data-aos="fade-up" data-aos-delay="200">
-          <div class="flex items-center justify-center mb-6">
-            <div class="bg-gradient-to-r from-primarycol to-fourth w-20 h-20 rounded-full flex items-center justify-center shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-            </div>
-          </div>
-          <h3 class="text-2xl font-bold text-center mb-4 text-primarycol">Branch Management</h3>
-          <ul class="list-disc pl-6 space-y-3 text-gray-700">
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Real-time Excess Product Tracking</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Efficient Product Management</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Excess Donation Coordination</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Sales Recording & Analytics</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Inventory Management</li>
-          </ul>
-        </div>
-        
-        <!-- NGO Role -->
-        <div class="bg-gradient-to-br from-white to-sec rounded-xl p-8 shadow-lg card-hover" data-aos="fade-up" data-aos-delay="300">
-          <div class="flex items-center justify-center mb-6">
-            <div class="bg-gradient-to-r from-primarycol to-fourth w-20 h-20 rounded-full flex items-center justify-center shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-            </div>
-          </div>
-          <h3 class="text-2xl font-bold text-center mb-4 text-primarycol">NGO Partnership</h3>
-          <ul class="list-disc pl-6 space-y-3 text-gray-700">
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Food Donation Visibility</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Streamlined Request Process</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Donation Status Tracking</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Pick-up Confirmation</li>
-            <li class="transition-all duration-300 hover:text-accent hover:translate-x-2">Donation History & Analytics</li>
-          </ul>
+          <p class="text-lg mb-4 text-gray-700">
+            Founded in 2024, our team set out to create a comprehensive solution that would help businesses track, analyze, and optimize their waste management processes while connecting them with NGOs that could benefit from excess food donations.
+          </p>
+          <p class="text-lg text-gray-700">
+            Today, WasteWise serves as a bridge between food businesses and community organizations, transforming potential waste into valuable resources for those in need.
+          </p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- How It Works -->
-  <div class="bg-gradient-to-r from-fourth to-darkgreen text-white py-20">
-    <div class="container mx-auto px-4">
-      <h2 class="text-4xl md:text-5xl font-bold text-center mb-16" data-aos="fade-up">How It Works</h2>
+  <!-- Our Mission Section -->
+  <div class="py-16 bg-gradient-to-br from-sec to-white relative overflow-hidden">
+    <div class="container mx-auto px-4 text-center">
+      <h2 class="text-4xl font-bold mb-8 gradient-text" data-aos="fade-up">Our Mission</h2>
+      <p class="text-xl max-w-4xl mx-auto mb-12 text-gray-700" data-aos="fade-up" data-aos-delay="100">
+        To empower businesses with intelligent tools to minimize waste, maximize resources, and strengthen community connections through strategic donation partnerships.
+      </p>
       
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
-        <div class="text-center relative group" data-aos="fade-up" data-aos-delay="100">
-          <div class="inline-block bg-white rounded-full p-6 mb-6 shadow-lg transform transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="bg-white p-8 rounded-xl shadow-lg card-hover" data-aos="fade-up" data-aos-delay="100">
+          <div class="bg-gradient-to-r from-primarycol to-fourth w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
           </div>
-          
-          <div class="absolute top-12 -right-5 hidden md:block text-6xl font-bold text-white opacity-10">1</div>
-          
-          <h3 class="text-2xl font-bold mb-4 text-accent">Track</h3>
-          <p class="text-lg leading-relaxed">Branches record excess food products and ingredients in real-time, creating complete visibility across your organization.</p>
+          <h3 class="text-xl font-bold mb-4 text-primarycol">Reduce Food Waste</h3>
+          <p class="text-gray-700">We help businesses track and analyze excess products to identify patterns and implement strategies that minimize waste from the source.</p>
         </div>
         
-        <div class="text-center relative group" data-aos="fade-up" data-aos-delay="200">
-          <div class="inline-block bg-white rounded-full p-6 mb-6 shadow-lg transform transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        <div class="bg-white p-8 rounded-xl shadow-lg card-hover" data-aos="fade-up" data-aos-delay="200">
+          <div class="bg-gradient-to-r from-primarycol to-fourth w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
-          
-          <div class="absolute top-12 -right-5 hidden md:block text-6xl font-bold text-white opacity-10">2</div>
-          
-          <h3 class="text-2xl font-bold mb-4 text-accent">Analyze</h3>
-          <p class="text-lg leading-relaxed">Our intelligent system analyzes patterns, identifies opportunities, and provides smart recommendations to reduce waste.</p>
+          <h3 class="text-xl font-bold mb-4 text-primarycol">Connect Communities</h3>
+          <p class="text-gray-700">Our platform bridges the gap between businesses with excess food and NGOs serving communities in need, creating meaningful partnerships.</p>
         </div>
         
-        <div class="text-center relative group" data-aos="fade-up" data-aos-delay="300">
-          <div class="inline-block bg-white rounded-full p-6 mb-6 shadow-lg transform transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+        <div class="bg-white p-8 rounded-xl shadow-lg card-hover" data-aos="fade-up" data-aos-delay="300">
+          <div class="bg-gradient-to-r from-primarycol to-fourth w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 shadow-md">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
-          
-          <div class="absolute top-12 -right-5 hidden md:block text-6xl font-bold text-white opacity-10">3</div>
-          
-          <h3 class="text-2xl font-bold mb-4 text-accent">Donate</h3>
-          <p class="text-lg leading-relaxed">Excess food is efficiently donated to partner NGOs, reducing waste and helping communities in need with seamless coordination.</p>
+          <h3 class="text-xl font-bold mb-4 text-primarycol">Environmental Impact</h3>
+          <p class="text-gray-700">By reducing food waste, we help businesses decrease their carbon footprint and contribute to a more sustainable future for our planet.</p>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Team Section -->
-  <div class="bg-gradient-to-b from-white to-sec py-20">
+  <div id="developers" class="py-16 bg-white">
     <div class="container mx-auto px-4">
-      <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 gradient-text" data-aos="fade-up">Meet Our Team</h2>
+      <h2 class="text-4xl font-bold text-center mb-12 gradient-text" data-aos="fade-up">Our Team</h2>
       
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         <!-- Team Member 1 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="100">
           <div class="relative overflow-hidden">
             <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">John leads our development team with over 8 years of experience in full-stack development and waste management systems.</p>
+                <p class="text-white text-sm">With over 10 years in the food industry and technology sector, David recognized the need for smarter waste management solutions.</p>
               </div>
             </div>
           </div>
           <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">John Doe</h3>
-            <p class="text-accent font-medium mb-4">Lead Developer</p>
+            <h3 class="text-xl font-bold mb-1 text-primarycol">David Rodriguez</h3>
+            <p class="text-accent font-medium mb-4">Founder & CEO</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -432,16 +373,16 @@
         <!-- Team Member 2 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="200">
           <div class="relative overflow-hidden">
-            <img src="../assets/images/fullstack guy.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">Jane has dedicated her career to sustainable business practices and brings 10+ years of expertise in waste reduction strategies.</p>
+                <p class="text-white text-sm">Sarah brings extensive expertise in data analytics and software development, leading our technical innovation initiatives.</p>
               </div>
             </div>
           </div>
           <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">John Jushua B. Chua</h3>
-            <p class="text-accent font-medium mb-4">Sustainability Director</p>
+            <h3 class="text-xl font-bold mb-1 text-primarycol">Sarah Chen</h3>
+            <p class="text-accent font-medium mb-4">Chief Technology Officer</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -468,13 +409,13 @@
             <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">Michael coordinates with our NGO partners to ensure efficient donation distribution, coming from 6 years in non-profit management.</p>
+                <p class="text-white text-sm">Michael leads our efforts to build meaningful partnerships with NGOs and community organizations across the country.</p>
               </div>
             </div>
           </div>
           <div class="p-6">
             <h3 class="text-xl font-bold mb-1 text-primarycol">Michael Johnson</h3>
-            <p class="text-accent font-medium mb-4">NGO Relations Manager</p>
+            <p class="text-accent font-medium mb-4">NGO Partnership Director</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -498,32 +439,52 @@
     </div>
   </div>
 
-  <!-- Impact Stats -->
-  <div class="bg-gradient-to-r from-primarycol to-fourth text-white py-20 relative overflow-hidden">
+  <!-- Benefits Section -->
+  <div id="benefits" class="py-16 bg-gradient-to-r from-fourth to-darkgreen text-white relative overflow-hidden">
     <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/binding-dark.png')] opacity-10"></div>
     
     <div class="container mx-auto px-4 relative z-10">
-      <h2 class="text-4xl md:text-5xl font-bold text-center mb-16" data-aos="fade-up">Our Impact</h2>
+      <h2 class="text-4xl font-bold text-center mb-12" data-aos="fade-up">Why Choose WasteWise?</h2>
       
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-10 text-center">
-        <div data-aos="zoom-in" data-aos-delay="100">
-          <div class="text-6xl font-bold mb-4 animated-count">8.5K+</div>
-          <p class="text-xl text-accent">Meals Donated</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div class="text-center p-6" data-aos="fade-up" data-aos-delay="100">
+          <div class="bg-white rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4 shadow-lg transform transition-transform duration-500 hover:rotate-6 hover:scale-110">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold mb-2 text-accent">Cost Savings</h3>
+          <p>Reduce operational costs by optimizing inventory management and minimizing waste</p>
         </div>
         
-        <div data-aos="zoom-in" data-aos-delay="200">
-          <div class="text-6xl font-bold mb-4 animated-count">24</div>
-          <p class="text-xl text-accent">Partner NGOs</p>
+        <div class="text-center p-6" data-aos="fade-up" data-aos-delay="200">
+          <div class="bg-white rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4 shadow-lg transform transition-transform duration-500 hover:rotate-6 hover:scale-110">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold mb-2 text-accent">Enhanced Reputation</h3>
+          <p>Build your brand as an environmentally responsible business committed to sustainability</p>
         </div>
         
-        <div data-aos="zoom-in" data-aos-delay="300">
-          <div class="text-6xl font-bold mb-4 animated-count">15%</div>
-          <p class="text-xl text-accent">Average Waste Reduction</p>
+        <div class="text-center p-6" data-aos="fade-up" data-aos-delay="300">
+          <div class="bg-white rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4 shadow-lg transform transition-transform duration-500 hover:rotate-6 hover:scale-110">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold mb-2 text-accent">Data-Driven Insights</h3>
+          <p>Make informed decisions with comprehensive analytics and reporting tools</p>
         </div>
         
-        <div data-aos="zoom-in" data-aos-delay="400">
-          <div class="text-6xl font-bold mb-4 animated-count">12</div>
-          <p class="text-xl text-accent">Branches Connected</p>
+        <div class="text-center p-6" data-aos="fade-up" data-aos-delay="400">
+          <div class="bg-white rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4 shadow-lg transform transition-transform duration-500 hover:rotate-6 hover:scale-110">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-fourth" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold mb-2 text-accent">Community Impact</h3>
+          <p>Create meaningful connections with local organizations and support those in need</p>
         </div>
       </div>
     </div>
@@ -532,41 +493,14 @@
   <!-- CTA Section -->
   <div class="bg-gradient-to-br from-third to-white py-20">
     <div class="container mx-auto px-4 text-center" data-aos="fade-up">
-      <h2 class="text-4xl md:text-5xl font-bold mb-6 text-primarycol">Ready to Reduce Waste?</h2>
-      <p class="text-xl mb-10 max-w-2xl mx-auto text-gray-700">Join our network of responsible businesses and NGOs making a difference in food waste management and community support.</p>
-      
-      <!-- Food Company Application Form -->
-      <div class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-lg mb-10" data-aos="fade-up" data-aos-delay="100">
-        <h3 class="text-2xl font-bold text-primarycol mb-4">Food Companies</h3>
-        <p class="text-gray-600 mb-6">Apply to join our waste management system and start making a difference today.</p>
-        <form action="../process/subscribe.php" method="POST" class="space-y-4">
-          <div class="flex flex-col">
-            <input type="text" name="company_name" placeholder="Company Name" required 
-                   class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
-          </div>
-          <div class="flex flex-col">
-            <input type="email" name="email" placeholder="Business Email" required 
-                   class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
-          </div>
-          <div class="flex flex-col">
-            <input type="tel" name="phone" placeholder="Contact Number" 
-                   class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
-          </div>
-          <button type="submit" class="btn-animated btn bg-primarycol text-white border-none shadow-xl w-full text-lg rounded-lg">
-            Subscribe Now
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </button>
-        </form>
-      </div>
-      
+      <h2 class="text-4xl md:text-5xl font-bold mb-6 text-primarycol">Join Our Mission</h2>
+      <p class="text-xl mb-10 max-w-2xl mx-auto text-gray-700">Become part of the WasteWise community and help us build a more sustainable future for businesses and communities alike.</p>
       <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
         <button class="btn-animated btn bg-primarycol text-white border-none shadow-xl px-8 py-3 text-lg rounded-lg">
           Register Now
         </button>
         <button class="btn bg-transparent border-2 border-primarycol text-primarycol hover:bg-primarycol hover:text-white transition-all duration-300 px-8 py-3 text-lg rounded-lg shadow-md hover:shadow-xl transform hover:scale-105">
-          Learn More
+          Contact Us
         </button>
       </div>
     </div>
