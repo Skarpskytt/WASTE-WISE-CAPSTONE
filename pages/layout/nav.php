@@ -103,26 +103,47 @@ if (isset($_GET['mark_all_read'])) {
             </li>
 
             <li class="menu-title pt-4"><span class="font-bold">Branch Management</span></li>
-            
-            <li class="menu-title pt-2"><span class="font-bold text-sm text-">Branch 1</span></li>
+
+            <!-- Branches Overview -->
             <li>
-                <a href="../admin/branch1_product_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                <a href="../admin/branches_product_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg hover:bg-gray-100 group">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.012 1.244h3.218a2.25 2.25 0 0 0 2.012-1.244l.256-.512a2.25 2.25 0 0 1 2.012-1.244h3.86m-16.5 0a2.25 2.25 0 0 1-2.25-2.25V6a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21.75 6v5.25a2.25 2.25 0 0 1-2.25 2.25m-16.5 0h13.5" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                     </svg>
-                    <span class="flex-1 ms-3 whitespace-nowrap">Product Excess Records</span>
+                    <span class="ms-3">All Branches Product Waste</span>
                 </a>
             </li>
 
-            <li class="menu-title pt-2"><span class="font-bold text-sm">Branch 2</span></li>
+            <!-- Company Registration Management -->
             <li>
-                <a href="../admin/branch2_product_waste_data.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                <a href="../admin/company_requests.php" class="flex items-center p-2 text-gray-900 rounded-lg hover:bg-gray-100 group">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.012 1.244h3.218a2.25 2.25 0 0 0 2.012-1.244l.256-.512a2.25 2.25 0 0 1 2.012-1.244h3.86m-16.5 0a2.25 2.25 0 0 1-2.25-2.25V6a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21.75 6v5.25a2.25 2.25 0 0 1-2.25 2.25m-16.5 0h13.5" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
                     </svg>
-                    <span class="flex-1 ms-3 whitespace-nowrap">Product Excess Records</span>
+                    <span class="ms-3">Company Registration Requests</span>
                 </a>
             </li>
+
+            <li>
+                <a href="../admin/pending_companies.php" class="flex items-center p-2 text-gray-900 rounded-lg hover:bg-gray-100 group">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="ms-3">Pending Companies</span>
+                    
+                    <?php 
+                    // Show badge if there are pending companies
+                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM branches WHERE branch_type = 'company_main' AND approval_status = 'pending'");
+                    $stmt->execute();
+                    $pendingCount = $stmt->fetchColumn();
+                    if ($pendingCount > 0): 
+                    ?>
+                    <span class="badge badge-accent ml-auto"><?= $pendingCount ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+
+         
 
             <!-- Donation Management section -->
             <li class="menu-title pt-4"><span class="font-bold">Donation Management</span></li>
@@ -149,7 +170,7 @@ if (isset($_GET['mark_all_read'])) {
             <li>
                 <a href="../admin/donation_history_admin.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75M3 18.75v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
                     </svg>
                     <span class="flex-1 ms-3 whitespace-nowrap">Donation Logs</span>
                 </a>
@@ -160,6 +181,24 @@ if (isset($_GET['mark_all_read'])) {
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                     </svg>
                     <span class="flex-1 ms-3 whitespace-nowrap">Export Reports</span>
+                </a>
+            </li>
+            <li>
+                <a href="../admin/pending_companies.php" class="flex items-center p-2 hover:bg-primarycol hover:text-white rounded-lg transition-all duration-300">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>Pending Companies</span>
+                    
+                    <?php 
+                    // Show badge if there are pending companies
+                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM branches WHERE branch_type = 'company_main' AND approval_status = 'pending'");
+                    $stmt->execute();
+                    $pendingCount = $stmt->fetchColumn();
+                    if ($pendingCount > 0): 
+                    ?>
+                    <span class="badge badge-accent ml-auto"><?= $pendingCount ?></span>
+                    <?php endif; ?>
                 </a>
             </li>
             <li class="menu-title pt-4"><span class="font-bold">User Management</span></li>

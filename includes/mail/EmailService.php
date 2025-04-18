@@ -1,6 +1,9 @@
 <?php
 namespace App\Mail;
 
+// Add this constant definition at the top of the file, just after the namespace declaration
+const SITE_URL = 'http://localhost/capstone/WASTE-WISE-CAPSTONE';
+
 // Set timezone to Philippine time
 date_default_timezone_set('Asia/Manila');
 
@@ -844,6 +847,236 @@ class EmailService {
                         <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
                         <p>This is an automated message, please do not reply directly to this email.</p>
                     </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        return $this->sendEmail($data['email'], $subject, $htmlBody);
+    }
+
+    /**
+     * Send a confirmation email to companies that have requested to join
+     */
+    public function sendCompanyRequestConfirmation($data) {
+        $subject = "WasteWise - We've Received Your Request";
+        
+        $htmlBody = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .logo { color: #47663B; font-size: 24px; font-weight: bold; }
+                .content { margin-top: 20px; }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>Request Confirmation</p>
+                </div>
+                
+                <div class='content'>
+                    <p>Dear {$data['name']},</p>
+                    
+                    <p>Thank you for your interest in joining WasteWise with <strong>{$data['company_name']}</strong>!</p>
+                    
+                    <p>We have received your request to join our waste management system. Our team will review your application shortly.</p>
+                    
+                    <p>Once approved, you'll receive an email with instructions on how to complete your registration and start using our system.</p>
+                    
+                    <p>Thank you for your commitment to reducing food waste!</p>
+                    
+                    <p>Best regards,<br>WasteWise Team</p>
+                </div>
+                
+                <div class='footer'>
+                    <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply directly to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        return $this->sendEmail($data['email'], $subject, $htmlBody);
+    }
+
+    /**
+     * Send approval email to companies with registration link
+     */
+    public function sendCompanyApprovalEmail($data) {
+        $subject = "Your WasteWise Application Has Been Approved!";
+        
+        $registrationLink = SITE_URL . "/auth/register_company.php?token=" . $data['token'] . "&email=" . urlencode($data['email']);
+        
+        $htmlBody = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                /* Email styles */
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>Application Approved</p>
+                </div>
+                
+                <div class='content'>
+                    <p>Dear {$data['name']},</p>
+                    
+                    <p>Great news! Your application for <strong>{$data['company_name']}</strong> has been approved to join WasteWise.</p>
+                    
+                    <p>You're now one step away from accessing our waste management system. Please click the button below to complete your registration and set up your account:</p>
+                    
+                    <div style='text-align: center;'>
+                        <a href='{$registrationLink}' class='button'>Complete Registration</a>
+                    </div>
+                    
+                    <p>This link will expire in 48 hours for security reasons.</p>
+                    
+                    <p>After registration, your company will be added as a branch in our system, allowing you to:</p>
+                    <ul>
+                        <li>Track excess food products</li>
+                        <li>Manage inventory efficiently</li>
+                        <li>Access waste reduction analytics</li>
+                        <li>Coordinate donations to partner NGOs</li>
+                    </ul>
+                    
+                    <p>Welcome to the WasteWise community!</p>
+                    
+                    <p>Best regards,<br>WasteWise Team</p>
+                </div>
+                
+                <div class='footer'>
+                    <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        return $this->sendEmail($data['email'], $subject, $htmlBody);
+    }
+
+    /**
+     * Send final approval email to company after their full registration has been approved
+     */
+    public function sendCompanyFinalApprovalEmail($data) {
+        $subject = "Your WasteWise Account Has Been Approved!";
+        
+        $htmlBody = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .logo { color: #47663B; font-size: 24px; font-weight: bold; }
+                .content { margin-top: 20px; }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>Account Approved</p>
+                </div>
+                
+                <div class='content'>
+                    <p>Dear {$data['name']},</p>
+                    
+                    <p>Great news! Your company account for <strong>{$data['company_name']}</strong> has been approved by our administrators.</p>
+                    
+                    <p>You can now log in to your WasteWise account and start using our waste management system. You'll be able to:</p>
+                    
+                    <ul>
+                        <li>Track excess food products</li>
+                        <li>Manage inventory efficiently</li>
+                        <li>Access waste reduction analytics</li>
+                        <li>Donate excess products to NGOs</li>
+                    </ul>
+                    
+                    <p>Login to your account to get started:</p>
+                    <p><a href='" . SITE_URL . "/index.php'>Login to WasteWise</a></p>
+                    
+                    <p>Welcome to the WasteWise community!</p>
+                    
+                    <p>Best regards,<br>WasteWise Team</p>
+                </div>
+                
+                <div class='footer'>
+                    <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply directly to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        return $this->sendEmail($data['email'], $subject, $htmlBody);
+    }
+
+    /**
+     * Send rejection email to company after their full registration has been rejected
+     */
+    public function sendCompanyRejectionEmail($data) {
+        $subject = "Important Information About Your WasteWise Registration";
+        
+        $htmlBody = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .logo { color: #47663B; font-size: 24px; font-weight: bold; }
+                .content { margin-top: 20px; }
+                .reason { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>Registration Update</p>
+                </div>
+                
+                <div class='content'>
+                    <p>Dear {$data['name']},</p>
+                    
+                    <p>Thank you for completing your registration for <strong>{$data['company_name']}</strong> with WasteWise.</p>
+                    
+                    <p>We've reviewed your application and unfortunately, we are unable to approve your account at this time.</p>
+                    
+                    <div class='reason'>
+                        <p><strong>Reason for rejection:</strong></p>
+                        <p>" . nl2br(htmlspecialchars($data['notes'])) . "</p>
+                    </div>
+                    
+                    <p>If you would like to address these issues and reapply, please contact our support team at support@wastewise.com.</p>
+                    
+                    <p>Thank you for your interest in WasteWise.</p>
+                    
+                    <p>Best regards,<br>WasteWise Team</p>
+                </div>
+                
+                <div class='footer'>
+                    <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply directly to this email.</p>
                 </div>
             </div>
         </body>

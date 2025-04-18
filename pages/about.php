@@ -331,25 +331,24 @@
     </div>
   </div>
 
-  <!-- Team Section -->
-  <div id="developers" class="py-16 bg-white">
+  <div class="bg-gradient-to-b from-white to-sec py-20">
     <div class="container mx-auto px-4">
-      <h2 class="text-4xl font-bold text-center mb-12 gradient-text" data-aos="fade-up">Our Team</h2>
+      <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 gradient-text" data-aos="fade-up">Meet Our Team</h2>
       
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
         <!-- Team Member 1 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="100">
           <div class="relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
+            <img src="../assets/images/rom.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">With over 10 years in the food industry and technology sector, David recognized the need for smarter waste management solutions.</p>
+              <p class="text-white text-sm">Rom leads the team's management and direction, ensuring clear communication and efficient project delivery while maintaining high quality standards.</p>
               </div>
             </div>
-          </div>
-          <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">David Rodriguez</h3>
-            <p class="text-accent font-medium mb-4">Founder & CEO</p>
+            </div>
+            <div class="p-6">
+            <h3 class="text-xl font-bold mb-1 text-primarycol">Rom Castro</h3>
+            <p class="text-accent font-medium mb-4">Team Manager</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -373,16 +372,16 @@
         <!-- Team Member 2 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="200">
           <div class="relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
+            <img src="../assets/images/fullstack guy.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">Sarah brings extensive expertise in data analytics and software development, leading our technical innovation initiatives.</p>
+              <p class="text-white text-sm">John leads the development of our platform with expertise in full-stack development and system architecture, ensuring a robust and scalable solution.</p>
               </div>
             </div>
-          </div>
-          <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">Sarah Chen</h3>
-            <p class="text-accent font-medium mb-4">Chief Technology Officer</p>
+            </div>
+            <div class="p-6">
+            <h3 class="text-xl font-bold mb-1 text-primarycol">John Jushua B. Chua</h3>
+            <p class="text-accent font-medium mb-4">Lead Developer</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -406,16 +405,16 @@
         <!-- Team Member 3 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="300">
           <div class="relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
+            <img src="../assets/images/rr.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">Michael leads our efforts to build meaningful partnerships with NGOs and community organizations across the country.</p>
+              <p class="text-white text-sm">Ronrick specializes in system security and data protection, with expertise in implementing robust security measures for web applications.</p>
               </div>
             </div>
-          </div>
-          <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">Michael Johnson</h3>
-            <p class="text-accent font-medium mb-4">NGO Partnership Director</p>
+            </div>
+            <div class="p-6">
+            <h3 class="text-xl font-bold mb-1 text-primarycol">Ronrick Furigay</h3>
+            <p class="text-accent font-medium mb-4">Security Specialist</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">

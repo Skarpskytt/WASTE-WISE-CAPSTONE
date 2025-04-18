@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="scroll-behavior: smooth;">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -261,12 +261,12 @@
             An innovative waste management system designed to help businesses efficiently track, analyze, and reduce waste. By leveraging data analytics and reporting,
             the system enables organizations to optimize their waste disposal processes, minimize environmental impact, and achieve sustainability goals.
           </p>
-          <button class="btn bg-primarycol hover:bg-accent text-white border-none shadow-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
+          <a href="#register-company" class="btn bg-primarycol hover:bg-accent text-white border-none shadow-lg transform transition duration-300 hover:scale-105 hover:shadow-xl">
             Get Started
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
-          </button>
+          </a>
         </div>
       </div>
     </div>
@@ -399,16 +399,16 @@
         <!-- Team Member 1 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="100">
           <div class="relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
+            <img src="../assets/images/rom.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">John leads our development team with over 8 years of experience in full-stack development and waste management systems.</p>
+              <p class="text-white text-sm">Rom leads the team's management and direction, ensuring clear communication and efficient project delivery while maintaining high quality standards.</p>
               </div>
             </div>
-          </div>
-          <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">John Doe</h3>
-            <p class="text-accent font-medium mb-4">Lead Developer</p>
+            </div>
+            <div class="p-6">
+            <h3 class="text-xl font-bold mb-1 text-primarycol">Rom Castro</h3>
+            <p class="text-accent font-medium mb-4">Team Manager</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -435,13 +435,13 @@
             <img src="../assets/images/fullstack guy.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">Jane has dedicated her career to sustainable business practices and brings 10+ years of expertise in waste reduction strategies.</p>
+              <p class="text-white text-sm">John leads the development of our platform with expertise in full-stack development and system architecture, ensuring a robust and scalable solution.</p>
               </div>
             </div>
-          </div>
-          <div class="p-6">
+            </div>
+            <div class="p-6">
             <h3 class="text-xl font-bold mb-1 text-primarycol">John Jushua B. Chua</h3>
-            <p class="text-accent font-medium mb-4">Sustainability Director</p>
+            <p class="text-accent font-medium mb-4">Lead Developer</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -465,16 +465,16 @@
         <!-- Team Member 3 -->
         <div class="bg-white rounded-xl overflow-hidden shadow-xl card-hover" data-aos="fade-up" data-aos-delay="300">
           <div class="relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
+            <img src="../assets/images/rr.jpg" alt="Team Member" class="w-full h-72 object-cover transition-transform duration-700 hover:scale-110">
             <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 hover:opacity-70 transition-opacity duration-300 flex items-end">
               <div class="p-4">
-                <p class="text-white text-sm">Michael coordinates with our NGO partners to ensure efficient donation distribution, coming from 6 years in non-profit management.</p>
+              <p class="text-white text-sm">Ronrick specializes in system security and data protection, with expertise in implementing robust security measures for web applications.</p>
               </div>
             </div>
-          </div>
-          <div class="p-6">
-            <h3 class="text-xl font-bold mb-1 text-primarycol">Michael Johnson</h3>
-            <p class="text-accent font-medium mb-4">NGO Relations Manager</p>
+            </div>
+            <div class="p-6">
+            <h3 class="text-xl font-bold mb-1 text-primarycol">Ronrick Furigay</h3>
+            <p class="text-accent font-medium mb-4">Security Specialist</p>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-500 hover:text-blue-500 transition-colors duration-300 transform hover:scale-125">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -530,18 +530,40 @@
   </div>
 
   <!-- CTA Section -->
-  <div class="bg-gradient-to-br from-third to-white py-20">
+  <div id="register-company" class="bg-gradient-to-br from-third to-white py-20">
     <div class="container mx-auto px-4 text-center" data-aos="fade-up">
       <h2 class="text-4xl md:text-5xl font-bold mb-6 text-primarycol">Ready to Reduce Waste?</h2>
-      <p class="text-xl mb-10 max-w-2xl mx-auto text-gray-700">Join our network of responsible businesses and NGOs making a difference in food waste management and community support.</p>
-      
       <!-- Food Company Application Form -->
+      <?php if (isset($_GET['success']) && $_GET['success'] === 'request_submitted'): ?>
+        <div class="alert alert-success max-w-md mx-auto mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>Thank you! Your request has been submitted. We'll contact you soon.</span>
+        </div>
+      <?php endif; ?>
+
+      <?php if (isset($_GET['error'])): ?>
+        <div class="alert alert-error max-w-md mx-auto mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>
+            <?php if ($_GET['error'] === 'email_exists'): ?>
+              This email is already registered. Please use a different email.
+            <?php else: ?>
+              There was an error processing your request. Please try again.
+            <?php endif; ?>
+          </span>
+        </div>
+      <?php endif; ?>
+
       <div class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-lg mb-10" data-aos="fade-up" data-aos-delay="100">
         <h3 class="text-2xl font-bold text-primarycol mb-4">Food Companies</h3>
         <p class="text-gray-600 mb-6">Apply to join our waste management system and start making a difference today.</p>
-        <form action="../process/subscribe.php" method="POST" class="space-y-4">
+        <form action="../process/subscribe_company.php" method="POST" class="space-y-4">
           <div class="flex flex-col">
             <input type="text" name="company_name" placeholder="Company Name" required 
+                   class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
+          </div>
+          <div class="flex flex-col">
+            <input type="text" name="contact_person" placeholder="Contact Person Name" required 
                    class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
           </div>
           <div class="flex flex-col">
@@ -549,8 +571,12 @@
                    class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
           </div>
           <div class="flex flex-col">
-            <input type="tel" name="phone" placeholder="Contact Number" 
+            <input type="tel" name="phone" placeholder="Contact Number" required
                    class="input input-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300" />
+          </div>
+          <div class="flex flex-col">
+            <textarea name="description" placeholder="Brief description of your company and waste management needs" rows="3"
+                   class="textarea textarea-bordered w-full bg-gray-50 focus:bg-white transition-colors duration-300"></textarea>
           </div>
           <button type="submit" class="btn-animated btn bg-primarycol text-white border-none shadow-xl w-full text-lg rounded-lg">
             Subscribe Now
@@ -561,14 +587,7 @@
         </form>
       </div>
       
-      <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-        <button class="btn-animated btn bg-primarycol text-white border-none shadow-xl px-8 py-3 text-lg rounded-lg">
-          Register Now
-        </button>
-        <button class="btn bg-transparent border-2 border-primarycol text-primarycol hover:bg-primarycol hover:text-white transition-all duration-300 px-8 py-3 text-lg rounded-lg shadow-md hover:shadow-xl transform hover:scale-105">
-          Learn More
-        </button>
-      </div>
+   
     </div>
   </div>
   
