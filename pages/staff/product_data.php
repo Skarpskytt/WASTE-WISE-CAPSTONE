@@ -4,7 +4,7 @@ require_once '../../config/db_connect.php';
 
 date_default_timezone_set('Asia/Manila');
 
-checkAuth(['staff']);
+checkAuth(['staff', 'company']);
 
 $pdo = getPDO();
 

@@ -8,7 +8,7 @@ require_once '../../config/db_connect.php';
 // Set timezone to Philippines
 date_default_timezone_set('Asia/Manila');
 
-checkAuth(['staff']);
+checkAuth(['staff', 'company']);
 
 $pdo = getPDO();
 $branchId = $_SESSION['branch_id'];

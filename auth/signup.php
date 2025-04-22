@@ -27,7 +27,7 @@ $session = SessionHandler::getInstance($pdo);
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Signup</title>
   <link rel="stylesheet" href="../assets/style/signup.css">
-  <link rel="icon" type="image/x-icon" href="../assets/images/Company Logo.jpg">
+  <link rel="icon" type="image/x-icon" href="../assets/images/Logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -89,19 +89,27 @@ $session = SessionHandler::getInstance($pdo);
                 </div>
                 <div>
                   <label for="role" class="block text-sm font-medium text-gray-700">Select Role</label>
-                  <select id="role" name="role" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required>
+                  <select id="role" name="role" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300" required onchange="handleSignupRoleChange()">
                     <option value="">Select a role</option>
-                    <?php
-                    // Fetch branches from database
-                    $stmt = $pdo->query('SELECT id, name FROM branches ORDER BY id');
-                    while ($branch = $stmt->fetch()) {
-                      // Create staff option for each branch
-                      echo '<option value="branch' . htmlspecialchars($branch['id']) . '_staff">Staff (' . 
-                           htmlspecialchars($branch['name']) . ')</option>';
-                    }
-                    ?>
+                    <option value="staff">Staff</option>
+                    <option value="company">Company</option>
                     <option value="ngo">NGO Partner</option>
                   </select>
+                </div>
+                <div id="branch-selection" class="hidden">
+                  <label for="branch_id" class="block text-sm font-medium text-gray-700">Select Branch</label>
+                  <select id="branch_id" name="branch_id" class="mt-1 p-2 w-full border rounded-md focus:border-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sec transition-colors duration-300">
+                    <option value="">Select a branch</option>
+                    <?php
+                    // Reset pointer to beginning of result set
+                    $stmt = $pdo->query('SELECT id, name FROM branches ORDER BY id');
+                    while ($branch = $stmt->fetch()) {
+                      echo '<option value="' . htmlspecialchars($branch['id']) . '">' . 
+                           htmlspecialchars($branch['name']) . '</option>';
+                    }
+                    ?>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">Select the branch you'll be associated with</p>
                 </div>
               </div>
             </div>
@@ -1438,6 +1446,40 @@ $session = SessionHandler::getInstance($pdo);
         if (filename) filename.textContent = file.name;
         if (preview) preview.classList.remove('hidden');
       }
+    });
+  </script>
+  <script>
+    // Add this to your JavaScript section
+    function handleSignupRoleChange() {
+      const role = document.getElementById('role').value;
+      const ngoFields = document.getElementById('ngo-fields');
+      const branchSelection = document.getElementById('branch-selection');
+      
+      // Hide all conditional fields first
+      ngoFields.classList.add('hidden');
+      branchSelection.classList.add('hidden');
+      
+      // Remove required attribute from all conditional fields
+      document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = false);
+      document.getElementById('branch_id').required = false;
+      
+      // Show relevant fields based on role
+      if (role === 'ngo') {
+        ngoFields.classList.remove('hidden');
+        document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = true);
+      } else if (role === 'company' || role === 'staff') {
+        branchSelection.classList.remove('hidden');
+        document.getElementById('branch_id').required = true;
+      }
+    }
+  </script>
+  <script>
+    // Make sure this event listener is set up correctly
+    document.addEventListener('DOMContentLoaded', function() {
+        const roleSelect = document.getElementById('role');
+        if (roleSelect) {
+            roleSelect.addEventListener('change', handleSignupRoleChange);
+        }
     });
   </script>
 </body>

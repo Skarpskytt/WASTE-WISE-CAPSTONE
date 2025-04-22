@@ -2,6 +2,11 @@
 
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', 'C:/xampp/php/logs/error.log');
+
+// Add debug logging
+error_log("Login attempt - POST data: " . print_r($_POST, true));
 
 require_once 'config/app_config.php';
 require_once 'config/db_connect.php';
@@ -37,134 +42,126 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
         $email = trim($_POST['email']);
         $password = $_POST['password'];
 
+        // Debug log
         error_log("Processing login for email: $email");
 
-    
         if (empty($email) || empty($password)) {
             $errorMessage = 'Please enter both email and password.';
         } else {
-      
             $stmt = $pdo->prepare("
                 SELECT u.*, 
                        np.status as ngo_status,
                        sp.status as staff_status,
+                       b.id as branch_id,
+                       b.name as branch_name,
                        u.failed_attempts,
-                       u.locked_until
+                       u.locked_until,
+                       u.role,
+                       u.is_active
                 FROM users u
                 LEFT JOIN ngo_profiles np ON u.id = np.user_id
                 LEFT JOIN staff_profiles sp ON u.id = sp.user_id
+                LEFT JOIN branches b ON u.branch_id = b.id
                 WHERE u.email = ?
             ");
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
-     
             if (!$user) {
-                $error = 'No account found with that email.';
-           
-                $errorMessage = $error;
-            }
-     
+                $errorMessage = 'No account found with that email.';
+            } 
+            // Rest of your existing checks...
             else if ($user['locked_until'] !== null && strtotime($user['locked_until']) > time()) {
                 $timeRemaining = ceil((strtotime($user['locked_until']) - time()) / 60);
-                $errorMessage = "Your account is locked due to multiple failed login attempts. Try again in $timeRemaining minutes.";
+                $errorMessage = "Your account is locked. Try again in $timeRemaining minutes.";
             }
-    
             else if (!password_verify($password, $user['password'])) {
-          
-                $newAttempts = ($user['failed_attempts'] ?? 0) + 1;
+                // Increment failed attempts
+                $newAttempts = $user['failed_attempts'] + 1;
+                $lockedUntil = null;
                 
-            
+                // Check if we should lock the account (after 5 attempts)
                 if ($newAttempts >= 5) {
-              
+                    // Lock for 30 minutes
                     $lockedUntil = date('Y-m-d H:i:s', strtotime('+30 minutes'));
-                    $stmt = $pdo->prepare("UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?");
-                    $stmt->execute([$newAttempts, $lockedUntil, $user['id']]);
-                    
-                    $errorMessage = 'Your account has been locked due to multiple failed attempts. Try again after 30 minutes.';
+                    $loginErrorMessage = "Too many failed attempts. Your account has been locked.";
+                    $attemptsLeft = 0;
                 } else {
-           
-                    $stmt = $pdo->prepare("UPDATE users SET failed_attempts = ? WHERE id = ?");
-                    $stmt->execute([$newAttempts, $user['id']]);
-                    
-               
-                    $loginErrorMessage = "Wrong password";
+                    // Still has attempts left
                     $attemptsLeft = 5 - $newAttempts;
+                    $loginErrorMessage = "Incorrect password.";
                 }
+                
+                // Update the database
+                $stmt = $pdo->prepare("UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?");
+                $stmt->execute([$newAttempts, $lockedUntil, $user['id']]);
+                
+                // Log the failed attempt
+                error_log("Failed login attempt for user {$user['email']}. Attempts: $newAttempts");
             }
-      
             else {
-         
+                // Reset failed attempts
                 $stmt = $pdo->prepare("UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?");
                 $stmt->execute([$user['id']]);
 
-         
-                if ($user['role'] === 'ngo') {
-                    $ngoStatusStmt = $pdo->prepare('SELECT status FROM ngo_profiles WHERE user_id = ?');
-                    $ngoStatusStmt->execute([$user['id']]);
-                    $ngoStatus = $ngoStatusStmt->fetchColumn();
-                    
-                    if (!$user['is_active'] && $ngoStatus === 'pending') {
-                        $pendingMessage = "Your NGO account is currently under review. You will be notified via email once approved.";
-                    } elseif (!$user['is_active'] && $ngoStatus === 'rejected') {
-                        $errorMessage = "Your NGO account application has been rejected.";
-                    }
-                }
-
-                if ($user['role'] === 'branch1_staff' || $user['role'] === 'branch2_staff') {
-                    $staffStatusStmt = $pdo->prepare('SELECT status FROM staff_profiles WHERE user_id = ?');
-                    $staffStatusStmt->execute([$user['id']]);
-                    $staffStatus = $staffStatusStmt->fetchColumn();
-                    
-                    if (!$user['is_active'] && $staffStatus === 'pending') {
-                        $pendingMessage = "Your staff account is currently under review. You will be notified via email once approved.";
-                    } elseif (!$user['is_active'] && $staffStatus === 'rejected') {
-                        $errorMessage = "Your staff account application has been rejected. Contact administration for details.";
-                    }
-                }
-
                 if (!$user['is_active']) {
                     $errorMessage = 'Your account is inactive. Please contact administrator.';
-                }
-
-          
-                if (!isset($errorMessage) && !isset($pendingMessage)) {
-            
-                    $otp = sprintf("%06d", mt_rand(100000, 999999));
-                    $expires_at = date('Y-m-d H:i:s', strtotime('+5 minutes'));
-
-                    $stmt = $pdo->prepare("
-                        INSERT INTO otp_codes (user_id, code, expires_at) 
-                        VALUES (?, ?, ?)
-                    ");
-                    $stmt->execute([$user['id'], $otp, $expires_at]);
-
-        
-                    $emailService = new \App\Mail\EmailService();
-                    $emailService->sendOTPEmail([
-                        'email' => $user['email'],
-                        'fname' => $user['fname'],
-                        'otp' => $otp
-                    ]);
-              
+                } else {
+                    // Set temporary session variables
                     $_SESSION['temp_user_id'] = $user['id'];
-                    $_SESSION['temp_email'] = $user['email']; 
-                    
-             
-                    error_log("Session before redirect - ID: " . session_id() . ", temp_user_id: " . $_SESSION['temp_user_id']);
-                    
-                
-                    session_write_close();
-                    
-           
-                    header('Location: auth/verify_otp.php');
-                    exit();
+                    $_SESSION['temp_email'] = $user['email'];
+                    $_SESSION['temp_role'] = $user['role'];
+                    $_SESSION['temp_fname'] = $user['fname'];
+                    $_SESSION['temp_lname'] = $user['lname'];
+
+                    // For staff and company users
+                    if (in_array($user['role'], ['staff', 'company'])) {
+                        if (empty($user['branch_id'])) {
+                            $errorMessage = 'No branch assigned to your account.';
+                        } else {
+                            $_SESSION['temp_branch_id'] = $user['branch_id'];
+                            $_SESSION['temp_branch_name'] = $user['branch_name'];
+                            
+                            // Debug log
+                            error_log("Staff/Company login - Branch ID: {$user['branch_id']}, Role: {$user['role']}");
+                        }
+                    }
+
+                    if (!isset($errorMessage)) {
+                        // Generate and send OTP
+                        $otp = sprintf("%06d", mt_rand(100000, 999999));
+                        $expires_at = date('Y-m-d H:i:s', strtotime('+5 minutes'));
+                        
+                        // Clear existing OTPs
+                        $clearStmt = $pdo->prepare("DELETE FROM otp_codes WHERE user_id = ?");
+                        $clearStmt->execute([$user['id']]);
+                        
+                        // Insert new OTP
+                        $stmt = $pdo->prepare("INSERT INTO otp_codes (user_id, code, expires_at) VALUES (?, ?, ?)");
+                        $stmt->execute([$user['id'], $otp, $expires_at]);
+
+                        // Send OTP email
+                        $emailService = new EmailService();
+                        $emailService->sendOTPEmail([
+                            'email' => $user['email'],
+                            'fname' => $user['fname'],
+                            'otp' => $otp
+                        ]);
+
+                        // Debug log
+                        error_log("OTP generated and sent. Redirecting to verification.");
+                        
+                        // Ensure session is written
+                        session_write_close();
+                        header('Location: auth/verify_otp.php');
+                        exit();
+                    }
                 }
             }
         }
     } catch (Exception $e) {
         error_log("Login error: " . $e->getMessage());
-        $errorMessage = $e->getMessage();
+        $errorMessage = "An error occurred. Please try again.";
     }
 }
 ?>
@@ -174,8 +171,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email']) && isset($_P
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login</title>
-  <link rel="icon" type="image/x-icon" href="assets/images/Company Logo.jpg">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/x-icon" href="assets/images/Logo.png">
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primarycol: '#47663B',
+            sec: '#E8ECD7',
+            third: '#EED3B1',
+            fourth: '#1F4529',
+            accent: '#FF8A00',
+            lightgreen: '#B5D99C',
+            darkgreen: '#0E2E1D',
+          },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'fade-in-up': 'fadeInUp 0.7s ease-out',
+            'fade-in': 'fadeIn 1s ease-out',
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-20px)' },
+            },
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            }
+          }
+        }
+      }
+    }
+  </script>
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   <!-- Add AOS animation library -->
@@ -426,6 +460,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Your JavaScript code here
+});
+</script>
 
 </head>
 <body class="bg-pattern">
@@ -480,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   required>
             <div class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-primarycol transition-colors duration-300">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
             <button type="button" 

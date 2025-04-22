@@ -10,7 +10,7 @@ require_once '../../includes/mail/EmailService.php';
 use App\Mail\EmailService;
 
 // Check for staff access
-checkAuth(['staff']);
+checkAuth(['staff', 'company']);
 
 $pdo = getPDO();
 $branchId = $_SESSION['branch_id'];

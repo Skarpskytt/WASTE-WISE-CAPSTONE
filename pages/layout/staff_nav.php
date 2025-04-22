@@ -1,11 +1,26 @@
 <?php
-// Check if user is logged in as staff
-if (!isset($_SESSION['role']) || (
-    $_SESSION['role'] !== 'branch1_staff' && 
-    $_SESSION['role'] !== 'branch2_staff'
-)) {
-    header("Location: ../../index.php");
-    exit;
+require_once '../../config/app_config.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+error_log("Staff Nav - Session Data: " . print_r($_SESSION, true));
+
+// Check authentication
+if (!isset($_SESSION['authenticated']) || !isset($_SESSION['role']) || 
+    !in_array($_SESSION['role'], ['staff', 'company'])) {
+    error_log("Staff Nav - Auth Check Failed");
+    header("Location: " . BASE_URL . "/index.php");
+    exit();
+}
+
+// Check branch assignment
+if (!isset($_SESSION['branch_id'])) {
+    error_log("Staff Nav - No Branch ID");
+    $_SESSION['error'] = 'No branch assigned to your account.';
+    header("Location: " . BASE_URL . "/index.php");
+    exit();
 }
 
 // Include database connection if not already included
@@ -13,7 +28,7 @@ if (!isset($pdo)) {
     include('../../config/db_connect.php');
 }
 
-// Get staff notifications
+// Get staff notifications - update to use branch_id from session
 $notificationsQuery = $pdo->prepare("
     SELECT id, message, link, is_read, created_at
     FROM notifications
@@ -22,8 +37,8 @@ $notificationsQuery = $pdo->prepare("
     LIMIT 5
 ");
 
-// Get the branch ID based on the staff role
-$branchId = ($_SESSION['role'] === 'branch1_staff') ? 1 : 2;
+// Use branch_id directly from session instead of role-based check
+$branchId = $_SESSION['branch_id'] ?? null;
 $notificationsQuery->execute([$_SESSION['user_id'], $_SESSION['role'], $branchId]);
 $notifications = $notificationsQuery->fetchAll(PDO::FETCH_ASSOC);
 
@@ -75,11 +90,28 @@ if (isset($_GET['mark_all_read'])) {
         </button>
        <ul class="h-full flex flex-col items-stretch space-y-2 font-small">
        <div class="mb-3">
-        <a href="staff_dashboard.php" class="flex ms-2 md:me-24">
-           <img src="../../assets/images/Company Logo.jpg" class="h-8 me-3" alt="WasteWise"/>
-           <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">Bea Bakes</span>
-         </a>
-        </div>
+    <a href="../staff/staff_dashboard.php" class="flex items-center ms-2 md:me-24">
+        <?php
+        // Get branch logo
+        $logoStmt = $pdo->prepare("SELECT logo_path FROM branches WHERE id = ?");
+        $logoStmt->execute([$_SESSION['branch_id']]);
+        $logoPath = $logoStmt->fetchColumn();
+        
+        // Determine logo path
+        $logoUrl = $logoPath ? 
+            "../../assets/uploads/branch_logos/" . htmlspecialchars($logoPath) : 
+            "../../assets/images/Company Logo.jpg";
+        ?>
+        
+        <img src="<?= $logoUrl ?>" 
+             class="h-12 w-12 object-contain rounded-lg me-3" 
+             alt="Branch Logo"/>
+             
+        <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
+            <?= isset($_SESSION['branch_name']) ? htmlspecialchars($_SESSION['branch_name']) : 'Unknown Branch' ?>
+        </span>
+    </a>
+</div>
             <li>
              <a href="../staff/staff_dashboard.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">

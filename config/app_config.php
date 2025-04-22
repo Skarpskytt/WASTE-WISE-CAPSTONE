@@ -1,27 +1,25 @@
 <?php
-// Detect environment and set base URL
 function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
     $host = $_SERVER['HTTP_HOST'];
     
-    // Local development
     if ($host === 'localhost' || strpos($host, '127.0.0.1') !== false) {
         return "{$protocol}://{$host}/capstone/WASTE-WISE-CAPSTONE";
     }
-    
-    // Production (Hostinger)
     return "{$protocol}://{$host}";
 }
 
-// App configuration
 define('BASE_URL', getBaseUrl());
-
-// Set default timezone to Philippines
 date_default_timezone_set('Asia/Manila');
 
-// Other timezone-specific settings
-define('TIMEZONE', 'Asia/Manila');
-define('TIMEZONE_DISPLAY', 'PHT'); // Philippine Time
+// Only set these if session hasn't started
+if (session_status() === PHP_SESSION_NONE) {
+    // Configure session security
+    ini_set('session.use_cookies', 1);
+    ini_set('session.use_only_cookies', 1);
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.cookie_secure', isset($_SERVER['HTTPS']));
+}
 
 /**
  * Generate relative URL paths that work across environments

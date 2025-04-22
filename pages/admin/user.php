@@ -158,12 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_staff'])) {
         
         $userId = $_POST['approve_staff'];
         
-        // Get staff details for notification
+        // Get staff details for notification - UPDATED QUERY
         $stmt = $pdo->prepare("
-            SELECT u.fname, u.lname, u.email, u.role 
+            SELECT u.fname, u.lname, u.email, u.role, u.branch_id, b.name as branch_name
             FROM users u 
             JOIN staff_profiles sp ON u.id = sp.user_id
-            WHERE u.id = ? AND (u.role = 'branch1_staff' OR u.role = 'branch2_staff')
+            LEFT JOIN branches b ON u.branch_id = b.id
+            WHERE u.id = ? AND u.role = 'staff'
         ");
         $stmt->execute([$userId]);
         $staffData = $stmt->fetch();
@@ -193,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_staff'])) {
         $emailData = [
             'name' => $staffData['fname'] . ' ' . $staffData['lname'],
             'email' => $staffData['email'],
-            'role' => $staffData['role']
+            'role' => 'Staff' . ($staffData['branch_name'] ? ' - ' . $staffData['branch_name'] : '')
         ];
         
         $emailService->sendStaffApprovalEmail($emailData);
@@ -217,12 +218,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reject_staff'])) {
         
         $userId = $_POST['reject_staff'];
         
-        // Get staff details for notification
+        // Get staff details for notification - UPDATED QUERY
         $stmt = $pdo->prepare("
-            SELECT u.fname, u.lname, u.email, u.role 
+            SELECT u.fname, u.lname, u.email, u.role, u.branch_id, b.name as branch_name
             FROM users u 
             JOIN staff_profiles sp ON u.id = sp.user_id
-            WHERE u.id = ? AND (u.role = 'branch1_staff' OR u.role = 'branch2_staff')
+            LEFT JOIN branches b ON u.branch_id = b.id
+            WHERE u.id = ? AND u.role = 'staff'
         ");
         $stmt->execute([$userId]);
         $staffData = $stmt->fetch();
@@ -248,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reject_staff'])) {
         $emailData = [
             'name' => $staffData['fname'] . ' ' . $staffData['lname'],
             'email' => $staffData['email'],
-            'role' => $staffData['role']
+            'role' => 'Staff' . ($staffData['branch_name'] ? ' - ' . $staffData['branch_name'] : '')
         ];
         
         $emailService->sendStaffRejectionEmail($emailData);
@@ -327,9 +329,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     && !isset($_POST['edit_id']) 
     && !isset($_POST['approve_ngo']) 
     && !isset($_POST['reject_ngo'])
-    && !isset($_POST['archive_user'])  // Add this line to exclude archive submissions
-    && !isset($_POST['approve_staff'])  // Also exclude staff approval
-    && !isset($_POST['reject_staff'])) {  // And staff rejection
+    && !isset($_POST['archive_user'])
+    && !isset($_POST['approve_staff'])
+    && !isset($_POST['reject_staff'])) {
     try {
         $pdo->beginTransaction();
         
@@ -350,6 +352,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         if (empty($password)) $errors[] = "Password is required";
         if ($password !== $conpassword) $errors[] = "Passwords do not match";
 
+        // Validate role against database enum
+        $valid_roles = ['admin', 'staff', 'company', 'ngo'];
+        if (!in_array($role, $valid_roles)) {
+            $errors[] = "Invalid role selected";
+        }
+
         // Check if email already exists
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
         $stmt->execute([$email]);
@@ -360,16 +368,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         if (empty($errors)) {
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
             
-            // Determine branch_id based on role if it's a staff
+            // Determine branch_id based on role
             $branch_id = null;
-            if ($role === 'branch1_staff') {
-                $branch_id = 1;
-            } elseif ($role === 'branch2_staff') {
-                $branch_id = 2;
+            
+            // Handle branch selection for staff and company users
+            if (($role === 'staff' || $role === 'company') && 
+                isset($_POST['branch_id']) && !empty($_POST['branch_id'])) {
+                $branch_id = (int)$_POST['branch_id'];
             }
             
-            // Set is_active based on role (only NGOs need approval when created by admin)
-            $is_active = $role === 'ngo' ? 0 : 1;
+            // Set is_active based on role (only NGOs and staff need approval when created by admin)
+            $is_active = ($role === 'ngo' || $role === 'staff') ? 0 : 1;
             
             $stmt = $pdo->prepare("
                 INSERT INTO users (fname, lname, email, role, password, branch_id, is_active) 
@@ -391,10 +400,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 $stmt->execute([$user_id, $org_name, $phone, $address]);
             }
             
-            // Create staff profile entry for staff users with approved status
-            if ($role === 'branch1_staff' || $role === 'branch2_staff') {
+            // Create staff profile entry for staff users with pending status
+            if ($role === 'staff') {
                 $stmt = $pdo->prepare('INSERT INTO staff_profiles (user_id, status) VALUES (?, ?)');
-                $stmt->execute([$user_id, 'approved']);
+                $stmt->execute([$user_id, 'pending']);
             }
             
             // Create notification
@@ -606,7 +615,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
               <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
                 <?= htmlspecialchars($user['email']) ?>
               </td>
-              <!-- Role Cell (simplified) -->
+              <!-- Replace the Role Cell in the table -->
 <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
   <span class="px-2 py-1 rounded-full text-xs font-semibold 
     <?php
@@ -617,10 +626,10 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
       case 'ngo':
         echo 'bg-green-100 text-green-800';
         break;
-      case 'branch1_staff':
+      case 'company':
         echo 'bg-purple-100 text-purple-800';
         break;
-      case 'branch2_staff':
+      case 'staff':
         echo 'bg-indigo-100 text-indigo-800';
         break;
       default:
@@ -629,18 +638,47 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
     ?>">
     <?php
       $roleDisplay = $user['role'];
-      if ($roleDisplay === 'branch1_staff') {
-        $roleDisplay = 'Branch 1 Staff';
-      } else if ($roleDisplay === 'branch2_staff') {
-        $roleDisplay = 'Branch 2 Staff';
+      
+      // If this is a staff member with a branch_id, display which branch
+      if ($roleDisplay === 'staff' && !empty($user['branch_id'])) {
+        // Get branch name if available
+        $branchName = '';
+        
+        // Try to get branch name from database
+        $branchStmt = $pdo->prepare('SELECT name FROM branches WHERE id = ?');
+        $branchStmt->execute([$user['branch_id']]);
+        $branchResult = $branchStmt->fetch();
+        
+        if ($branchResult && !empty($branchResult['name'])) {
+          $branchName = $branchResult['name'];
+          $roleDisplay = 'Staff - ' . htmlspecialchars($branchName);
+        } else {
+          $roleDisplay = 'Staff - Branch ' . $user['branch_id'];
+        }
+      } else {
+        switch($roleDisplay) {
+          case 'company':
+            $roleDisplay = 'Company';
+            break;
+          case 'ngo':
+            $roleDisplay = 'NGO Partner';
+            break;
+          case 'admin':
+            $roleDisplay = 'Administrator';
+            break;
+          case 'staff':
+            $roleDisplay = 'Staff';
+            break;
+          case '': // Handle empty role
+            $roleDisplay = 'No Role';
+            break;
+        }
       }
-      echo ucfirst($roleDisplay);
+      echo htmlspecialchars($roleDisplay);
     ?>
   </span>
 </td>
-
-<!-- Status Cell (enhanced to show account status + approval status) -->
-<td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
+              <td class="py-2 px-4 border-b border-gray-200 text-sm text-gray-700">
   <!-- Account active/inactive status -->
   <div class="flex flex-col gap-1">
     <span class="px-2 py-1 rounded-full text-xs font-semibold inline-block 
@@ -671,8 +709,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
     <?php endif; ?>
     
     <!-- Staff approval status -->
-    <?php if (($user['role'] === 'branch1_staff' || $user['role'] === 'branch2_staff') && 
-              !empty($user['staff_status'])): ?>
+    <?php if ($user['role'] === 'staff' && !empty($user['staff_status'])): ?>
       <span class="px-2 py-1 rounded-full text-xs font-semibold inline-block
         <?php
         switch($user['staff_status']) {
@@ -763,25 +800,32 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
                 </button>
             </form>
         <?php endif; ?>
-        <?php if (($user['role'] === 'branch1_staff' || $user['role'] === 'branch2_staff') && isset($user['staff_status']) && $user['staff_status'] === 'pending'): ?>
-    <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
-        Pending Approval
-    </span>
-    
-    <form method="POST" class="mt-2">
-        <input type="hidden" name="approve_staff" value="<?= $user['id'] ?>">
-        <button type="submit" class="text-xs bg-green-100 hover:bg-green-200 text-green-800 py-1 px-2 rounded">
-            Approve
-        </button>
-    </form>
-    
-    <form method="POST" class="mt-1">
-        <input type="hidden" name="reject_staff" value="<?= $user['id'] ?>">
-        <button type="submit" class="text-xs bg-red-100 hover:bg-red-200 text-red-800 py-1 px-2 rounded">
-            Reject
-        </button>
-    </form>
-<?php endif; ?>
+        <?php if ($user['role'] === 'staff' && isset($user['staff_status']) && $user['staff_status'] === 'pending'): ?>
+            <form method="POST" class="inline">
+                <input type="hidden" name="approve_staff" value="<?= $user['id'] ?>">
+                <button type="submit" 
+                        class="rounded-md hover:bg-green-100 text-green-600 p-2 flex items-center mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" 
+                         viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Approve Staff
+                </button>
+            </form>
+            <form method="POST" class="inline">
+                <input type="hidden" name="reject_staff" value="<?= $user['id'] ?>">
+                <button type="submit" 
+                        class="rounded-md hover:bg-red-100 text-red-600 p-2 flex items-center mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" 
+                         viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Reject Staff
+                </button>
+            </form>
+        <?php endif; ?>
                   <!-- New View button -->
                   <button onclick="viewUser(<?= htmlspecialchars(json_encode($user)) ?>)" 
                      class='rounded-md bg-blue-50 hover:bg-blue-100 text-blue-600 p-2 flex items-center'>
@@ -909,13 +953,29 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
 
             <div class="form-control">
                 <label class="label">Role</label>
-                <select name="role" class="select select-bordered" required>
+                <select name="role" id="role" class="select select-bordered" required onchange="handleRoleChange()">
                     <option value="">Select a role</option>
-                    <option value="branch1_staff">Branch 1 Staff</option>
-                    <option value="branch2_staff">Branch 2 Staff</option>
-                    <option value="admin">Admin</option>
+                    <option value="admin">Administrator</option>
+                    <option value="company">Company</option>
                     <option value="ngo">NGO Partner</option>
+                    <option value="staff">Staff</option>
                 </select>
+            </div>
+
+            <!-- Add this branch selection field for staff or company users -->
+            <div id="branch-selection-fields" class="form-control hidden">
+                <label class="label">Assign to Branch</label>
+                <select name="branch_id" class="select select-bordered">
+                    <option value="">Select Branch</option>
+                    <?php
+                    // Fetch branches from the database
+                    $branchStmt = $pdo->query('SELECT id, name FROM branches ORDER BY id');
+                    while ($branch = $branchStmt->fetch()) {
+                        echo '<option value="' . $branch['id'] . '">' . htmlspecialchars($branch['name']) . '</option>';
+                    }
+                    ?>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Select which branch this user will be associated with</p>
             </div>
 
             <!-- NGO-specific fields (hidden by default) -->
@@ -1244,14 +1304,23 @@ function viewUser(user) {
   
   // Properly format role for display
   let formattedRole = user.role;
-  if (user.role === 'branch1_staff') {
-    formattedRole = 'Branch 1 Staff';
-  } else if (user.role === 'branch2_staff') {
-    formattedRole = 'Branch 2 Staff';
-  } else if (user.role === 'ngo') {
-    formattedRole = 'NGO Partner';
-  } else if (user.role === 'admin') {
-    formattedRole = 'Administrator';
+  if (user.role === 'staff' && user.branch_id) {
+    formattedRole = 'Staff - Branch ' + user.branch_id;
+  } else {
+    switch(user.role) {
+      case 'ngo':
+        formattedRole = 'NGO Partner';
+        break;
+      case 'company':
+        formattedRole = 'Company';
+        break;
+      case 'admin':
+        formattedRole = 'Administrator';
+        break;
+      default:
+        // Keep the role as is if it doesn't match any specific case
+        break;
+    }
   }
   
   document.getElementById('view_role').textContent = formattedRole;
@@ -1335,6 +1404,33 @@ function openArchiveModal(userId, userName) {
   document.getElementById('archive_user_name').textContent = userName;
   document.getElementById('archive_user_id').value = userId;
   document.getElementById('archive_modal').showModal();
+}
+</script>
+
+<!-- Add this to your script section -->
+<script>
+function handleRoleChange() {
+    const role = document.getElementById('role').value;
+    const ngoFields = document.getElementById('ngo-fields');
+    const branchSelectionFields = document.getElementById('branch-selection-fields');
+    
+    // Hide all conditional fields first
+    ngoFields.classList.add('hidden');
+    branchSelectionFields.classList.add('hidden');
+    
+    // Make all conditional fields not required by default
+    document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = false);
+    
+    // Show relevant fields based on selection
+    if (role === 'ngo') {
+        // Show and require NGO fields
+        ngoFields.classList.remove('hidden');
+        document.querySelectorAll('#ngo-fields input, #ngo-fields textarea').forEach(el => el.required = true);
+    } else if (role === 'company' || role === 'staff') {
+        // Show branch selection for both company and staff users
+        branchSelectionFields.classList.remove('hidden');
+        document.querySelector('#branch-selection-fields select').required = true;
+    }
 }
 </script>
 

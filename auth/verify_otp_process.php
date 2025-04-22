@@ -1,103 +1,65 @@
 <?php
-// Use standard PHP session
+require_once '../config/app_config.php';
+require_once '../config/db_connect.php';
+
+// Start session after config
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once '../config/app_config.php';
-require_once '../config/db_connect.php';
-
-// Get database connection
-$pdo = getPDO();
-
-// Debug session data
-error_log("verify_otp_process.php - Session ID: " . session_id() . ", temp_user_id: " . ($_SESSION['temp_user_id'] ?? 'not set'));
-
-// Check if temp_user_id exists
-if (!isset($_SESSION['temp_user_id'])) {
-    $_SESSION['error'] = "Your session has expired. Please log in again.";
-    header('Location: ../index.php');
-    exit();
-}
-
-// Process the OTP
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['otp'])) {
     try {
-        // Get data
-        $user_id = $_SESSION['temp_user_id'];
+        $pdo = getPDO();
+        $user_id = $_SESSION['temp_user_id'] ?? null;
         $otp = $_POST['otp'];
-        $current_time = date('Y-m-d H:i:s');
-        
-        // Log the verification attempt
-        error_log("Verifying OTP: $otp for user ID: $user_id");
-        
-        // Verify OTP in database
-        $stmt = $pdo->prepare("
-            SELECT * FROM otp_codes 
-            WHERE user_id = ? 
-            AND code = ? 
-            AND is_used = 0 
-            AND expires_at > ?
-            ORDER BY created_at DESC 
-            LIMIT 1
-        ");
-        $stmt->execute([$user_id, $otp, $current_time]);
-        $otp_record = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        // Log OTP verification result
-        error_log("OTP verification result: " . ($otp_record ? 'Valid OTP found' : 'No valid OTP found'));
-        
-        if (!$otp_record) {
-            throw new Exception('Invalid or expired OTP code.');
+
+        if (!$user_id) {
+            throw new Exception('Session expired. Please login again.');
         }
-        
+
+        // Verify OTP and user
+        $stmt = $pdo->prepare("
+            SELECT o.*, u.*, b.id as branch_id, b.name as branch_name 
+            FROM otp_codes o
+            JOIN users u ON o.user_id = u.id
+            LEFT JOIN branches b ON u.branch_id = b.id
+            WHERE o.user_id = ? AND o.code = ? AND o.is_used = 0 
+            AND o.expires_at > NOW()
+            ORDER BY o.created_at DESC LIMIT 1
+        ");
+        $stmt->execute([$user_id, $otp]);
+        $result = $stmt->fetch();
+
+        if (!$result) {
+            throw new Exception('Invalid or expired OTP.');
+        }
+
         // Mark OTP as used
         $stmt = $pdo->prepare("UPDATE otp_codes SET is_used = 1 WHERE id = ?");
-        $stmt->execute([$otp_record['id']]);
-        
-        // Get user data
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-        $stmt->execute([$user_id]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$user) {
-            throw new Exception('User not found.');
-        }
-        
-        // Set session variables for user
-        $_SESSION['authenticated'] = true; // Add this line
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['fname'] = $user['fname'];
-        $_SESSION['lname'] = $user['lname'];
-        $_SESSION['email'] = $user['email']; // Add email
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['branch_id'] = $user['branch_id'] ?? null;
-        $_SESSION['organization_name'] = $user['organization_name'] ?? null; // Add organization name
-        
-        // Clear temp data
-        unset($_SESSION['temp_user_id']);
-        unset($_SESSION['temp_email']);
-        
-        // Log session after user data is set
-        error_log("SESSION after user login: " . print_r($_SESSION, true));
-        error_log("Redirecting user with role: " . $user['role']);
-        
-        // Add session checking
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            error_log("ERROR: Session became inactive during OTP verification!");
-            session_start(); // Try to restart the session
-        }
-        
-        // Ensure session is written before redirect
-        session_write_close();
-        
+        $stmt->execute([$result['id']]);
+
+        // Set session variables
+        $_SESSION['authenticated'] = true;
+        $_SESSION['user_id'] = $result['user_id'];
+        $_SESSION['email'] = $result['email'];
+        $_SESSION['fname'] = $result['fname'];
+        $_SESSION['lname'] = $result['lname'];
+        $_SESSION['role'] = $result['role'];
+        $_SESSION['branch_id'] = $result['branch_id'];
+        $_SESSION['branch_name'] = $result['branch_name'];
+
+        // Debug log
+        error_log("Session variables set successfully: " . print_r($_SESSION, true));
+        error_log("User role: " . $result['role']);
+        error_log("Branch ID: " . $result['branch_id']);
+
         // Redirect based on role
-        switch($user['role']) {
+        switch($result['role']) {
             case 'admin':
                 header('Location: ../pages/admin/admindashboard.php');
                 break;
-            case 'branch1_staff':
-            case 'branch2_staff':
+            case 'staff':
+            case 'company':
                 header('Location: ../pages/staff/staff_dashboard.php');
                 break;
             case 'ngo':
@@ -105,20 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 break;
             default:
                 header('Location: ../index.php');
-                break;
         }
         exit();
-        
+
     } catch (Exception $e) {
-        error_log("OTP verification error: " . $e->getMessage());
         $_SESSION['error'] = $e->getMessage();
         header('Location: verify_otp.php');
         exit();
     }
 } else {
-    // If not POST request
-    $_SESSION['error'] = "Invalid request method.";
-    header('Location: verify_otp.php');
+    header('Location: ../index.php');
     exit();
 }
 ?>

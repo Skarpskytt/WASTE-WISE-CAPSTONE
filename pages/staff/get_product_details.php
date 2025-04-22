@@ -2,7 +2,7 @@
 require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
-checkAuth(['staff']);
+checkAuth(['staff', 'company']);
 
 $pdo = getPDO();
 $branchId = $_SESSION['branch_id'];

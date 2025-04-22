@@ -1,12 +1,31 @@
 <?php
-require_once '../../config/auth_middleware.php';
+session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Debug log
+error_log("Staff Dashboard - Session data: " . print_r($_SESSION, true));
+
 require_once '../../config/db_connect.php';
+require_once '../../config/app_config.php';
+
+// Check authentication and role
+if (!isset($_SESSION['authenticated']) || !isset($_SESSION['role']) || 
+    !in_array($_SESSION['role'], ['staff', 'company'])) {
+    $_SESSION['error'] = 'Please log in to access this page.';
+    header('Location: ' . BASE_URL . '/index.php');
+    exit();
+}
+
+// Check branch assignment
+if (!isset($_SESSION['branch_id'])) {
+    $_SESSION['error'] = 'No branch assigned to your account.';
+    header('Location: ' . BASE_URL . '/index.php');
+    exit();
+}
 
 // Set timezone to Philippines
 date_default_timezone_set('Asia/Manila');
-
-// Fix: Update to check for both branch staff roles
-checkAuth(['branch1_staff', 'branch2_staff']);
 
 // Get branch ID from session
 $pdo = getPDO();  // Make sure we initialize the database connection

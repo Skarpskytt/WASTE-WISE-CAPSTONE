@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $pdo->beginTransaction();
 
         // Validate role
-        $allowed_roles = ['branch1_staff', 'branch2_staff', 'ngo'];
+        $allowed_roles = ['staff', 'company', 'ngo'];
         if (!in_array($_POST['role'], $allowed_roles)) {
             throw new Exception('Invalid role selected.');
         }
@@ -76,25 +76,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             throw new Exception('Email already registered.');
         }
 
-        // IMPORTANT FIX: Keep the original role value
-        if ($role === 'ngo') {
-            $branch_id = null;
-        } else if (preg_match('/^branch(\d+)_staff$/', $role, $matches)) {
+        // Map branch staff roles to regular 'staff' role in the database
+        if (preg_match('/^branch(\d+)_staff$/', $role, $matches)) {
+            // For branch staff roles, extract branch ID from the role string
             $branch_id = (int)$matches[1];
-            // DO NOT change the role name - keep as branch1_staff or branch2_staff
+            // Store original role in a session variable if needed for display purposes
+            $_SESSION['original_role'] = $role;
+            // Use 'staff' as the actual role to match the database enum
+            $role = 'staff';
+        } else if ($role === 'ngo') {
+            $branch_id = null;
+        } else if ($role === 'company' || $role === 'staff') {
+            // Get the selected branch ID for company and staff accounts
+            $branch_id = isset($_POST['branch_id']) && !empty($_POST['branch_id']) ? 
+                         (int)$_POST['branch_id'] : null;
+                         
+            // Validation for company and staff accounts
+            if (empty($branch_id)) {
+                throw new Exception('Please select a branch for your ' . $role . ' account.');
+            }
         } else {
             throw new Exception('Invalid role selected.');
         }
 
-        // Insert user with is_active = 0 for new accounts
-        $stmt = $pdo->prepare('INSERT INTO users (fname, lname, email, password, role, branch_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 0)');
+        // Insert user with is_active = 0 for new accounts that need approval
+        $is_active = 0; // Default to inactive for accounts that need approval
+
+        // Insert user record - Make sure role is one of the allowed enum values
+        $allowed_db_roles = ['admin', 'staff', 'company', 'ngo'];
+        if (!in_array($role, $allowed_db_roles)) {
+            throw new Exception('Invalid role value for database.');
+        }
+
+        // Insert user record
+        $stmt = $pdo->prepare('INSERT INTO users (fname, lname, email, password, role, branch_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([
             $fname,
             $lname,
             $email,
             password_hash($password, PASSWORD_DEFAULT),
-            $role, // Use the original role value
-            $branch_id
+            $role,
+            $branch_id,
+            $is_active
         ]);
 
         // Get the user ID once
@@ -116,6 +139,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['pending_approval'] = "Your NGO account is pending approval from an administrator.";
         } 
         else if (preg_match('/^branch(\d+)_staff$/', $role)) {
+            // Create staff profile with pending status
+            $stmt = $pdo->prepare("INSERT INTO staff_profiles (user_id, status) VALUES (?, 'pending')");
+            $stmt->execute([$user_id]);
+            
+            $_SESSION['success'] = "Your staff account has been created successfully.";
+            $_SESSION['pending_approval'] = "Your staff account is pending approval from an administrator.";
+        }
+        // Create staff profile with pending status for staff role
+        else if ($role === 'staff') {
             // Create staff profile with pending status
             $stmt = $pdo->prepare("INSERT INTO staff_profiles (user_id, status) VALUES (?, 'pending')");
             $stmt->execute([$user_id]);

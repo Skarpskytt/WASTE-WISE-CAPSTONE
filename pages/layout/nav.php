@@ -142,20 +142,20 @@ if (isset($_GET['mark_all_read'])) {
                     <?php endif; ?>
                 </a>
             </li>
+            <li>
+    <a href="../admin/manage_branches.php" class="flex items-center p-2 text-gray-900 rounded-lg hover:bg-gray-100 group">
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+        </svg>
+        <span class="ms-3">Manage Branches</span>
+    </a>
+</li>
 
          
 
             <!-- Donation Management section -->
             <li class="menu-title pt-4"><span class="font-bold">Donation Management</span></li>
-            <li>
-                <a href="../admin/ngo_priorities.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-                    </svg>
-                    <span class="flex-1 ms-3 whitespace-nowrap">Partnerships</span>
-                </a>
-            </li>
-
+          
             <li>
                 <a href="../admin/foods.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
@@ -183,24 +183,7 @@ if (isset($_GET['mark_all_read'])) {
                     <span class="flex-1 ms-3 whitespace-nowrap">Export Reports</span>
                 </a>
             </li>
-            <li>
-                <a href="../admin/pending_companies.php" class="flex items-center p-2 hover:bg-primarycol hover:text-white rounded-lg transition-all duration-300">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span>Pending Companies</span>
-                    
-                    <?php 
-                    // Show badge if there are pending companies
-                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM branches WHERE branch_type = 'company_main' AND approval_status = 'pending'");
-                    $stmt->execute();
-                    $pendingCount = $stmt->fetchColumn();
-                    if ($pendingCount > 0): 
-                    ?>
-                    <span class="badge badge-accent ml-auto"><?= $pendingCount ?></span>
-                    <?php endif; ?>
-                </a>
-            </li>
+
             <li class="menu-title pt-4"><span class="font-bold">User Management</span></li>
             <li>
                 <a href="../admin/user.php" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">

@@ -1,5 +1,6 @@
 <?php
 require_once '../../config/db_connect.php';
+require_once '../../config/app_config.php';
 require_once '../../config/auth_middleware.php';
 require_once '../../includes/mail/EmailService.php';
 
@@ -32,9 +33,11 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
             'name' => $companyData['contact_person'],
             'company_name' => $companyData['company_name'],
             'email' => $companyData['email'],
-            'token' => $companyData['token']
+            'token' => $companyData['token'],
+            'registration_url' => BASE_URL . '/auth/register_company.php?token=' . $companyData['token'] . '&email=' . $companyData['email']
         ];
         
+        // The email should contain a special link with the token that will be used to auto-approve the branch
         if (!$emailService->sendCompanyApprovalEmail($emailData)) {
             $_SESSION['error'] = "Approval was successful but email could not be sent.";
         } else {
@@ -153,6 +156,8 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <span class="badge badge-warning">Pending</span>
                                         <?php elseif ($request['status'] === 'approved'): ?>
                                             <span class="badge badge-success">Approved</span>
+                                        <?php elseif ($request['status'] === 'registered'): ?>
+                                            <span class="badge badge-info">Registered</span>
                                         <?php else: ?>
                                             <span class="badge badge-error">Rejected</span>
                                         <?php endif; ?>
@@ -299,6 +304,8 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 statusHtml = '<span class="badge badge-warning">Pending</span>';
             } else if (status === 'approved') {
                 statusHtml = '<span class="badge badge-success">Approved</span>';
+            } else if (status === 'registered') {
+                statusHtml = '<span class="badge badge-info">Registered</span>';
             } else {
                 statusHtml = '<span class="badge badge-error">Rejected</span>';
             }

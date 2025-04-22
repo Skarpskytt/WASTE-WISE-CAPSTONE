@@ -3,8 +3,7 @@ require_once '../../config/auth_middleware.php';
 require_once '../../config/db_connect.php';
 
 
-// Check for staff access
-checkAuth(['staff']);
+checkAuth(['staff', 'company']);
 
 $pdo = getPDO();
 

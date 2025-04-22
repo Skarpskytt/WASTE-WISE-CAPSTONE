@@ -1,6 +1,16 @@
 <?php
-// Start with standard PHP session - MUST BE FIRST LINE
 session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+error_log("Verify OTP Page - Session Data: " . print_r($_SESSION, true));
+
+// Check if temp_user_id exists
+if (!isset($_SESSION['temp_user_id'])) {
+    $_SESSION['error'] = "Please log in first";
+    header('Location: ../index.php');
+    exit();
+}
 
 // Debug settings
 error_reporting(E_ALL);
@@ -40,7 +50,7 @@ $pdo = getPDO();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify OTP</title>
-    <link rel="icon" type="image/x-icon" href="../assets/images/Company Logo.jpg">
+    <link rel="icon" type="image/x-icon" href="../assets/images/Logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Add Toastify CSS and JS -->
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">

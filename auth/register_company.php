@@ -50,37 +50,30 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Validate form data
         $formData['company_name'] = trim($_POST['company_name'] ?? '');
-        $formData['contact_person'] = trim($_POST['contact_person'] ?? '');
+        $formData['fname'] = trim($_POST['fname'] ?? '');
+        $formData['lname'] = trim($_POST['lname'] ?? '');
         $formData['email'] = trim($_POST['email'] ?? '');
         $formData['phone'] = trim($_POST['phone'] ?? '');
         $formData['address'] = trim($_POST['address'] ?? '');
         $formData['city'] = trim($_POST['city'] ?? '');
         $formData['postal_code'] = trim($_POST['postal_code'] ?? '');
         $formData['business_permit_number'] = trim($_POST['business_permit_number'] ?? '');
-        $formData['username'] = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
         $passwordConfirm = $_POST['password_confirm'] ?? '';
         
         // Basic validations
         if (empty($formData['company_name'])) $errors[] = "Company name is required";
-        if (empty($formData['contact_person'])) $errors[] = "Contact person name is required";
+        if (empty($formData['fname'])) $errors[] = "First name is required";
+        if (empty($formData['lname'])) $errors[] = "Last name is required";
         if (empty($formData['email'])) $errors[] = "Email is required";
         if (empty($formData['phone'])) $errors[] = "Phone number is required";
         if (empty($formData['address'])) $errors[] = "Address is required";
         if (empty($formData['city'])) $errors[] = "City is required";
         if (empty($formData['postal_code'])) $errors[] = "Postal code is required";
         if (empty($formData['business_permit_number'])) $errors[] = "Business permit number is required";
-        if (empty($formData['username'])) $errors[] = "Username is required";
         if (empty($password)) $errors[] = "Password is required";
         if ($password !== $passwordConfirm) $errors[] = "Passwords do not match";
         if (strlen($password) < 8) $errors[] = "Password must be at least 8 characters long";
-        
-        // Check if username is already taken
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
-        $stmt->execute([$formData['username']]);
-        if ($stmt->rowCount() > 0) {
-            $errors[] = "Username is already taken";
-        }
         
         // Handle business permit file upload
         $permitFileName = null;
@@ -95,7 +88,8 @@ try {
                 $errors[] = "Business permit file size must be less than 5MB";
             } else {
                 $permitFileName = uniqid('permit_') . '.' . $fileExtension;
-                $uploadDir = '../uploads/permits/';
+                // Changed from '../uploads/permits/' to '../assets/uploads/verification/'
+                $uploadDir = '../assets/uploads/verification/';
                 
                 // Create directory if it doesn't exist
                 if (!is_dir($uploadDir)) {
@@ -118,16 +112,19 @@ try {
             $pdo->beginTransaction();
             
             try {
-                // Create user account
+                // Create user account (using email for login instead of username)
                 $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("
-                    INSERT INTO users (username, email, password, role, created_at) 
-                    VALUES (?, ?, ?, 'company', NOW())
+                    INSERT INTO users (fname, lname, email, password, role, created_at) 
+                    VALUES (?, ?, ?, ?, 'company', NOW())
                 ");
-                $stmt->execute([$formData['username'], $formData['email'], $hashedPassword]);
+                $stmt->execute([$formData['fname'], $formData['lname'], $formData['email'], $hashedPassword]);
                 $userId = $pdo->lastInsertId();
                 
-                // Create branch record (instead of company profile)
+                // Set the contact person name using first and last name
+                $contactPerson = $formData['fname'] . ' ' . $formData['lname'];
+                
+                // Create branch record
                 $branchAddress = $formData['address'] . ', ' . $formData['city'] . ', ' . $formData['postal_code'];
                 $stmt = $pdo->prepare("
                     INSERT INTO branches (
@@ -141,18 +138,22 @@ try {
                     $userId,
                     $formData['business_permit_number'],
                     $permitFileName,
-                    $formData['contact_person'],
+                    $contactPerson,
                     $formData['phone']
                 ]);
                 
-                // Add notification for admin
+                // Get the branch ID and update the user record with it
                 $branchId = $pdo->lastInsertId();
+                $updateUserStmt = $pdo->prepare("UPDATE users SET branch_id = ? WHERE id = ?");
+                $updateUserStmt->execute([$branchId, $userId]);
+
+                // Continue with notifications...
                 $stmt = $pdo->prepare("
                     INSERT INTO notifications 
                     (user_id, target_role, message, notification_type, link, created_at) 
-                    VALUES (NULL, 'admin', ?, 'new_company_registration', '/admin/pending_companies.php', NOW())
+                    VALUES (NULL, 'admin', ?, 'company_registration_completed', '/admin/branch_details.php?id=" . $branchId . "', NOW())
                 ");
-                $stmt->execute(["New company registration: " . $formData['company_name']]);
+                $stmt->execute(["Company registration completed: " . $formData['company_name']]);
                 
                 // Update company_request status to registered
                 $stmt = $pdo->prepare("
@@ -162,11 +163,20 @@ try {
                 ");
                 $stmt->execute([$request['id']]);
                 
+                // Add notification for admin about registration needing approval
+                $branchId = $pdo->lastInsertId();
+                $stmt = $pdo->prepare("
+                    INSERT INTO notifications 
+                    (user_id, target_role, message, notification_type, link, created_at) 
+                    VALUES (NULL, 'admin', ?, 'company_registration_pending', '/admin/pending_companies.php', NOW())
+                ");
+                $stmt->execute(["New company registration pending approval: " . $formData['company_name']]);
+
                 // Commit transaction
                 $pdo->commit();
                 
-                // Redirect to login page with success message
-                header("Location: ../index.php?success=registration_complete");
+                // Redirect to login page with pending message
+                header("Location: ../index.php?pending_approval=Your registration is complete. Please wait for admin approval before logging in.");
                 exit();
                 
             } catch (Exception $e) {
@@ -259,11 +269,20 @@ try {
                             <input type="text" name="company_name" value="<?= htmlspecialchars($request['company_name'] ?? '') ?>" class="input input-bordered" required>
                         </div>
                         
-                        <div class="form-control">
-                            <label class="label">
-                                <span class="label-text">Contact Person</span>
-                            </label>
-                            <input type="text" name="contact_person" value="<?= htmlspecialchars($request['contact_person'] ?? '') ?>" class="input input-bordered" required>
+                        <div class="form-control md:col-span-2 md:grid md:grid-cols-2 md:gap-6">
+                            <div>
+                                <label class="label">
+                                    <span class="label-text">First Name</span>
+                                </label>
+                                <input type="text" name="fname" value="<?= htmlspecialchars($formData['fname'] ?? '') ?>" class="input input-bordered w-full" required>
+                            </div>
+                            
+                            <div>
+                                <label class="label">
+                                    <span class="label-text">Last Name</span>
+                                </label>
+                                <input type="text" name="lname" value="<?= htmlspecialchars($formData['lname'] ?? '') ?>" class="input input-bordered w-full" required>
+                            </div>
                         </div>
                         
                         <div class="form-control">
@@ -272,7 +291,7 @@ try {
                             </label>
                             <input type="email" name="email" value="<?= htmlspecialchars($email) ?>" class="input input-bordered" required readonly>
                             <label class="label">
-                                <span class="label-text-alt text-gray-500">Email cannot be changed</span>
+                                <span class="label-text-alt text-gray-500">This email will be used for login</span>
                             </label>
                         </div>
                         
@@ -329,32 +348,23 @@ try {
                     
                     <div class="divider"></div>
                     
-                    <h3 class="text-xl font-bold text-primarycol">Account Details</h3>
+                    <h3 class="text-xl font-bold text-primarycol">Account Password</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="form-control">
                             <label class="label">
-                                <span class="label-text">Username</span>
+                                <span class="label-text">Password</span>
                             </label>
-                            <input type="text" name="username" value="<?= htmlspecialchars($formData['username'] ?? '') ?>" class="input input-bordered" required>
+                            <input type="password" name="password" class="input input-bordered" required minlength="8">
+                            <label class="label">
+                                <span class="label-text-alt text-gray-500">At least 8 characters</span>
+                            </label>
                         </div>
                         
-                        <div class="form-control md:col-span-2 md:grid md:grid-cols-2 md:gap-6">
-                            <div>
-                                <label class="label">
-                                    <span class="label-text">Password</span>
-                                </label>
-                                <input type="password" name="password" class="input input-bordered w-full" required minlength="8">
-                                <label class="label">
-                                    <span class="label-text-alt text-gray-500">At least 8 characters</span>
-                                </label>
-                            </div>
-                            
-                            <div>
-                                <label class="label">
-                                    <span class="label-text">Confirm Password</span>
-                                </label>
-                                <input type="password" name="password_confirm" class="input input-bordered w-full" required minlength="8">
-                            </div>
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text">Confirm Password</span>
+                            </label>
+                            <input type="password" name="password_confirm" class="input input-bordered" required minlength="8">
                         </div>
                     </div>
                     
