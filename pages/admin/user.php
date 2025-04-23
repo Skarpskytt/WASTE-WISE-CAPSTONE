@@ -184,8 +184,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_staff'])) {
         // Create notification for staff user
         $staffNotification = "Your staff account has been approved. You can now log in.";
         $notifStmt = $pdo->prepare("
-            INSERT INTO notifications (user_id, message, is_read, created_at) 
-            VALUES (?, ?, 0, NOW())
+            INSERT INTO notifications (user_id, message, is_read, created_at, target_role) 
+            VALUES (?, ?, 0, NOW(), NULL)
         ");
         $notifStmt->execute([$userId, $staffNotification]);
         

@@ -7,6 +7,15 @@ checkAuth(['admin']);
 
 $pdo = getPDO();
 
+// Add this after getting PDO connection - mark expired products automatically
+$updateExpiredSql = "
+    UPDATE donation_products
+    SET status = 'expired'
+    WHERE expiry_date < CURDATE() 
+    AND status = 'available'
+";
+$pdo->query($updateExpiredSql);
+
 // Get categories for filter
 $categoriesQuery = $pdo->query("SELECT DISTINCT category FROM product_info ORDER BY category");
 $categories = $categoriesQuery->fetchAll(PDO::FETCH_COLUMN);
@@ -47,9 +56,10 @@ $sql = "
     JOIN product_info pi ON dp.product_id = pi.id
     JOIN branches b ON dp.branch_id = b.id
     WHERE dp.quantity_available > 0
+    AND (dp.status != 'expired' OR dp.status IS NULL)
 ";
 
-// Filter by donation status (available, fully_allocated, expired)
+// Filter by donation status (available, fully_allocated)
 if ($status != 'all') {
     $sql .= " AND dp.status = ?";
     $params[] = $status;

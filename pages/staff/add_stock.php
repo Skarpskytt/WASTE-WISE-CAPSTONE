@@ -486,14 +486,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                         
                         const img = new Image();
                         img.onload = function() {
-                            $('#modal-product-image').attr('src', imgPath);
+                            // Make sure we're not loading Company Logo.jpg
+                            if (imgPath.includes('Company Logo.jpg')) {
+                                $('#modal-product-image').attr('src', '../../assets/images/product-default.png');
+                            } else {
+                                $('#modal-product-image').attr('src', imgPath);
+                            }
                         };
                         img.onerror = function() {
-                            $('#modal-product-image').attr('src', '../../assets/images/Company Logo.jpg');
+                            $('#modal-product-image').attr('src', '../../assets/images/product-default.png');
                         };
                         img.src = imgPath;
                     } else {
-                        $('#modal-product-image').attr('src', '../../assets/images/Company Logo.jpg');
+                        $('#modal-product-image').attr('src', '../../assets/images/product-default.png');
                     }
                     
                     // Remove loading state
@@ -559,14 +564,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                             $('#edit-current-image-preview').attr('src', imgPath + cacheBuster);
                         };
                         img.onerror = function() {
-                            $('#edit-current-image-preview').attr('src', '../../assets/images/Company Logo.jpg');
+                            $('#edit-current-image-preview').attr('src', '../../assets/images/product-default.png?v=' + new Date().getTime());
                         };
                         img.src = imgPath + cacheBuster;
                         
                         // Store current image path in hidden field
                         $('#current-image-path').val(data.image);
                     } else {
-                        $('#edit-current-image-preview').attr('src', '../../assets/images/Company Logo.jpg');
+                        $('#edit-current-image-preview').attr('src', '../../assets/images/product-default.png?v=' + new Date().getTime());
                         $('#current-image-path').val('');
                     }
                     
@@ -787,6 +792,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                 $(this).attr('src', originalSrc + '?v=' + new Date().getTime());
             }
         });
+
+        // Add to the end of the $(document).ready function
+        // Force reload all default images to prevent showing cached Company Logo
+        $('img[src$="product-default.png"]').each(function() {
+            this.src = this.src + '?v=' + new Date().getTime();
+            $(this).on('error', function() {
+                // If image still fails to load, force set to product-default
+                this.src = '../../assets/images/product-default.png?' + new Date().getTime();
+            });
+        });
+
+        // Only replace Company Logo in product contexts, NOT in the sidebar
+        $('.product-card img[src*="Company Logo.jpg"], #modal-product-image[src*="Company Logo.jpg"], #edit-current-image-preview[src*="Company Logo.jpg"]').each(function() {
+            this.src = '../../assets/images/product-default.png?' + new Date().getTime();
+        });
+
+        // Force reload product-specific default images
+        $('.product-card img[src$="product-default.png"], #modal-product-image, #edit-current-image-preview').each(function() {
+            if (!this.src.includes('?v=')) {
+                this.src = this.src + '?v=' + new Date().getTime();
+            }
+            $(this).on('error', function() {
+                this.src = '../../assets/images/product-default.png?' + new Date().getTime();
+            });
+        });
     });
     </script>
     <style>
@@ -795,7 +825,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
         transition: opacity 0.3s;
     }
     
-    img[src='../../assets/images/Company Logo.jpg'] {
+    img[src='../../assets/images/product-default.png'] {
         opacity: 0.8;
     }
     
@@ -809,7 +839,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
         to { opacity: 1; }
     }
     
-    img:not([src='../../assets/images/Company Logo.jpg']) {
+    img:not([src='../../assets/images/product-default.png']) {
         animation: fadeIn 0.5s;
     }
     
@@ -820,6 +850,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
     
     .add-stock-btn:hover {
         transform: translateY(-1px);
+    }
+
+    /* Replace this overly broad CSS rule */
+    /* img[src*="Company Logo.jpg"] {
+        display: none !important;
+    }
+
+    img[src*="product-default.png"] {
+        display: block !important; 
+    } */
+    
+    /* With this more specific selector that only targets product images */
+    .product-card img[src*="Company Logo.jpg"],
+    #modal-product-image[src*="Company Logo.jpg"],
+    #edit-current-image-preview[src*="Company Logo.jpg"] {
+        display: none !important;
+    }
+
+    .product-card img[src*="product-default.png"],
+    #modal-product-image[src*="product-default.png"],
+    #edit-current-image-preview[src*="product-default.png"] {
+        display: block !important; 
+    }
+
+    /* Add this rule to preserve the sidebar navigation logo */
+    .sidebar-logo img, 
+    #sidebar img, 
+    nav img {
+        /* Override any previous hiding rules */
+        display: block !important;
     }
     </style>
 </head>
@@ -872,7 +932,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                             <input type="text" id="search-products" placeholder="Search products..." 
                                 class="w-full px-4 py-2 rounded-lg border border-gray-300 pl-10">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0114 0 7 7 0114 0z" />
                             </svg>
                         </div>
                         
@@ -899,7 +959,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                     <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow product-card" data-name="<?= htmlspecialchars($product['name']) ?>" data-category="<?= htmlspecialchars($product['category']) ?>" data-stock-status="<?= $product['total_stock'] <= 0 ? 'out' : ($product['total_stock'] < 10 ? 'low' : 'in') ?>">
                         <div class="h-48 overflow-hidden relative">
                             <?php 
-                            // Fixed image path handling
+                            // For product cards
                             $imagePath = '';
                             if (!empty($product['image'])) {
                                 // Check if image is a full path or just a filename
@@ -911,8 +971,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                                     $imagePath = "../../assets/uploads/products/" . $product['image'];
                                 }
                             } else {
-                                // Use default image
-                                $imagePath = "../../assets/images/Company Logo.jpg";
+                                // Only use product-default for product cards, not for navigation
+                                $imagePath = "../../assets/images/product-default.png";
                             }
 
                             // Add cache busting parameter with last update timestamp
@@ -921,7 +981,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                             <img src="<?= htmlspecialchars($imagePath . $cacheBuster) ?>" 
                                  alt="<?= htmlspecialchars($product['name']) ?>"
                                  class="w-full h-full object-cover"
-                                 onerror="this.onerror=null; this.src='../../assets/images/Company Logo.jpg';">
+                                 onerror="this.onerror=null; this.src='../../assets/images/product-default.png?v=' + new Date().getTime();">
                             
                             <!-- Stock badge -->
                             <div class="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold
@@ -964,7 +1024,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                                     data-product-id="<?= $product['id'] ?>"
                                     data-current-stock="<?= $product['total_stock'] ?>">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                                        <path fill-rule="evenodd" d="M10 3a1 1 011 1v5h5a1 1 110 2h-5v5a1 1 11-2 0v-5H4a1 1 110-2h5V4a1 1 011-1z" clip-rule="evenodd" />
                                     </svg>
                                     Add Stock
                                 </button>
@@ -975,7 +1035,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                                         class="flex-1 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors edit-product-btn"
                                         data-product-id="<?= $product['id'] ?>">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                            <path d="M13.586 3.586a2 2 0112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                         </svg>
                                         Edit
                                     </button>
@@ -984,7 +1044,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                                         data-product-id="<?= $product['id'] ?>"
                                         data-product-name="<?= htmlspecialchars($product['name']) ?>">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                                            <path fill-rule="evenodd" d="M3 4a1 1 011-1h12a1 1 110 2H4a1 1 01-1-1zm0 4a1 1 011-1h12a1 1 110 2H4a1 1 01-1-1zm0 4a1 1 011-1h12a1 1 110 2H4a1 1 01-1-1z" clip-rule="evenodd" />
                                         </svg>
                                         Archive
                                     </button>
@@ -1003,7 +1063,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                             <?php if ($currentPage > 1): ?>
                                 <a href="?product_page=<?= $currentPage - 1 ?>" class="px-3 py-2 inline-flex items-center text-sm leading-5 font-medium rounded-l-md text-gray-700 bg-white hover:text-gray-500 focus:outline-none focus:shadow-outline-blue focus:border-blue-300 active:bg-gray-100 active:text-gray-700 transition ease-in-out duration-150">
                                     <svg class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 01-1.414 1.414l-4-4a1 1 010-1.414l4-4a1 1 011.414 0z" clip-rule="evenodd"/>
+                                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 010 1.414L9.414 10l3.293 3.293a1 1 01-1.414 1.414l-4-4a1 1 010-1.414l4-4a1 1 011.414 0z" clip-rule="evenodd"/>
                                     </svg>
                                     Previous
                                 </a>
@@ -1019,7 +1079,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                                 <a href="?product_page=<?= $currentPage + 1 ?>" class="px-3 py-2 inline-flex items-center text-sm leading-5 font-medium rounded-r-md text-gray-700 bg-white hover:text-gray-500 focus:outline-none focus:shadow-outline-blue focus:border-blue-300 active:bg-gray-100 active:text-gray-700 transition ease-in-out duration-150">
                                     Next
                                     <svg class="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 011.414-1.414l4 4a1 1 010 1.414l-4 4a1 1 01-1.414 0z" clip-rule="evenodd"/>
+                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 010-1.414L10.586 10 7.293 6.707a1 1 011.414-1.414l4 4a1 1 010 1.414l-4 4a1 1 01-1.414 0z" clip-rule="evenodd"/>
                                     </svg>
                                 </a>
                             <?php endif; ?>
@@ -1063,9 +1123,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                 <div id="modal-product-details" class="bg-gray-50 p-4 rounded-lg mb-6 flex gap-4 items-center">
                     <div class="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
                         <img id="modal-product-image" 
-                             src="../../assets/images/Company Logo.jpg" 
+                             src="../../assets/images/product-default.png" 
                              alt="Product" 
-                             class="w-full h-full object-cover">
+                             class="w-full h-full object-cover"
+                             onerror="this.onerror=null; this.src='../../assets/images/product-default.png?v=' + new Date().getTime();">
                     </div>
                     <div class="flex-grow">
                         <div class="flex justify-between items-start">
@@ -1077,7 +1138,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                             <div class="bg-blue-50 px-3 py-2 rounded-lg flex items-center">
                                 <div class="mr-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-700" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+                                        <path d="M5 3a2 2 00-2 2v2a2 2 002 2h2a2 2 002-2V5a2 2 00-2-2H5zM5 11a2 2 00-2 2v2a2 2 002 2h2a2 2 002-2v-2a2 2 00-2-2H5zM11 5a2 2 012-2h2a2 2 012 2v2a2 2 01-2 2h-2a2 2 01-2-2V5zM14 11a1 1 011 1v1h1a1 1 110 2h-1v1a1 1 11-2 0v-1h-1a1 1 110-2h1v-1a1 1 011-1z" />
                                     </svg>
                                 </div>
                                 <div>
@@ -1133,7 +1194,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                         <div id="modal-box-info" class="mb-4 hidden bg-blue-50 p-3 rounded-lg">
                             <div class="flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0110 0v2a2 2 012 2v5a2 2 01-2 2H5a2 2 01-2-2v-5a2 2 012-2zm8-2v2H7V7a3 3 016 0z" clip-rule="evenodd" />
                                 </svg>
                                 <span>This product is tracked in boxes. Each box contains <span id="modal-box-size" class="font-bold">12</span> pieces.</span>
                             </div>
@@ -1153,7 +1214,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                                 </div>
                                 <button id="modal-regenerate-batch" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-r-lg">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 01-15.357-2m15.357 2H15" />
                                     </svg>
                                 </button>
                             </div>
@@ -1299,7 +1360,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
                             <div class="flex items-start">
                                 <!-- Current image preview -->
                                 <div class="w-24 h-24 bg-gray-100 rounded-md overflow-hidden mr-4 flex-shrink-0 border border-gray-200">
-                                    <img id="edit-current-image-preview" src="../../assets/images/Company Logo.jpg" alt="Current product image" class="w-full h-full object-cover">
+                                    <img id="edit-current-image-preview" src="../../assets/images/product-default.png" alt="Current product image" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='../../assets/images/product-default.png?v=' + new Date().getTime();">
                                 </div>
                                 
                                 <div class="flex-grow">
@@ -1340,7 +1401,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_stock'])) {
             <div class="p-6">
                 <div class="text-center mb-6">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        <path fill-rule="evenodd" d="M18 10a8 8 0116 0 8 8 0116 0zm-7 4a1 1 011-2 0 1 1 012 0zm-1-9a1 1 00-1 1v4a1 1 0102 0V6a1 1 00-1-1z" clip-rule="evenodd" />
                     </svg>
                     
                     <h3 class="text-lg font-bold mt-4">Are you sure you want to archive this product?</h3>

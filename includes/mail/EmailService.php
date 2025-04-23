@@ -1085,4 +1085,149 @@ class EmailService {
         
         return $this->sendEmail($data['email'], $subject, $htmlBody);
     }
+
+    /**
+     * Send confirmation email to staff when an NGO confirms a pickup
+     */
+    public function sendStaffPickupConfirmationEmail($data) {
+        $subject = "NGO Pickup Confirmation: {$data['product_name']}";
+        
+        $htmlBody = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .logo { color: #47663B; font-size: 24px; font-weight: bold; }
+                .content { margin-top: 20px; }
+                .details { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>NGO Pickup Confirmation</p>
+                </div>
+                
+                <div class='content'>
+                    <p>Dear {$data['staff_name']},</p>
+                    
+                    <p>This is to inform you that an NGO has confirmed pickup of the following donation:</p>
+                    
+                    <div class='details'>
+                        <p><strong>NGO:</strong> {$data['ngo_name']}</p>
+                        <p><strong>Product:</strong> {$data['product_name']}</p>
+                        <p><strong>Quantity:</strong> {$data['quantity']} units</p>
+                        <p><strong>Branch:</strong> {$data['branch_name']}</p>
+                        <p><strong>Pickup Date:</strong> " . date('F j, Y g:i A', strtotime($data['pickup_date'])) . " PHT</p>
+                        
+                        " . (!empty($data['remarks']) ? "<p><strong>NGO Remarks:</strong><br>" . nl2br(htmlspecialchars($data['remarks'])) . "</p>" : "") . "
+                    </div>
+                    
+                    <p>The donation has been successfully completed and recorded in the system.</p>
+                    
+                    <p>Thank you for your dedication to reducing food waste!</p>
+                    
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
+                        <p>This is an automated message, please do not reply directly to this email.</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        return $this->sendEmail($data['staff_email'], $subject, $htmlBody);
+    }
+
+    /**
+     * Send confirmation email to staff when an NGO confirms a bulk pickup
+     */
+    public function sendStaffBulkPickupConfirmationEmail($data) {
+        $subject = "NGO Bulk Pickup Confirmation";
+        
+        // Build products list
+        $productsHtml = '';
+        foreach ($data['products'] as $product) {
+            $productsHtml .= "<tr>
+                <td style='border: 1px solid #ddd; padding: 8px;'>" . htmlspecialchars($product['product_name']) . "</td>
+                <td style='border: 1px solid #ddd; padding: 8px; text-align: center;'>" . $product['quantity'] . "</td>
+            </tr>";
+        }
+        
+        $htmlBody = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #47663B; }
+                .logo { color: #47663B; font-size: 24px; font-weight: bold; }
+                .content { margin-top: 20px; }
+                .details { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+                table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                th { background-color: #f2f2f2; text-align: left; padding: 8px; border: 1px solid #ddd; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='logo'>WasteWise</div>
+                    <p>NGO Bulk Pickup Confirmation</p>
+                </div>
+                
+                <div class='content'>
+                    <p>Dear {$data['staff_name']},</p>
+                    
+                    <p>This is to inform you that <strong>{$data['ngo_name']}</strong> has confirmed pickup of multiple donation items from your branch.</p>
+                    
+                    <div class='details'>
+                        <p><strong>Pickup Details:</strong></p>
+                        <p><strong>NGO:</strong> {$data['ngo_name']}</p>
+                        <p><strong>Branch:</strong> {$data['branch_name']}</p>
+                        <p><strong>Pickup Date:</strong> " . date('F j, Y g:i A', strtotime($data['pickup_date'])) . " PHT</p>
+                        
+                        <h3>Items Confirmed Received:</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th style='text-align: center;'>Quantity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {$productsHtml}
+                                <tr style='font-weight: bold; background-color: #f9f9f9;'>
+                                    <td style='border: 1px solid #ddd; padding: 8px;'>Total Items:</td>
+                                    <td style='border: 1px solid #ddd; padding: 8px; text-align: center;'>{$data['total_quantity']}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        " . (!empty($data['remarks']) ? "<p><strong>NGO Remarks:</strong><br>" . nl2br(htmlspecialchars($data['remarks'])) . "</p>" : "") . "
+                    </div>
+                    
+                    <p>All donations have been successfully completed and recorded in the system.</p>
+                    
+                    <p>Thank you for your dedication to reducing food waste!</p>
+                    
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " WasteWise. All rights reserved.</p>
+                        <p>This is an automated message, please do not reply directly to this email.</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        return $this->sendEmail($data['staff_email'], $subject, $htmlBody);
+    }
 }

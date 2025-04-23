@@ -395,6 +395,195 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
                 console.warn("Warning: Multiple elements with id='donationDetails' found. IDs should be unique!");
             }
         });
+        
+        // Add this after your existing JavaScript in the <script> tag
+        
+        // Search and sort functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const productContainer = document.getElementById('product-container');
+            const productCards = Array.from(productContainer.children);
+            const searchInput = document.getElementById('product-search');
+            const sortSelect = document.getElementById('sort-order');
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            const productCount = document.getElementById('product-count');
+            
+            // Store original order of products
+            const originalOrder = [...productCards];
+            
+            // Function to update product count display
+            function updateProductCount(count) {
+                productCount.textContent = `Showing ${count} of ${productCards.length} products`;
+            }
+            
+            // Search functionality
+            searchInput.addEventListener('input', function() {
+                filterAndSortProducts();
+            });
+            
+            // Sort functionality
+            sortSelect.addEventListener('change', function() {
+                filterAndSortProducts();
+            });
+            
+            // Filter button functionality
+            filterButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Update active state
+                    filterButtons.forEach(btn => btn.classList.remove('active', 'bg-primarycol', 'text-white'));
+                    filterButtons.forEach(btn => {
+                        if (btn.dataset.filter !== this.dataset.filter) {
+                            // Restore original background based on filter type
+                            if (btn.dataset.filter === 'expiring-soon') {
+                                btn.classList.add('bg-amber-100', 'text-amber-800');
+                            } else if (btn.dataset.filter === 'critical') {
+                                btn.classList.add('bg-red-100', 'text-red-800');
+                            } else if (btn.dataset.filter === 'fefo') {
+                                btn.classList.add('bg-blue-100', 'text-blue-800');
+                            } else {
+                                btn.classList.add('bg-gray-100', 'text-gray-800');
+                            }
+                        }
+                    });
+                    
+                    this.classList.add('active', 'bg-primarycol', 'text-white');
+                    filterAndSortProducts();
+                });
+            });
+            
+            // Main function to filter and sort products
+            function filterAndSortProducts() {
+                const searchTerm = searchInput.value.toLowerCase().trim();
+                const sortOption = sortSelect.value;
+                const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
+                
+                // First filter the products
+                const filteredProducts = productCards.filter(card => {
+                    // Get product details from the card
+                    const productName = card.querySelector('h2').textContent.toLowerCase();
+                    const productCategory = card.querySelector('.bg-green-100')?.textContent.trim().toLowerCase() || '';
+                    const batchNumber = card.querySelector('.font-mono')?.textContent.trim().toLowerCase() || '';
+                    
+                    // Get spans for special statuses
+                    const allBadges = card.querySelectorAll('span.px-2.py-1.rounded.text-xs.font-semibold');
+                    const badgeTexts = Array.from(allBadges).map(badge => badge.textContent.trim().toLowerCase());
+                    
+                    // Search term filtering
+                    const matchesSearch = searchTerm === '' || 
+                        productName.includes(searchTerm) || 
+                        productCategory.includes(searchTerm) ||
+                        batchNumber.includes(searchTerm);
+                    
+                    // Filter button filtering
+                    let matchesFilter = true;
+                    if (activeFilter === 'expiring-soon') {
+                        matchesFilter = badgeTexts.includes('expiring soon');
+                    } else if (activeFilter === 'critical') {
+                        matchesFilter = badgeTexts.includes('critical expiry');
+                    } else if (activeFilter === 'fefo') {
+                        matchesFilter = badgeTexts.includes('use first (fefo)');
+                    }
+                    
+                    return matchesSearch && matchesFilter;
+                });
+                
+                // Then sort the filtered products
+                filteredProducts.sort((a, b) => {
+                    if (sortOption === 'expiry-asc') {
+                        const daysA = parseInt(a.querySelector('input[data-days-until-expiry]').value);
+                        const daysB = parseInt(b.querySelector('input[data-days-until-expiry]').value);
+                        return daysA - daysB;
+                    } else if (sortOption === 'expiry-desc') {
+                        const daysA = parseInt(a.querySelector('input[data-days-until-expiry]').value);
+                        const daysB = parseInt(b.querySelector('input[data-days-until-expiry]').value);
+                        return daysB - daysA;
+                    } else if (sortOption === 'name-asc') {
+                        const nameA = a.querySelector('h2').textContent.toLowerCase();
+                        const nameB = b.querySelector('h2').textContent.toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    } else if (sortOption === 'name-desc') {
+                        const nameA = a.querySelector('h2').textContent.toLowerCase();
+                        const nameB = b.querySelector('h2').textContent.toLowerCase();
+                        return nameB.localeCompare(nameA);
+                    } else if (sortOption === 'quantity-desc') {
+                        const qtyA = parseFloat(a.querySelector('input[name="available_stock"]').value);
+                        const qtyB = parseFloat(b.querySelector('input[name="available_stock"]').value);
+                        return qtyB - qtyA;
+                    } else if (sortOption === 'quantity-asc') {
+                        const qtyA = parseFloat(a.querySelector('input[name="available_stock"]').value);
+                        const qtyB = parseFloat(b.querySelector('input[name="available_stock"]').value);
+                        return qtyA - qtyB;
+                    } else if (sortOption === 'category') {
+                        const catA = a.querySelector('.bg-green-100')?.textContent.trim().toLowerCase() || '';
+                        const catB = b.querySelector('.bg-green-100')?.textContent.trim().toLowerCase() || '';
+                        return catA.localeCompare(catB);
+                    }
+                    
+                    return 0;
+                });
+                
+                // Clear container
+                productContainer.innerHTML = '';
+                
+                // Add filtered and sorted products back to container
+                filteredProducts.forEach(card => {
+                    productContainer.appendChild(card);
+                });
+                
+                // Update product count
+                updateProductCount(filteredProducts.length);
+                
+                // Display "no products found" message if needed
+                if (filteredProducts.length === 0) {
+                    const noResults = document.createElement('div');
+                    noResults.className = 'bg-white p-8 rounded-lg shadow text-center';
+                    noResults.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <h3 class="text-lg font-medium text-gray-900">No products found</h3>
+                        <p class="mt-1 text-sm text-gray-500">Try adjusting your search or filter criteria</p>
+                        <button id="reset-filters" class="mt-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primarycol hover:bg-green-700">
+                            Reset Filters
+                        </button>
+                    `;
+                    productContainer.appendChild(noResults);
+                    
+                    // Add reset button functionality
+                    document.getElementById('reset-filters').addEventListener('click', function() {
+                        searchInput.value = '';
+                        sortSelect.value = 'expiry-asc';
+                        filterButtons.forEach(btn => {
+                            btn.classList.remove('active', 'bg-primarycol', 'text-white');
+                            if (btn.dataset.filter === 'all') {
+                                btn.classList.add('active', 'bg-primarycol', 'text-white');
+                            } else if (btn.dataset.filter === 'expiring-soon') {
+                                btn.classList.add('bg-amber-100', 'text-amber-800');
+                            } else if (btn.dataset.filter === 'critical') {
+                                btn.classList.add('bg-red-100', 'text-red-800');
+                            } else if (btn.dataset.filter === 'fefo') {
+                                btn.classList.add('bg-blue-100', 'text-blue-800');
+                            }
+                        });
+                        filterAndSortProducts();
+                    });
+                }
+            }
+            
+            // Initialize with default sorting (expiry date ascending)
+            filterAndSortProducts();
+        });
+        
+        // CSS for active filter button
+        document.addEventListener('DOMContentLoaded', function() {
+            const style = document.createElement('style');
+            style.textContent = `
+                .filter-btn.active {
+                    background-color: #47663B !important;
+                    color: white !important;
+                }
+            `;
+            document.head.appendChild(style);
+        });
     </script>
 
     <style>
@@ -595,7 +784,55 @@ $showSuccessMessage = isset($_GET['success']) && $_GET['success'] == '1';
             <div class="lg:col-span-2">
                 <h2 class="text-xl font-bold mb-4 text-gray-800">Record Product Excess</h2>
                 
-                <div class="grid grid-cols-1 gap-6">
+            <!-- Add search and sort functionality -->
+            <div class="bg-white p-4 rounded-lg shadow mb-4">
+                <div class="flex flex-col md:flex-row gap-4">
+                    <!-- Search field -->
+                    <div class="flex-grow">
+                        <label for="product-search" class="block text-sm font-medium text-gray-700 mb-1">Search Products</label>
+                        <input type="text" id="product-search" 
+                            placeholder="Search by name, category, or batch number..." 
+                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+                    
+                    <!-- Sort options -->
+                    <div class="md:w-1/4">
+                        <label for="sort-order" class="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+                        <select id="sort-order" 
+                            class="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            <option value="expiry-asc">Expiry Date (Soonest First)</option>
+                            <option value="expiry-desc">Expiry Date (Latest First)</option>
+                            <option value="name-asc">Product Name (A-Z)</option>
+                            <option value="name-desc">Product Name (Z-A)</option>
+                            <option value="quantity-desc">Available Quantity (High to Low)</option>
+                            <option value="quantity-asc">Available Quantity (Low to High)</option>
+                            <option value="category">Category</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Filter options -->
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button type="button" class="filter-btn active px-3 py-1 text-xs rounded-full bg-primarycol text-white" data-filter="all">
+                        All Products
+                    </button>
+                    <button type="button" class="filter-btn px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-800" data-filter="expiring-soon">
+                        Expiring Soon
+                    </button>
+                    <button type="button" class="filter-btn px-3 py-1 text-xs rounded-full bg-red-100 text-red-800" data-filter="critical">
+                        Critical Expiry
+                    </button>
+                    <button type="button" class="filter-btn px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800" data-filter="fefo">
+                        FEFO First
+                    </button>
+                </div>
+                
+                <div class="mt-2 text-sm">
+                    <span id="product-count" class="text-gray-600">Showing all products</span>
+                </div>
+            </div>
+                
+            <div class="grid grid-cols-1 gap-6" id="product-container">
                     <?php foreach ($products as $product):
                         $productId = $product['product_id'];
                         $stockId = $product['stock_id'];

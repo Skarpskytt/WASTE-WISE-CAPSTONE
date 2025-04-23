@@ -341,7 +341,10 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                         THEN ps.quantity * pi.price_per_unit ELSE 0 END) as critical_inventory_value,
                 COUNT(DISTINCT pi.category) as total_categories,
                 COUNT(DISTINCT CASE WHEN DATEDIFF(ps.expiry_date, CURRENT_DATE()) <= 3 
-                                  THEN pi.category ELSE NULL END) as categories_at_risk
+                                  THEN pi.category ELSE NULL END) as categories_at_risk,
+                COUNT(DISTINCT pi.id) as total_products,
+                COUNT(DISTINCT CASE WHEN DATEDIFF(ps.expiry_date, CURRENT_DATE()) <= 3 
+                                  THEN pi.id ELSE NULL END) as products_at_risk
             FROM product_stock ps
             JOIN product_info pi ON ps.product_info_id = pi.id
             WHERE ps.branch_id = ? AND ps.quantity > 0 AND (ps.archived_at IS NULL AND ps.is_archived = 0)
@@ -350,24 +353,29 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
         $riskStmt->execute([$branchId]);
         $riskData = $riskStmt->fetch(PDO::FETCH_ASSOC);
 
-        // Get category risk breakdown
-        $categorySql = "
+        // Replace with product-specific risk analysis
+        $productRiskSql = "
             SELECT 
+                pi.id as product_id,
+                pi.name as product_name,
                 pi.category,
                 COUNT(*) as batch_count,
                 SUM(ps.quantity) as total_items,
                 SUM(CASE WHEN DATEDIFF(ps.expiry_date, CURRENT_DATE()) <= 3 
                         THEN ps.quantity ELSE 0 END) as at_risk_items,
-                SUM(ps.quantity * pi.price_per_unit) as category_value
+                SUM(ps.quantity * pi.price_per_unit) as product_value,
+                MIN(DATEDIFF(ps.expiry_date, CURRENT_DATE())) as days_until_expiry
             FROM product_stock ps
             JOIN product_info pi ON ps.product_info_id = pi.id
             WHERE ps.branch_id = ? AND ps.quantity > 0 AND (ps.archived_at IS NULL AND ps.is_archived = 0)
-            GROUP BY pi.category
-            ORDER BY at_risk_items DESC
+            GROUP BY pi.id, pi.name, pi.category
+            HAVING at_risk_items > 0
+            ORDER BY at_risk_items DESC, days_until_expiry ASC
+            LIMIT 10
         ";
-        $categoryStmt = $pdo->prepare($categorySql);
-        $categoryStmt->execute([$branchId]);
-        $categoryRisks = $categoryStmt->fetchAll(PDO::FETCH_ASSOC);
+        $productRiskStmt = $pdo->prepare($productRiskSql);
+        $productRiskStmt->execute([$branchId]);
+        $productRisks = $productRiskStmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Display Inventory Risk Dashboard
         if ($riskData['total_inventory_value'] > 0):
@@ -395,39 +403,49 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 
                 <div class="p-4 border rounded-lg bg-gradient-to-r from-indigo-50 to-indigo-100">
-                    <div class="text-sm text-gray-500">Categories at Risk</div>
-                    <div class="text-2xl font-bold"><?= $riskData['categories_at_risk'] ?> of <?= $riskData['total_categories'] ?></div>
+                    <div class="text-sm text-gray-500">Products at Risk</div>
+                    <div class="text-2xl font-bold"><?= $riskData['products_at_risk'] ?> of <?= $riskData['total_products'] ?></div>
                 </div>
             </div>
             
-            <?php if(count($categoryRisks) > 0): ?>
-            <h3 class="text-lg font-medium text-gray-700 mb-2">Category Risk Analysis</h3>
+            <?php if(count($productRisks) > 0): ?>
+            <h3 class="text-lg font-medium text-gray-700 mb-2">Products at Risk</h3>
             <div class="overflow-x-auto">
                 <table class="min-w-full">
                     <thead>
                         <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                             <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Batches</th>
                             <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Items</th>
                             <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">At-Risk Items</th>
                             <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Risk %</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Days Left</th>
                             <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Value</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach($categoryRisks as $cat): 
-                            $riskPercent = $cat['total_items'] > 0 ? ($cat['at_risk_items'] / $cat['total_items']) * 100 : 0;
-                            $riskClass = $riskPercent > 50 ? 'text-red-600' : ($riskPercent > 20 ? 'text-amber-600' : 'text-green-600');
+                        <?php foreach($productRisks as $product): 
+                            $riskPercent = $product['total_items'] > 0 ? ($product['at_risk_items'] / $product['total_items']) * 100 : 0;
+                            $riskClass = $riskPercent > 75 ? 'text-red-600' : ($riskPercent > 40 ? 'text-amber-600' : 'text-yellow-600');
+                            $daysClass = $product['days_until_expiry'] <= 1 ? 'text-red-600 font-medium' : 
+                                        ($product['days_until_expiry'] <= 2 ? 'text-amber-600' : 'text-yellow-600');
                         ?>
                         <tr class="border-t">
-                            <td class="px-4 py-2"><?= htmlspecialchars($cat['category']) ?></td>
-                            <td class="px-4 py-2 text-right"><?= number_format($cat['total_items']) ?></td>
-                            <td class="px-4 py-2 text-right <?= $cat['at_risk_items'] > 0 ? 'font-medium ' . $riskClass : '' ?>">
-                                <?= number_format($cat['at_risk_items']) ?>
+                            <td class="px-4 py-2 font-medium"><?= htmlspecialchars($product['product_name']) ?></td>
+                            <td class="px-4 py-2 text-gray-600"><?= htmlspecialchars($product['category']) ?></td>
+                            <td class="px-4 py-2 text-right"><?= number_format($product['batch_count']) ?></td>
+                            <td class="px-4 py-2 text-right"><?= number_format($product['total_items']) ?></td>
+                            <td class="px-4 py-2 text-right font-medium <?= $riskClass ?>">
+                                <?= number_format($product['at_risk_items']) ?>
                             </td>
                             <td class="px-4 py-2 text-right <?= $riskClass ?>">
                                 <?= number_format($riskPercent, 1) ?>%
                             </td>
-                            <td class="px-4 py-2 text-right">₱<?= number_format($cat['category_value'], 2) ?></td>
+                            <td class="px-4 py-2 text-right <?= $daysClass ?>">
+                                <?= $product['days_until_expiry'] ?> day<?= $product['days_until_expiry'] != 1 ? 's' : '' ?>
+                            </td>
+                            <td class="px-4 py-2 text-right">₱<?= number_format($product['product_value'], 2) ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -873,7 +891,7 @@ $fifoRecommendations = $fifoStmt->fetchAll(PDO::FETCH_ASSOC);
                                 <?php endfor; ?>
                                 
                                 <?php if ($page < $totalPages): ?>
-                                    <a href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&category=<?= urlencode($categoryFilter) ?>&expiry=<?= urlencode($expiryFilter) ?>&sort=<?= urlencode($sortBy) ?>&algorithm=<?= $algorithm ?>" 
+                                    <a href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&category=<?= urlencode($categoryFilter) ?>&expiry=<?= urlencode($expiryFilter) ?>&sort=<?= $algorithm ?>" 
                                    class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                     <span class="sr-only">Next</span>
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

@@ -61,23 +61,22 @@ $stmt = $pdo->prepare("
         ndr.received_at,
         p.name as product_name,
         p.category,
-        (SELECT ps.expiry_date FROM product_stock ps 
-         WHERE ps.product_info_id = ndr.product_id 
-         AND ps.branch_id = ndr.branch_id
-         ORDER BY ps.expiry_date ASC LIMIT 1) as expiry_date, /* Get earliest expiry date */
+        dp.expiry_date, /* Get expiry date directly from donation_products */
         b.name as branch_name,
         b.address as branch_address,
-        dp.id as prepared_id,
-        dp.prepared_date,
-        dp.staff_notes
+        dp2.id as prepared_id,
+        dp2.prepared_date,
+        dp2.staff_notes
     FROM 
         ngo_donation_requests ndr
     JOIN 
         product_info p ON ndr.product_id = p.id
     JOIN 
         branches b ON ndr.branch_id = b.id
+    JOIN
+        donation_products dp ON dp.waste_id = ndr.waste_id /* Join with donation_products to get accurate expiry */
     LEFT JOIN
-        donation_prepared dp ON ndr.id = dp.ngo_request_id
+        donation_prepared dp2 ON ndr.id = dp2.ngo_request_id
     WHERE 
         ndr.ngo_id = ?
     ORDER BY 
@@ -192,21 +191,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_pickup'])) {
         ");
         $updateStmt->execute([$requestId]);
         
-        // Notify admin
-        $notifyStmt = $pdo->prepare("
+        // Notify staff at the branch about this pickup
+        $notifyBranchStmt = $pdo->prepare("
             INSERT INTO notifications (
-                target_role, message, notification_type, link, is_read
+                target_branch_id, message, notification_type, link, is_read
             ) VALUES (
-                'admin',
+                ?,
                 ?,
                 'donation_received',
-                '../admin/foods.php',
+                '../staff/donation_branch_history.php',
                 0
             )
         ");
-        $ngoName = $_SESSION['organization_name'] ?: ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
+        $ngoName = isset($_SESSION['organization_name']) && !empty($_SESSION['organization_name']) ? 
+            $_SESSION['organization_name'] : ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
         $message = "NGO '{$ngoName}' has confirmed pickup of {$receivedQuantity} {$requestDetails['product_name']} items.";
-        $notifyStmt->execute([$message]);
+        $notifyBranchStmt->execute([$requestDetails['branch_id'], $message]);
+
+        // Notify staff at the branch about this pickup
+        $notifyBranchStmt = $pdo->prepare("
+            INSERT INTO notifications (
+                target_branch_id, message, notification_type, link, is_read
+            ) VALUES (
+                ?,
+                ?,
+                'donation_received',
+                '../staff/donation_branch_history.php',
+                0
+            )
+        ");
+        $ngoName = isset($_SESSION['organization_name']) && !empty($_SESSION['organization_name']) ? 
+            $_SESSION['organization_name'] : ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
+        $message = "NGO '{$ngoName}' has confirmed pickup of {$receivedQuantity} {$requestDetails['product_name']} items.";
+        $notifyBranchStmt->execute([$requestDetails['branch_id'], $message]);
+
+        // Get staff emails at this branch for notification
+        $staffEmailStmt = $pdo->prepare("
+            SELECT u.email, u.fname, u.lname 
+            FROM users u
+            WHERE u.branch_id = ? 
+            AND u.role IN ('staff', 'company')
+            LIMIT 10
+        ");
+        $staffEmailStmt->execute([$requestDetails['branch_id']]);
+        $staffMembers = $staffEmailStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Send email notification to staff
+        if (!empty($staffMembers)) {
+            try {
+                foreach ($staffMembers as $staff) {
+                    $staffEmailData = [
+                        'staff_name' => $staff['fname'] . ' ' . $staff['lname'],
+                        'staff_email' => $staff['email'],
+                        'ngo_name' => $ngoName,
+                        'product_name' => $requestDetails['product_name'],
+                        'quantity' => $receivedQuantity,
+                        'branch_name' => $requestDetails['branch_name'],
+                        'pickup_date' => date('Y-m-d H:i:s'),
+                        'remarks' => $remarks
+                    ];
+                    $emailService->sendStaffPickupConfirmationEmail($staffEmailData);
+                }
+            } catch (Exception $e) {
+                error_log("Failed to send staff notification email: " . $e->getMessage());
+            }
+        }
         
         // Send receipt email
         $emailService = new EmailService();
@@ -306,13 +355,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_bulk_pickup']
                 $allProducts[] = [
                     'id' => $requestId,
                     'product_name' => $requestDetails['product_name'],
-                    'quantity' => $receivedQuantity
+                    'quantity' => $receivedQuantity,
+                    'branch_id' => $requestDetails['branch_id'],
+                    'branch_name' => $requestDetails['branch_name'],
+                    'branch_address' => $requestDetails['branch_address'] ?? 'Address not available'
                 ];
                 $totalQuantity += $receivedQuantity;
-                
-                // Store branch info (assuming all products are from same branch)
-                $branchName = $requestDetails['branch_name'];
-                $branchAddress = $requestDetails['branch_address'] ?? 'Address not available';
                 
                 $successCount++;
             }
@@ -335,7 +383,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_bulk_pickup']
                     )
                 ");
                 
-                $ngoName = $_SESSION['organization_name'] ?: ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
+                $ngoName = isset($_SESSION['organization_name']) && !empty($_SESSION['organization_name']) ? 
+                    $_SESSION['organization_name'] : ($_SESSION['fname'] . ' ' . $_SESSION['lname']);
                 
                 // Format product list for notification
                 $productSummary = '';
@@ -369,6 +418,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_bulk_pickup']
                 ];
                 
                 $emailService->sendBulkDonationReceiptEmail($bulkEmailData);
+            }
+
+            // Group notifications by branch to avoid multiple notifications to the same branch
+            $branchNotifications = [];
+            $branchProducts = [];
+
+            // Collect all products and group by branch
+            foreach ($allProducts as $product) {
+                if (isset($product['branch_id'])) {
+                    if (!isset($branchProducts[$product['branch_id']])) {
+                        $branchProducts[$product['branch_id']] = [];
+                    }
+                    $branchProducts[$product['branch_id']][] = $product;
+                }
+            }
+
+            // Now send one notification per branch with all products from that branch
+            foreach ($branchProducts as $branchId => $products) {
+                // Get branch name from the first product
+                $branchName = $products[0]['branch_name'] ?? 'Unknown Branch';
+                
+                // Create product list text for notification
+                $productList = [];
+                $totalBranchQty = 0;
+                foreach ($products as $product) {
+                    $productList[] = "{$product['quantity']} × {$product['product_name']}";
+                    $totalBranchQty += $product['quantity'];
+                }
+                
+                // Format product list for notification message
+                $productText = implode(", ", $productList);
+                if (count($productList) > 3) {
+                    $topProducts = array_slice($productList, 0, 3);
+                    $productText = implode(", ", $topProducts) . " and " . (count($productList) - 3) . " more items";
+                }
+                
+                // Insert notification for this branch
+                $notifyBranchStmt = $pdo->prepare("
+                    INSERT INTO notifications (
+                        target_branch_id, message, notification_type, link, is_read
+                    ) VALUES (
+                        ?,
+                        ?,
+                        'donation_received',
+                        '../staff/donation_branch_history.php',
+                        0
+                    )
+                ");
+                $message = "NGO '{$ngoName}' has confirmed pickup of {$totalBranchQty} items from your branch: {$productText}";
+                $notifyBranchStmt->execute([$branchId, $message]);
+                
+                // Get staff emails for this branch
+                $staffEmailStmt = $pdo->prepare("
+                    SELECT u.email, u.fname, u.lname 
+                    FROM users u
+                    WHERE u.branch_id = ? 
+                    AND u.role IN ('staff', 'company')
+                    LIMIT 10
+                ");
+                $staffEmailStmt->execute([$branchId]);
+                $staffMembers = $staffEmailStmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Send email to staff at this branch
+                if (!empty($staffMembers)) {
+                    try {
+                        foreach ($staffMembers as $staff) {
+                            $staffEmailData = [
+                                'staff_name' => $staff['fname'] . ' ' . $staff['lname'],
+                                'staff_email' => $staff['email'],
+                                'ngo_name' => $ngoName,
+                                'branch_name' => $branchName,
+                                'pickup_date' => date('Y-m-d H:i:s'),
+                                'remarks' => $remarks,
+                                'is_bulk' => true,
+                                'products' => $products,
+                                'total_quantity' => $totalBranchQty
+                            ];
+                            $emailService->sendStaffBulkPickupConfirmationEmail($staffEmailData);
+                        }
+                    } catch (Exception $e) {
+                        error_log("Failed to send staff bulk pickup email: " . $e->getMessage());
+                    }
+                }
             }
             
             $pdo->commit();
@@ -496,10 +628,10 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                             <th>
                                 <input type="checkbox" id="select-all" class="checkbox checkbox-sm">
                             </th>
-                            <th>ID</th>
+                            <!-- Removed ID column -->
                             <th>Product</th>
                             <th>Quantity</th>
-                            <th>Expiry Date</th> <!-- Add this column header -->
+                            <th>Expiry Date</th>
                             <th>Branch</th>
                             <th>Pickup Date</th>
                             <th>Status</th>
@@ -509,7 +641,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                     <tbody>
                         <?php if (count($donations) === 0): ?>
                             <tr>
-                                <td colspan="9" class="text-center py-4 text-gray-500"> <!-- Update colspan to match new column count -->
+                                <td colspan="8" class="text-center py-4 text-gray-500"> <!-- Updated colspan from 9 to 8 -->
                                     No donation history found.
                                 </td>
                             </tr>
@@ -525,7 +657,7 @@ function sendReceiptEmail($recipientEmail, $recipientName, $donationDetails, $no
                                                data-quantity="<?= $donation['quantity_requested'] ?>">
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= $donation['id'] ?></td>
+                                    <!-- Removed the ID column td -->
                                     <td><?= htmlspecialchars($donation['product_name']) ?></td>
                                     <td><?= $donation['quantity_requested'] ?></td>
                                     <td>

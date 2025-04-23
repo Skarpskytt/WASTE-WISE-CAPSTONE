@@ -37,7 +37,6 @@ $donationStats = $pdo->query("
     SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available,
-        SUM(CASE WHEN status = 'fully_allocated' THEN 1 ELSE 0 END) as allocated,
         SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) as expired,
         SUM(quantity_available) as total_quantity
     FROM donation_products
@@ -63,7 +62,7 @@ $receivedStats = $pdo->query("
     FROM donated_products
 ")->fetch(PDO::FETCH_ASSOC);
 
-// Build the query - REMOVED quantity_allocated
+// Build the query - FIXED the JOIN for NGO filtering and improved filter logic
 $baseQuery = "
     SELECT 
         dp.id as donation_id,
@@ -93,6 +92,8 @@ $baseQuery = "
         product_info pi ON dp.product_id = pi.id
     JOIN 
         branches b ON dp.branch_id = b.id
+    LEFT JOIN
+        ngo_donation_requests ndr ON ndr.waste_id = dp.waste_id
     WHERE 
         1=1
 ";
@@ -116,6 +117,12 @@ if ($branchFilter > 0) {
     $params[] = $branchFilter;
 }
 
+// Apply NGO filter - FIXED: Add NGO filtering
+if ($ngoFilter > 0) {
+    $baseQuery .= " AND EXISTS (SELECT 1 FROM ngo_donation_requests WHERE waste_id = dp.waste_id AND ngo_id = ?)";
+    $params[] = $ngoFilter;
+}
+
 // Apply search filter
 if (!empty($search)) {
     $baseQuery .= " AND (pi.name LIKE ? OR pi.category LIKE ? OR b.name LIKE ?)";
@@ -124,6 +131,9 @@ if (!empty($search)) {
     $params[] = $searchParam;
     $params[] = $searchParam;
 }
+
+// Make sure we use GROUP BY to avoid duplicate records
+$baseQuery .= " GROUP BY dp.id";
 
 // Add ordering
 $baseQuery .= " ORDER BY dp.creation_date DESC";
@@ -295,10 +305,6 @@ for ($i = 6; $i >= 0; $i--) {
             @apply bg-green-100 text-green-800;
         }
         
-        .status-fully_allocated {
-            @apply bg-blue-100 text-blue-800;
-        }
-        
         .status-expired {
             @apply bg-red-100 text-red-800;
         }
@@ -306,14 +312,6 @@ for ($i = 6; $i >= 0; $i--) {
         /* Priority badge styles */
         .priority-normal {
             @apply bg-gray-100 text-gray-800;
-        }
-        
-        .priority-high {
-            @apply bg-orange-100 text-orange-800;
-        }
-        
-        .priority-urgent {
-            @apply bg-red-100 text-red-800;
         }
     </style>
 </head>
@@ -341,7 +339,7 @@ for ($i = 6; $i >= 0; $i--) {
                         <div class="text-2xl font-bold text-gray-800"><?= number_format($donationStats['total']) ?></div>
                         <div class="ml-2 flex flex-col">
                             <span class="text-xs text-gray-500">Available: <span class="font-medium text-green-600"><?= number_format($donationStats['available']) ?></span></span>
-                            <span class="text-xs text-gray-500">Allocated: <span class="font-medium text-blue-600"><?= number_format($donationStats['allocated']) ?></span></span>
+                            <span class="text-xs text-gray-500">Expired: <span class="font-medium text-red-600"><?= number_format($donationStats['expired']) ?></span></span>
                         </div>
                         <div class="ml-auto bg-primarycol bg-opacity-10 p-2 rounded-full">
                             <i class="fas fa-box-open text-primarycol"></i>
@@ -422,7 +420,6 @@ for ($i = 6; $i >= 0; $i--) {
                         <select name="status" class="select select-bordered w-full text-sm h-10">
                             <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All Statuses</option>
                             <option value="available" <?= $statusFilter === 'available' ? 'selected' : '' ?>>Available</option>
-                            <option value="fully_allocated" <?= $statusFilter === 'fully_allocated' ? 'selected' : '' ?>>Fully Allocated</option>
                             <option value="expired" <?= $statusFilter === 'expired' ? 'selected' : '' ?>>Expired</option>
                         </select>
                     </div>
@@ -491,6 +488,16 @@ for ($i = 6; $i >= 0; $i--) {
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Add a clear Submit button -->
+                    <div class="lg:col-span-5 flex justify-end mt-2">
+                        <button type="submit" class="btn btn-sm bg-primarycol text-white hover:bg-primarydark">
+                            <i class="fas fa-filter mr-1"></i> Apply Filters
+                        </button>
+                        <a href="donation_history_admin.php" class="btn btn-sm bg-gray-200 text-gray-700 hover:bg-gray-300 ml-2">
+                            <i class="fas fa-times mr-1"></i> Clear Filters
+                        </a>
+                    </div>
                 </form>
             </div>
             
@@ -536,14 +543,6 @@ for ($i = 6; $i >= 0; $i--) {
                                                     <?= htmlspecialchars($donation['product_name']) ?>
                                                     <span class="text-xs text-gray-500 ml-2"><?= htmlspecialchars($donation['category']) ?></span>
                                                 </h4>
-                                                
-                                                <?php if ($donation['donation_priority'] !== 'normal'): 
-                                                    $priorityClass = 'priority-' . $donation['donation_priority'];
-                                                ?>
-                                                    <span class="status-badge <?= $priorityClass ?> ml-2">
-                                                        <?= ucfirst($donation['donation_priority']) ?>
-                                                    </span>
-                                                <?php endif; ?>
                                             </div>
                                             <div class="text-sm text-gray-500">ID: <?= $donation['donation_id'] ?></div>
                                         </div>

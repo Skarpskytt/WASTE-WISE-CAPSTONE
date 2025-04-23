@@ -59,6 +59,7 @@ $sql = "
     JOIN branches b ON dp.branch_id = b.id
     WHERE dp.status = 'available' 
     AND dp.quantity_available > 0
+    AND dp.expiry_date >= CURDATE()
 ";
 
 $params = [];

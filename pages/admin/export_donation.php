@@ -242,8 +242,7 @@ function exportReceivedDonationsReport($pdo, $format, $fileName, $startDate, $en
             ndr.pickup_date,
             ndr.quantity_requested,
             b.name as branch_name,
-            s.fname as staff_fname,
-            s.lname as staff_lname,
+            CONCAT(s.fname, ' ', s.lname) as staff_name,
             dp.notes
         FROM donated_products dp
         JOIN ngo_donation_requests ndr ON dp.donation_request_id = ndr.id
@@ -300,7 +299,7 @@ function exportReceivedDonationsReport($pdo, $format, $fileName, $startDate, $en
             $row['pickup_date'],
             $row['quantity_requested'],
             $row['branch_name'],
-            $row['staff_fname'] . ' ' . $row['staff_lname'],
+            $row['staff_name'],
             $row['notes']
         ];
     }
@@ -313,22 +312,27 @@ function exportReceivedDonationsReport($pdo, $format, $fileName, $startDate, $en
  * Output report data in specified format
  */
 function outputReport($data, $format, $fileName) {
-    // Simple CSV export (always available as fallback)
-    if ($format === 'csv' || $format === 'fallback') {
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="' . $fileName . '.csv"');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-        
-        $output = fopen('php://output', 'w');
-        
-        foreach ($data as $row) {
-            fputcsv($output, $row);
-        }
-        
-        fclose($output);
-        exit;
+    // Set appropriate headers to prevent caching
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="' . $fileName . '.csv"');
+    header('Pragma: no-cache');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Expires: 0');
+    
+    // Open output stream
+    $output = fopen('php://output', 'w');
+    
+    // Add UTF-8 BOM for Excel compatibility
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+    
+    // Write each row to CSV
+    foreach ($data as $row) {
+        fputcsv($output, $row);
     }
+    
+    // Close output stream
+    fclose($output);
+    exit;
 }
 ?>
 

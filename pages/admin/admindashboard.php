@@ -43,16 +43,28 @@ if (isset($_GET['period'])) {
     }
 }
 
+// Get sort parameters
+$sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'waste_value';
+$sortOrder = isset($_GET['order']) ? $_GET['order'] : 'desc';
+$viewMode = isset($_GET['view']) ? $_GET['view'] : 'all';
+
+// Get selected branch for   detailed view
+$selectedBranchId = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
+
 // Get branch names
-$branchQuery = $pdo->query("SELECT id, name FROM branches ORDER BY id");
+$branchQuery = $pdo->query("SELECT id, name FROM branches ORDER BY name");
 $branches = $branchQuery->fetchAll(PDO::FETCH_ASSOC);
 
-// For branch IDs that we know exist
-$branch1Id = 1;
-$branch2Id = 2;
-
-// Branch comparison data
+// Branch statistics data
 $branchStats = [];
+$aggregatedStats = [
+    'total_waste_records' => 0,
+    'total_waste_quantity' => 0,
+    'total_waste_value' => 0,
+    'total_donations' => 0,
+    'total_quantity_available' => 0
+];
+
 foreach ($branches as $branch) {
     $branchId = $branch['id'];
     
@@ -135,6 +147,23 @@ foreach ($branches as $branch) {
     $topWasteQuery->execute([$branchId, $startDate, $endDate]);
     $topWasteProducts = $topWasteQuery->fetchAll(PDO::FETCH_ASSOC);
     
+    // Calculate donation efficiency ratio
+    $donationRatio = 0;
+    if (!empty($wasteStats['total_waste_quantity']) && $wasteStats['total_waste_quantity'] > 0) {
+        $donationRatio = ($donationStats['total_quantity_available'] / $wasteStats['total_waste_quantity']) * 100;
+    }
+    
+    // Get the waste reasons distribution
+    $wasteReasonsQuery = $pdo->prepare("
+        SELECT waste_reason, COUNT(*) as count
+        FROM product_waste
+        WHERE branch_id = ? AND waste_date BETWEEN ? AND ?
+        GROUP BY waste_reason
+        ORDER BY count DESC
+    ");
+    $wasteReasonsQuery->execute([$branchId, $startDate, $endDate]);
+    $wasteReasons = $wasteReasonsQuery->fetchAll(PDO::FETCH_ASSOC);
+    
     $branchStats[$branchId] = [
         'name' => $branch['name'],
         'waste' => $wasteStats,
@@ -143,57 +172,59 @@ foreach ($branches as $branch) {
         'donations' => $donationStats,
         'categories' => $categories,
         'trend_data' => $trendData,
-        'top_waste_products' => $topWasteProducts
+        'top_waste_products' => $topWasteProducts,
+        'donation_ratio' => $donationRatio,
+        'waste_reasons' => $wasteReasons
     ];
+    
+    // Aggregate statistics for all branches
+    $aggregatedStats['total_waste_records'] += $wasteStats['total_waste_records'] ?? 0;
+    $aggregatedStats['total_waste_quantity'] += $wasteStats['total_waste_quantity'] ?? 0;
+    $aggregatedStats['total_waste_value'] += $wasteStats['total_waste_value'] ?? 0;
+    $aggregatedStats['total_donations'] += $donationStats['total_donations'] ?? 0;
+    $aggregatedStats['total_quantity_available'] += $donationStats['total_quantity_available'] ?? 0;
+}
+
+// Sort branches based on selected criteria
+$sortedBranches = [];
+foreach ($branchStats as $branchId => $stats) {
+    switch ($sortBy) {
+        case 'waste_value':
+            $sortValue = $stats['waste']['total_waste_value'] ?? 0;
+            break;
+        case 'waste_quantity':
+            $sortValue = $stats['waste']['total_waste_quantity'] ?? 0;
+            break;
+        case 'waste_records':
+            $sortValue = $stats['waste']['total_waste_records'] ?? 0;
+            break;
+        case 'donations':
+            $sortValue = $stats['donations']['total_donations'] ?? 0;
+            break;
+        case 'donation_ratio':
+            $sortValue = $stats['donation_ratio'] ?? 0;
+            break;
+        case 'name':
+            $sortValue = $stats['name'];
+            break;
+        default:
+            $sortValue = $stats['waste']['total_waste_value'] ?? 0;
+    }
+    
+    $sortedBranches[$branchId] = $sortValue;
+}
+
+// Apply sort order
+if ($sortOrder === 'asc') {
+    asort($sortedBranches);
+} else {
+    arsort($sortedBranches);
 }
 
 // Generate smart recommendations based on the data
 $recommendations = [];
 
-// Compare waste values between branches
-if (count($branchStats) >= 2) {
-    $branch1 = $branchStats[$branch1Id] ?? null;
-    $branch2 = $branchStats[$branch2Id] ?? null;
-    
-    if ($branch1 && $branch2) {
-        // Compare waste values
-        if ($branch1['waste']['total_waste_value'] > $branch2['waste']['total_waste_value'] * 1.2) {
-            $recommendations[] = [
-                'type' => 'warning',
-                'target' => $branch1['name'],
-                'message' => "The waste value in {$branch1['name']} is significantly higher than in {$branch2['name']}. Consider investigating the inventory management practices.",
-                'icon' => 'fa-triangle-exclamation'
-            ];
-        } elseif ($branch2['waste']['total_waste_value'] > $branch1['waste']['total_waste_value'] * 1.2) {
-            $recommendations[] = [
-                'type' => 'warning',
-                'target' => $branch2['name'],
-                'message' => "The waste value in {$branch2['name']} is significantly higher than in {$branch1['name']}. Consider investigating the inventory management practices.",
-                'icon' => 'fa-triangle-exclamation'
-            ];
-        }
-        
-        // Compare donation utilization
-        if ($branch1['waste']['total_waste_quantity'] > 0 && $branch1['donations']['total_quantity_available'] / $branch1['waste']['total_waste_quantity'] < 0.5) {
-            $recommendations[] = [
-                'type' => 'opportunity',
-                'target' => $branch1['name'],
-                'message' => "The donation rate in {$branch1['name']} is low compared to waste quantity. Consider increasing donation partnerships.",
-                'icon' => 'fa-lightbulb'
-            ];
-        }
-        if ($branch2['waste']['total_waste_quantity'] > 0 && $branch2['donations']['total_quantity_available'] / $branch2['waste']['total_waste_quantity'] < 0.5) {
-            $recommendations[] = [
-                'type' => 'opportunity',
-                'target' => $branch2['name'],
-                'message' => "The donation rate in {$branch2['name']} is low compared to waste quantity. Consider increasing donation partnerships.",
-                'icon' => 'fa-lightbulb'
-            ];
-        }
-    }
-}
-
-// Find patterns in waste reasons
+// Find patterns in waste reasons across all branches
 foreach ($branchStats as $branchId => $stats) {
     if ($stats['top_reason'] === 'expired') {
         $recommendations[] = [
@@ -216,32 +247,87 @@ foreach ($branchStats as $branchId => $stats) {
             break; // Limit to one category recommendation per branch
         }
     }
+    
+    // Identify outliers (branches with waste values significantly above average)
+    $avgWasteValue = $aggregatedStats['total_waste_value'] / count($branchStats);
+    if ($stats['waste']['total_waste_value'] > $avgWasteValue * 1.5) {
+        $recommendations[] = [
+            'type' => 'warning',
+            'target' => $stats['name'],
+            'message' => "{$stats['name']} has waste value significantly above average. Review inventory management practices.",
+            'icon' => 'fa-triangle-exclamation'
+        ];
+    }
 }
 
-// Get donation effectiveness ratio
-$donationEfficiencyQuery = $pdo->query("
-    SELECT 
-        b.id as branch_id,
-        b.name as branch_name,
-        SUM(pw.waste_quantity) as total_waste,
-        COALESCE(SUM(dp.quantity_available), 0) as total_donations,
-        CASE 
-            WHEN SUM(pw.waste_quantity) > 0 THEN COALESCE(SUM(dp.quantity_available), 0) / SUM(pw.waste_quantity) * 100
-            ELSE 0
-        END as donation_ratio
-    FROM branches b
-    LEFT JOIN product_waste pw ON b.id = pw.branch_id AND pw.waste_date BETWEEN '$startDate' AND '$endDate'
-    LEFT JOIN donation_products dp ON b.id = dp.branch_id AND dp.creation_date BETWEEN '$startDate' AND '$endDate'
-    GROUP BY b.id, b.name
-    ORDER BY b.id
-");
-$donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
+// Identify branches with extremely low donation ratios
+foreach ($branchStats as $branchId => $stats) {
+    if ($stats['donation_ratio'] < 10 && $stats['waste']['total_waste_quantity'] > 50) { // Less than 10% donation ratio with significant waste
+        $recommendations[] = [
+            'type' => 'opportunity',
+            'target' => $stats['name'],
+            'message' => "Very low donation ratio in {$stats['name']}. Significant opportunity to improve sustainability by increasing donations.",
+            'icon' => 'fa-recycle'
+        ];
+    }
+}
+
+// Filter recommendations for branch detail view
+$branchRecommendations = [];
+if ($viewMode === 'branch' && $selectedBranchId) {
+    $branchName = $branchStats[$selectedBranchId]['name'] ?? null;
+    if ($branchName) {
+        foreach ($recommendations as $rec) {
+            if ($rec['target'] === $branchName) {
+                $branchRecommendations[] = $rec;
+            }
+        }
+    }
+    // Add a few more targeted recommendations for the specific branch
+    $stats = $branchStats[$selectedBranchId];
+    if ($stats) {
+        // Add branch-specific recommendations based on detailed analysis
+        if (!empty($stats['top_waste_products'])) {
+            $branchRecommendations[] = [
+                'type' => 'insight',
+                'target' => $stats['name'],
+                'message' => "Your top wasted product is " . $stats['top_waste_products'][0]['product_name'] . ". Consider adjusting inventory levels for this item.",
+                'icon' => 'fa-box'
+            ];
+        }
+        
+        // Analyze waste trend patterns
+        if (count($stats['trend_data']) >= 3) {
+            $lastThreePoints = array_slice($stats['trend_data'], -3);
+            $increasing = true;
+            for ($i = 1; $i < count($lastThreePoints); $i++) {
+                if ($lastThreePoints[$i]['quantity'] <= $lastThreePoints[$i-1]['quantity']) {
+                    $increasing = false;
+                    break;
+                }
+            }
+            
+            if ($increasing) {
+                $branchRecommendations[] = [
+                    'type' => 'warning',
+                    'target' => $stats['name'],
+                    'message' => "Waste quantities have been increasing over the last three periods. Review recent inventory management changes.",
+                    'icon' => 'fa-arrow-trend-up'
+                ];
+            }
+        }
+    }
+}
+
+// Limit to 6 recommendations to avoid cluttering the dashboard
+$recommendations = array_slice($recommendations, 0, 6);
+$branchRecommendations = array_slice($branchRecommendations, 0, 4);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Dashboard - Branch Comparison</title>
+    <title>Admin Dashboard - Branch Analytics</title>
     <link rel="icon" type="image/x-icon" href="../../assets/images/Logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
@@ -276,6 +362,27 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
         .stat-card:hover {
             transform: scale(1.03);
         }
+        .branch-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        .branch-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .branch-card.high-waste {
+            border-left-color: #ef4444;
+        }
+        .branch-card.medium-waste {
+            border-left-color: #f59e0b;
+        }
+        .branch-card.low-waste {
+            border-left-color: #10b981;
+        }
+        .tab-active {
+            background-color: #47663B !important;
+            color: white !important;
+        }
     </style>
 </head>
 
@@ -284,16 +391,43 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
 
 <div class="flex-1 p-6 overflow-auto">
     <div class="max-w-7xl mx-auto">
-        <!-- Header with Time Period Filter -->
+        <!-- Header with Time Period Controls -->
         <div class="mb-6">
-            <h1 class="text-2xl font-bold text-primarycol">Branch Comparison Dashboard</h1>
-            <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <p class="text-sm text-gray-600">
-                    Comparing data from <span class="font-medium"><?= date('M j, Y', strtotime($startDate)) ?></span> to <span class="font-medium"><?= date('M j, Y', strtotime($endDate)) ?></span>
-                </p>
-                
+            <?php if ($viewMode === 'branch' && $selectedBranchId && isset($branchStats[$selectedBranchId])): ?>
+                <div class="flex items-center justify-between">
+                    <h1 class="text-2xl font-bold text-primarycol flex items-center">
+                        <i class="fa-solid fa-store mr-2"></i>
+                        <?= htmlspecialchars($branchStats[$selectedBranchId]['name']) ?> Dashboard
+                    </h1>
+                    <a href="?view=all<?= isset($_GET['period']) ? '&period='.$_GET['period'] : '' ?><?= isset($_GET['start_date']) ? '&start_date='.$_GET['start_date'] : '' ?><?= isset($_GET['end_date']) ? '&end_date='.$_GET['end_date'] : '' ?>" 
+                       class="btn btn-sm bg-gray-200 hover:bg-gray-300 text-gray-800">
+                        <i class="fa-solid fa-arrow-left mr-1"></i> Back to All Branches
+                    </a>
+                </div>
+            <?php else: ?>
+                <h1 class="text-2xl font-bold text-primarycol flex items-center">
+                    <i class="fa-solid fa-chart-line mr-2"></i>
+                    Branch Analytics Dashboard
+                </h1>
+            <?php endif; ?>
+            
+            <div class="mt-4 flex flex-wrap gap-4">
                 <!-- Time Period Filter -->
-                <form method="GET" class="flex flex-wrap gap-2 items-center">
+                <form method="GET" class="flex flex-wrap gap-2 items-center ml-auto">
+                    <?php if ($viewMode === 'branch'): ?>
+                        <input type="hidden" name="view" value="branch">
+                        <input type="hidden" name="branch_id" value="<?= $selectedBranchId ?>">
+                    <?php else: ?>
+                        <input type="hidden" name="view" value="all">
+                    <?php endif; ?>
+                    
+                    <?php if (isset($_GET['sort'])): ?>
+                        <input type="hidden" name="sort" value="<?= $_GET['sort'] ?>">
+                    <?php endif; ?>
+                    <?php if (isset($_GET['order'])): ?>
+                        <input type="hidden" name="order" value="<?= $_GET['order'] ?>">
+                    <?php endif; ?>
+                    
                     <select name="period" class="select select-sm select-bordered">
                         <option value="week" <?= ($_GET['period'] ?? '') == 'week' ? 'selected' : '' ?>>Last Week</option>
                         <option value="month" <?= (!isset($_GET['period']) || $_GET['period'] == 'month') ? 'selected' : '' ?>>Last 30 Days</option>
@@ -313,8 +447,13 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
                     </button>
                 </form>
             </div>
+            
+            <div class="mt-2 text-sm text-gray-600">
+                Showing data from <span class="font-medium"><?= date('M j, Y', strtotime($startDate)) ?></span> to <span class="font-medium"><?= date('M j, Y', strtotime($endDate)) ?></span>
+            </div>
         </div>
 
+        <?php if ($viewMode === 'all'): ?>
         <!-- Smart Recommendations Section -->
         <?php if (!empty($recommendations)): ?>
         <section class="mb-8">
@@ -355,176 +494,341 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
         </section>
         <?php endif; ?>
 
-        <!-- Key Metrics Comparison -->
+        <!-- All Branches Overview -->
         <section class="mb-8">
-            <h2 class="text-lg font-bold mb-4">Key Performance Metrics</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Overall Performance</h2>
+                
+                <!-- Sort Controls -->
+                <div class="flex items-center text-sm">
+                    <span class="mr-2">Sort by:</span>
+                    <form method="GET" class="flex gap-2">
+                        <input type="hidden" name="view" value="all">
+                        <?php if (isset($_GET['period'])): ?>
+                            <input type="hidden" name="period" value="<?= $_GET['period'] ?>">
+                        <?php endif; ?>
+                        <?php if (isset($_GET['start_date'])): ?>
+                            <input type="hidden" name="start_date" value="<?= $_GET['start_date'] ?>">
+                        <?php endif; ?>
+                        <?php if (isset($_GET['end_date'])): ?>
+                            <input type="hidden" name="end_date" value="<?= $_GET['end_date'] ?>">
+                        <?php endif; ?>
+                        
+                        <select name="sort" class="select select-bordered select-sm">
+                            <option value="waste_value" <?= ($sortBy === 'waste_value') ? 'selected' : '' ?>>Waste Value</option>
+                            <option value="waste_quantity" <?= ($sortBy === 'waste_quantity') ? 'selected' : '' ?>>Waste Quantity</option>
+                            <option value="waste_records" <?= ($sortBy === 'waste_records') ? 'selected' : '' ?>>Waste Records</option>
+                            <option value="donations" <?= ($sortBy === 'donations') ? 'selected' : '' ?>>Donations</option>
+                            <option value="donation_ratio" <?= ($sortBy === 'donation_ratio') ? 'selected' : '' ?>>Donation Ratio</option>
+                            <option value="name" <?= ($sortBy === 'name') ? 'selected' : '' ?>>Branch Name</option>
+                        </select>
+                        
+                        <select name="order" class="select select-bordered select-sm">
+                            <option value="desc" <?= ($sortOrder === 'desc') ? 'selected' : '' ?>>Highest First</option>
+                            <option value="asc" <?= ($sortOrder === 'asc') ? 'selected' : '' ?>>Lowest First</option>
+                        </select>
+                        
+                        <button type="submit" class="btn btn-sm bg-primarycol hover:bg-primarycol/80 text-white border-none">
+                            Sort
+                        </button>
+                    </form>
+                </div>
+            </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <!-- Total Waste Comparison -->
+            <!-- Aggregate Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <!-- Total Waste Value -->
                 <div class="stat-card bg-white p-4 rounded-lg shadow">
-                    <h3 class="text-sm font-medium text-gray-500">Total Waste Value</h3>
-                    <div class="grid grid-cols-2 gap-4 mt-2">
-                        <?php foreach($branches as $branch): 
-                            $branchId = $branch['id'];
-                            $stats = $branchStats[$branchId] ?? null;
-                            if (!$stats) continue;
-                            
-                            $wasteValue = $stats['waste']['total_waste_value'] ?? 0;
-                        ?>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold">₱<?= number_format($wasteValue, 2) ?></div>
-                            <div class="text-xs text-gray-500 mt-1"><?= htmlspecialchars($branch['name']) ?></div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                    
-                    <?php 
-                    // Calculate percentage difference
-                    $branch1Value = $branchStats[$branch1Id]['waste']['total_waste_value'] ?? 0;
-                    $branch2Value = $branchStats[$branch2Id]['waste']['total_waste_value'] ?? 0;
-                    $difference = 0;
-                    $isIncrease = false;
-                    
-                    if ($branch1Value > 0 && $branch2Value > 0) {
-                        // Calculate which branch has higher waste and by what percentage
-                        if ($branch1Value > $branch2Value) {
-                            $difference = ($branch1Value - $branch2Value) / $branch2Value * 100;
-                            $isIncrease = true;
-                            $higherBranch = $branch1Id;
-                        } else {
-                            $difference = ($branch2Value - $branch1Value) / $branch1Value * 100;
-                            $isIncrease = true;
-                            $higherBranch = $branch2Id;
-                        }
-                    }
-                    ?>
-                    
-                    <?php if ($difference > 5): ?>
-                    <div class="mt-3 text-xs <?= $isIncrease ? 'text-red-600' : 'text-green-600' ?> flex items-center justify-center">
-                        <i class="fa-solid <?= $isIncrease ? 'fa-arrow-up' : 'fa-arrow-down' ?> mr-1"></i>
-                        <?= number_format($difference, 1) ?>% <?= $isIncrease ? 'higher' : 'lower' ?> in <?= htmlspecialchars($branchStats[$higherBranch]['name']) ?>
-                    </div>
-                    <?php endif; ?>
+                    <div class="text-gray-500 text-sm">Total Waste Value</div>
+                    <div class="text-2xl font-bold mt-1">₱<?= number_format($aggregatedStats['total_waste_value'], 2) ?></div>
+                    <div class="text-xs text-gray-500 mt-1">Across all branches</div>
                 </div>
                 
-                <!-- Waste Quantity Comparison -->
+                <!-- Total Waste Quantity -->
                 <div class="stat-card bg-white p-4 rounded-lg shadow">
-                    <h3 class="text-sm font-medium text-gray-500">Total Waste Quantity</h3>
-                    <div class="grid grid-cols-2 gap-4 mt-2">
-                        <?php foreach($branches as $branch): 
-                            $branchId = $branch['id'];
-                            $stats = $branchStats[$branchId] ?? null;
-                            if (!$stats) continue;
-                            
-                            $wasteQty = $stats['waste']['total_waste_quantity'] ?? 0;
-                        ?>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold"><?= number_format($wasteQty) ?></div>
-                            <div class="text-xs text-gray-500 mt-1"><?= htmlspecialchars($branch['name']) ?></div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                    
-                    <?php 
-                    // Calculate percentage difference for quantity
-                    $branch1Qty = $branchStats[$branch1Id]['waste']['total_waste_quantity'] ?? 0;
-                    $branch2Qty = $branchStats[$branch2Id]['waste']['total_waste_quantity'] ?? 0;
-                    $qtyDifference = 0;
-                    $qtyIsIncrease = false;
-                    
-                    if ($branch1Qty > 0 && $branch2Qty > 0) {
-                        if ($branch1Qty > $branch2Qty) {
-                            $qtyDifference = ($branch1Qty - $branch2Qty) / $branch2Qty * 100;
-                            $qtyIsIncrease = true;
-                            $qtyHigherBranch = $branch1Id;
-                        } else {
-                            $qtyDifference = ($branch2Qty - $branch1Qty) / $branch1Qty * 100;
-                            $qtyIsIncrease = true;
-                            $qtyHigherBranch = $branch2Id;
-                        }
-                    }
-                    ?>
-                    
-                    <?php if ($qtyDifference > 5): ?>
-                    <div class="mt-3 text-xs <?= $qtyIsIncrease ? 'text-red-600' : 'text-green-600' ?> flex items-center justify-center">
-                        <i class="fa-solid <?= $qtyIsIncrease ? 'fa-arrow-up' : 'fa-arrow-down' ?> mr-1"></i>
-                        <?= number_format($qtyDifference, 1) ?>% <?= $qtyIsIncrease ? 'higher' : 'lower' ?> in <?= htmlspecialchars($branchStats[$qtyHigherBranch]['name']) ?>
-                    </div>
-                    <?php endif; ?>
+                    <div class="text-gray-500 text-sm">Total Waste Quantity</div>
+                    <div class="text-2xl font-bold mt-1"><?= number_format($aggregatedStats['total_waste_quantity']) ?></div>
+                    <div class="text-xs text-gray-500 mt-1">Items discarded</div>
+                </div>
+                
+                <!-- Total Waste Records -->
+                <div class="stat-card bg-white p-4 rounded-lg shadow">
+                    <div class="text-gray-500 text-sm">Waste Records</div>
+                    <div class="text-2xl font-bold mt-1"><?= number_format($aggregatedStats['total_waste_records']) ?></div>
+                    <div class="text-xs text-gray-500 mt-1">Total entries</div>
                 </div>
                 
                 <!-- Donation Efficiency -->
                 <div class="stat-card bg-white p-4 rounded-lg shadow">
-                    <h3 class="text-sm font-medium text-gray-500">Donation Efficiency</h3>
-                    <div class="grid grid-cols-2 gap-4 mt-2">
-                        <?php foreach($donationEfficiency as $branch): 
-                            $efficiency = $branch['donation_ratio'] ?? 0;
-                        ?>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold"><?= number_format($efficiency, 1) ?>%</div>
-                            <div class="text-xs text-gray-500 mt-1"><?= htmlspecialchars($branch['branch_name']) ?></div>
+                    <div class="text-gray-500 text-sm">Donation Rate</div>
+                    <?php 
+                    $overallDonationRate = 0;
+                    if ($aggregatedStats['total_waste_quantity'] > 0) {
+                        $overallDonationRate = ($aggregatedStats['total_quantity_available'] / $aggregatedStats['total_waste_quantity']) * 100;
+                    }
+                    ?>
+                    <div class="text-2xl font-bold mt-1"><?= number_format($overallDonationRate, 1) ?>%</div>
+                    <div class="text-xs text-gray-500 mt-1">Average across branches</div>
+                </div>
+            </div>
+            
+            <!-- Branch Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <?php foreach ($sortedBranches as $branchId => $sortValue): 
+                    $stats = $branchStats[$branchId];
+                    // Determine card border color based on waste value
+                    $cardClass = 'branch-card';
+                    $avgWasteValue = $aggregatedStats['total_waste_value'] / count($branchStats);
+                    
+                    if ($stats['waste']['total_waste_value'] > $avgWasteValue * 1.2) {
+                        $cardClass .= ' high-waste';
+                    } elseif ($stats['waste']['total_waste_value'] > $avgWasteValue * 0.8) {
+                        $cardClass .= ' medium-waste';
+                    } else {
+                        $cardClass .= ' low-waste';
+                    }
+                ?>
+                <div class="<?= $cardClass ?> bg-white p-4 rounded-lg shadow">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-lg"><?= htmlspecialchars($stats['name']) ?></h3>
+                            <p class="text-xs text-gray-500"><?= $stats['waste']['total_waste_records'] ?? 0 ?> waste records</p>
                         </div>
-                        <?php endforeach; ?>
+                        
+                        <a href="?view=branch&branch_id=<?= $branchId ?>&period=<?= $_GET['period'] ?? 'month' ?><?= isset($_GET['start_date']) ? '&start_date='.$_GET['start_date'] : '' ?><?= isset($_GET['end_date']) ? '&end_date='.$_GET['end_date'] : '' ?>" 
+                           class="btn btn-xs bg-primarycol hover:bg-primarycol/80 text-white border-none">
+                            View Details
+                        </a>
                     </div>
                     
-                    <div class="mt-2">
-                        <div class="text-xs text-gray-500 text-center">Percentage of waste converted to donations</div>
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <div class="text-sm text-gray-500">Waste Value</div>
+                            <div class="text-xl font-semibold">₱<?= number_format($stats['waste']['total_waste_value'] ?? 0, 2) ?></div>
+                        </div>
+                        
+                        <div>
+                            <div class="text-sm text-gray-500">Waste Quantity</div>
+                            <div class="text-xl font-semibold"><?= number_format($stats['waste']['total_waste_quantity'] ?? 0) ?></div>
+                        </div>
+                        
+                        <div>
+                            <div class="text-sm text-gray-500">Donations</div>
+                            <div class="text-xl font-semibold"><?= number_format($stats['donations']['total_quantity_available'] ?? 0) ?></div>
+                        </div>
+                        
+                        <div>
+                            <div class="text-sm text-gray-500">Donation Ratio</div>
+                            <div class="text-xl font-semibold"><?= number_format($stats['donation_ratio'], 1) ?>%</div>
+                        </div>
                     </div>
+                    
+                    <?php if (!empty($stats['top_reason']) && $stats['top_reason'] != 'No data'): ?>
+                    <div class="mt-3 pt-3 border-t border-gray-100">
+                        <div class="flex items-center">
+                            <div class="text-sm">
+                                <span class="text-gray-500">Top waste reason:</span> 
+                                <span class="font-medium"><?= htmlspecialchars(ucfirst($stats['top_reason'])) ?></span>
+                                (<?= number_format($stats['top_reason_count']) ?> occurrences)
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($stats['top_waste_products'])): ?>
+                    <div class="mt-3">
+                        <div class="text-sm font-medium text-gray-500">Top wasted product:</div>
+                        <div class="mt-1">
+                            <span class="font-medium"><?= htmlspecialchars($stats['top_waste_products'][0]['product_name']) ?></span>
+                            <span class="text-sm text-gray-500">
+                                (<?= number_format($stats['top_waste_products'][0]['total_quantity']) ?> items, 
+                                ₱<?= number_format($stats['top_waste_products'][0]['total_value'], 2) ?>)
+                            </span>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+        
+        <!-- Overall Charts -->
+        <section class="mb-8">
+            <h2 class="text-lg font-bold mb-4">Overall Analytics</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Overall Waste Trend Chart -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold mb-4">Waste Trends All Branches</h3>
+                    <div id="overallTrendChart" class="h-64"></div>
+                </div>
+                
+                <!-- Branch Comparison Chart -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold mb-4">Waste Value by Branch</h3>
+                    <div id="branchComparisonChart" class="h-64"></div>
                 </div>
             </div>
         </section>
-
-        <!-- Branch Comparison Charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Waste Trend Chart -->
-            <div class="bg-white p-6 rounded-lg shadow">
-                <h3 class="font-bold mb-4">Waste Trends Comparison</h3>
-                <div id="wasteTrendChart" class="h-64"></div>
-            </div>
-            
-            <!-- Category Distribution Comparison -->
-            <div class="bg-white p-6 rounded-lg shadow">
-                <h3 class="font-bold mb-4">Category Distribution Comparison</h3>
-                <div id="categoryComparisonChart" class="h-64"></div>
-            </div>
-        </div>
+        <?php endif; ?>
         
-        <!-- Top Waste Products By Branch -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <?php foreach($branches as $branch): 
-                $branchId = $branch['id'];
-                $stats = $branchStats[$branchId] ?? null;
-                if (!$stats || empty($stats['top_waste_products'])) continue;
-            ?>
+        <?php if ($viewMode === 'branch' && $selectedBranchId && isset($branchStats[$selectedBranchId])): 
+            $branchData = $branchStats[$selectedBranchId];
+        ?>
+        <!-- Individual Branch Dashboard -->
+        
+        <!-- Branch Recommendations -->
+        <?php if (!empty($branchRecommendations)): ?>
+        <section class="mb-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center">
+                <i class="fa-solid fa-lightbulb text-yellow-500 mr-2"></i>
+                Recommendations for <?= htmlspecialchars($branchData['name']) ?>
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <?php foreach($branchRecommendations as $index => $rec): 
+                    $bgColor = 'bg-blue-50 border-blue-200';
+                    $iconColor = 'text-blue-500';
+                    
+                    if ($rec['type'] == 'warning') {
+                        $bgColor = 'bg-amber-50 border-amber-200';
+                        $iconColor = 'text-amber-500';
+                    } elseif ($rec['type'] == 'action') {
+                        $bgColor = 'bg-green-50 border-green-200';
+                        $iconColor = 'text-green-500';
+                    } elseif ($rec['type'] == 'opportunity') {
+                        $bgColor = 'bg-purple-50 border-purple-200';
+                        $iconColor = 'text-purple-500';
+                    }
+                ?>
+                <div class="recommendation-card p-4 border rounded-lg <?= $bgColor ?>">
+                    <div class="flex items-start">
+                        <div class="mr-3">
+                            <i class="fa-solid <?= $rec['icon'] ?> text-xl <?= $iconColor ?>"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-700"><?= htmlspecialchars($rec['message']) ?></p>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+        <?php endif; ?>
+        
+        <!-- Branch Statistics Summary -->
+        <section class="mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Waste Value -->
+                <div class="stat-card bg-white p-4 rounded-lg shadow">
+                    <div class="text-gray-500 text-sm">Total Waste Value</div>
+                    <div class="text-2xl font-bold mt-1">₱<?= number_format($branchData['waste']['total_waste_value'] ?? 0, 2) ?></div>
+                    <div class="text-xs text-gray-500 mt-1">For selected period</div>
+                </div>
+                
+                <!-- Waste Quantity -->
+                <div class="stat-card bg-white p-4 rounded-lg shadow">
+                    <div class="text-gray-500 text-sm">Waste Quantity</div>
+                    <div class="text-2xl font-bold mt-1"><?= number_format($branchData['waste']['total_waste_quantity'] ?? 0) ?></div>
+                    <div class="text-xs text-gray-500 mt-1">Items discarded</div>
+                </div>
+                
+                <!-- Records Count -->
+                <div class="stat-card bg-white p-4 rounded-lg shadow">
+                    <div class="text-gray-500 text-sm">Waste Records</div>
+                    <div class="text-2xl font-bold mt-1"><?= number_format($branchData['waste']['total_waste_records'] ?? 0) ?></div>
+                    <div class="text-xs text-gray-500 mt-1">Total entries</div>
+                </div>
+                
+                <!-- Donation Ratio -->
+                <div class="stat-card bg-white p-4 rounded-lg shadow">
+                    <div class="text-gray-500 text-sm">Donation Ratio</div>
+                    <div class="text-2xl font-bold mt-1"><?= number_format($branchData['donation_ratio'], 1) ?>%</div>
+                    <div class="text-xs text-gray-500 mt-1">Of waste converted to donations</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Branch Charts -->
+        <section class="mb-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Waste Trend Chart -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold mb-4">Waste Trend Over Time</h3>
+                    <div id="branchTrendChart" class="h-64"></div>
+                </div>
+                
+                <!-- Category Distribution -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold mb-4">Waste by Category</h3>
+                    <div id="branchCategoryChart" class="h-64"></div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Additional Charts -->
+        <section class="mb-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Waste Reasons Distribution -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold mb-4">Waste Reasons Distribution</h3>
+                    <div id="wasteReasonsPieChart" class="h-64"></div>
+                </div>
+                
+                <!-- Top Waste Products -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold mb-4">Top Wasted Products</h3>
+                    <div id="topProductsChart" class="h-64"></div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Top Waste Products Table -->
+        <section class="mb-8">
             <div class="bg-white p-6 rounded-lg shadow">
-                <h3 class="font-bold flex items-center mb-4">
-                    <span class="mr-2">Top Waste Products - <?= htmlspecialchars($branch['name']) ?></span>
-                </h3>
+                <h3 class="font-bold mb-4">Top Waste Products Details</h3>
+                
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead>
                             <tr>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% of Total</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <?php foreach($stats['top_waste_products'] as $product): ?>
+                            <?php 
+                            $totalQty = $branchData['waste']['total_waste_quantity'] ?? 1; // Avoid division by zero
+                            foreach($branchData['top_waste_products'] as $index => $product): 
+                                $percentOfTotal = ($product['total_quantity'] / $totalQty) * 100;
+                            ?>
                             <tr class="hover:bg-gray-50">
-                                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900"><?= htmlspecialchars($product['product_name']) ?></td>
-                                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500"><?= htmlspecialchars($product['category']) ?></td>
-                                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500"><?= number_format($product['total_quantity']) ?></td>
-                                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">₱<?= number_format($product['total_value'], 2) ?></td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    <?= htmlspecialchars($product['product_name']) ?>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    <?= htmlspecialchars($product['category']) ?>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    <?= number_format($product['total_quantity']) ?>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    ₱<?= number_format($product['total_value'], 2) ?>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    <?= number_format($percentOfTotal, 1) ?>%
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
-            <?php endforeach; ?>
-        </div>
+        </section>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -541,35 +845,26 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
         }
     });
     
-    // Prepare data for waste trend chart
-    const branch1TrendData = <?= json_encode(array_map(function($item) {
-        return [
-            'x' => $item['date'], 
-            'y' => floatval($item['quantity'])
-        ];
-    }, $branchStats[$branch1Id]['trend_data'] ?? [])) ?>;
-    
-    const branch2TrendData = <?= json_encode(array_map(function($item) {
-        return [
-            'x' => $item['date'], 
-            'y' => floatval($item['quantity'])
-        ];
-    }, $branchStats[$branch2Id]['trend_data'] ?? [])) ?>;
+    <?php if ($viewMode === 'branch' && $selectedBranchId && isset($branchStats[$selectedBranchId])): 
+        $branchData = $branchStats[$selectedBranchId];
+    ?>
+    // Branch Detail Charts
     
     // Waste Trend Chart
-    const wasteTrendOptions = {
-        series: [
-            {
-                name: '<?= htmlspecialchars($branchStats[$branch1Id]['name'] ?? "Branch 1") ?>',
-                data: branch1TrendData
-            },
-            {
-                name: '<?= htmlspecialchars($branchStats[$branch2Id]['name'] ?? "Branch 2") ?>',
-                data: branch2TrendData
-            }
-        ],
+    const branchTrendData = <?= json_encode(array_map(function($item) {
+        return [
+            'x' => $item['date'], 
+            'y' => floatval($item['quantity'])
+        ];
+    }, $branchData['trend_data'] ?? [])) ?>;
+    
+    const branchTrendOptions = {
+        series: [{
+            name: 'Waste Quantity',
+            data: branchTrendData
+        }],
         chart: {
-            type: 'line',
+            type: 'area',
             height: 250,
             toolbar: {
                 show: false
@@ -579,7 +874,16 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
             curve: 'smooth',
             width: 3
         },
-        colors: ['#47663B', '#3B82F6'],
+        colors: ['#47663B'],
+        fill: {
+            type: 'gradient',
+            gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.7,
+                opacityTo: 0.2,
+                stops: [0, 90, 100]
+            }
+        },
         xaxis: {
             type: 'datetime',
             labels: {
@@ -591,9 +895,6 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
                 text: 'Waste Quantity'
             }
         },
-        legend: {
-            position: 'top'
-        },
         tooltip: {
             x: {
                 format: 'dd MMM'
@@ -601,36 +902,22 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
         }
     };
     
-    const wasteTrendChart = new ApexCharts(document.querySelector("#wasteTrendChart"), wasteTrendOptions);
-    wasteTrendChart.render();
+    const branchTrendChart = new ApexCharts(document.querySelector("#branchTrendChart"), branchTrendOptions);
+    branchTrendChart.render();
     
-    // Prepare data for category comparison chart
-    const branch1Categories = <?= json_encode(array_map(function($cat) {
+    // Category Distribution Chart
+    const categoryData = <?= json_encode(array_map(function($item) {
         return [
-            'x' => $cat['category'], 
-            'y' => floatval($cat['quantity'])
+            'x' => $item['category'], 
+            'y' => floatval($item['quantity'])
         ];
-    }, array_slice($branchStats[$branch1Id]['categories'] ?? [], 0, 5))) ?>;
+    }, array_slice($branchData['categories'] ?? [], 0, 5))) ?>;
     
-    const branch2Categories = <?= json_encode(array_map(function($cat) {
-        return [
-            'x' => $cat['category'], 
-            'y' => floatval($cat['quantity'])
-        ];
-    }, array_slice($branchStats[$branch2Id]['categories'] ?? [], 0, 5))) ?>;
-    
-    // Category Comparison Chart
     const categoryOptions = {
-        series: [
-            {
-                name: '<?= htmlspecialchars($branchStats[$branch1Id]['name'] ?? "Branch 1") ?>',
-                data: branch1Categories
-            },
-            {
-                name: '<?= htmlspecialchars($branchStats[$branch2Id]['name'] ?? "Branch 2") ?>',
-                data: branch2Categories
-            }
-        ],
+        series: [{
+            name: 'Quantity',
+            data: categoryData
+        }],
         chart: {
             type: 'bar',
             height: 250,
@@ -640,30 +927,271 @@ $donationEfficiency = $donationEfficiencyQuery->fetchAll(PDO::FETCH_ASSOC);
         },
         plotOptions: {
             bar: {
-                horizontal: false,
+                borderRadius: 3,
                 columnWidth: '70%',
-                borderRadius: 3
-            },
+                distributed: true,
+                dataLabels: {
+                    position: 'top'
+                },
+            }
         },
         dataLabels: {
             enabled: false
         },
-        colors: ['#47663B', '#3B82F6'],
+        colors: ['#47663B', '#7C9473', '#AEBF92', '#D0DCAC', '#E8ECD7'],
         xaxis: {
-            type: 'category'
+            type: 'category',
+            labels: {
+                rotate: -45,
+                style: {
+                    fontSize: '12px'
+                }
+            }
         },
         yaxis: {
             title: {
                 text: 'Quantity'
             }
         },
-        legend: {
-            position: 'top'
-        },
+        title: {
+            text: 'Waste by Category',
+            align: 'center',
+            style: {
+                fontSize: '14px'
+            }
+        }
     };
     
-    const categoryComparisonChart = new ApexCharts(document.querySelector("#categoryComparisonChart"), categoryOptions);
-    categoryComparisonChart.render();
+    const branchCategoryChart = new ApexCharts(document.querySelector("#branchCategoryChart"), categoryOptions);
+    branchCategoryChart.render();
+    
+    // Waste Reasons Pie Chart
+    const wasteReasonsData = <?= json_encode(array_map(function($item) {
+        return floatval($item['count']);
+    }, $branchData['waste_reasons'] ?? [])) ?>;
+    
+    const wasteReasonsLabels = <?= json_encode(array_map(function($item) {
+        return ucfirst($item['waste_reason']);
+    }, $branchData['waste_reasons'] ?? [])) ?>;
+    
+    const wasteReasonsPieOptions = {
+        series: wasteReasonsData,
+        chart: {
+            type: 'pie',
+            height: 250,
+            toolbar: {
+                show: false
+            },
+        },
+        labels: wasteReasonsLabels,
+        colors: ['#47663B', '#7C9473', '#AEBF92', '#D0DCAC', '#E8ECD7', '#b7c9a8'],
+        legend: {
+            position: 'bottom'
+        },
+        responsive: [{
+            breakpoint: 480,
+            options: {
+                chart: {
+                    width: 200
+                },
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }]
+    };
+    
+    const wasteReasonsPieChart = new ApexCharts(document.querySelector("#wasteReasonsPieChart"), wasteReasonsPieOptions);
+    wasteReasonsPieChart.render();
+    
+    // Top Products Chart
+    const topProductsData = <?= json_encode(array_map(function($item) {
+        return [
+            'x' => $item['product_name'],
+            'y' => floatval($item['total_quantity'])
+        ];
+    }, array_slice($branchData['top_waste_products'] ?? [], 0, 5))) ?>;
+    
+    const topProductsOptions = {
+        series: [{
+            name: 'Quantity',
+            data: topProductsData
+        }],
+        chart: {
+            type: 'bar',
+            height: 250,
+            toolbar: {
+                show: false
+            },
+        },
+        plotOptions: {
+            bar: {
+                horizontal: true,
+                borderRadius: 3,
+                distributed: true,
+                dataLabels: {
+                    position: 'top'
+                },
+            }
+        },
+        colors: ['#47663B', '#7C9473', '#AEBF92', '#D0DCAC', '#E8ECD7'],
+        dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+                return val.toFixed(0);
+            },
+            offsetX: 20,
+            style: {
+                fontSize: '12px',
+                colors: ['#333']
+            }
+        },
+        xaxis: {
+            type: 'category',
+            labels: {
+                style: {
+                    fontSize: '12px'
+                }
+            }
+        }
+    };
+    
+    const topProductsChart = new ApexCharts(document.querySelector("#topProductsChart"), topProductsOptions);
+    topProductsChart.render();
+    
+    <?php endif; ?>
+    
+    <?php if ($viewMode === 'all'): ?>
+    // Overall waste trend chart for all branches
+    // Combine all branch data and group by date
+    const overallTrendData = {};
+    
+    <?php foreach ($branchStats as $branchId => $stats): 
+        if (empty($stats['trend_data'])) continue;
+    ?>
+        <?php foreach ($stats['trend_data'] as $dataPoint): ?>
+            if (!overallTrendData['<?= $dataPoint['date'] ?>']) {
+                overallTrendData['<?= $dataPoint['date'] ?>'] = 0;
+            }
+            overallTrendData['<?= $dataPoint['date'] ?>'] += <?= floatval($dataPoint['quantity']) ?>;
+        <?php endforeach; ?>
+    <?php endforeach; ?>
+    
+    const overallTrendSeries = Object.keys(overallTrendData).map(date => ({
+        x: date,
+        y: overallTrendData[date]
+    })).sort((a, b) => new Date(a.x) - new Date(b.x));
+    
+    // Overall waste trend chart
+    const overallTrendOptions = {
+        series: [{
+            name: 'All Branches',
+            data: overallTrendSeries
+        }],
+        chart: {
+            type: 'area',
+            height: 250,
+            toolbar: {
+                show: false
+            },
+        },
+        stroke: {
+            curve: 'smooth',
+            width: 3
+        },
+        colors: ['#47663B'],
+        fill: {
+            type: 'gradient',
+            gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.7,
+                opacityTo: 0.2,
+                stops: [0, 90, 100]
+            }
+        },
+        xaxis: {
+            type: 'datetime',
+            labels: {
+                format: 'dd MMM',
+            }
+        },
+        yaxis: {
+            title: {
+                text: 'Total Waste Quantity'
+            }
+        },
+        tooltip: {
+            x: {
+                format: 'dd MMM'
+            }
+        }
+    };
+    
+    const overallTrendChart = new ApexCharts(document.querySelector("#overallTrendChart"), overallTrendOptions);
+    overallTrendChart.render();
+    
+    // Branch comparison chart
+    const branchComparisonData = <?= json_encode(array_map(function($branchId) use ($branchStats) {
+        return [
+            'x' => $branchStats[$branchId]['name'],
+            'y' => floatval($branchStats[$branchId]['waste']['total_waste_value'] ?? 0)
+        ];
+    }, array_keys($sortedBranches))) ?>;
+    
+    const branchComparisonOptions = {
+        series: [{
+            name: 'Waste Value',
+            data: branchComparisonData
+        }],
+        chart: {
+            type: 'bar',
+            height: 250,
+            toolbar: {
+                show: false
+            },
+        },
+        plotOptions: {
+            bar: {
+                borderRadius: 3,
+                horizontal: true,
+                distributed: true,
+                dataLabels: {
+                    position: 'top'
+                },
+            }
+        },
+        colors: ['#47663B', '#7C9473', '#AEBF92', '#D0DCAC', '#E8ECD7'],
+        dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+                return '₱' + val.toFixed(2);
+            },
+            offsetX: 20,
+            style: {
+                fontSize: '12px',
+                colors: ['#333']
+            }
+        },
+        xaxis: {
+            categories: branchComparisonData.map(item => item.x),
+            labels: {
+                formatter: function(val) {
+                    return '₱' + parseFloat(val).toFixed(2);
+                }
+            }
+        },
+        tooltip: {
+            y: {
+                formatter: function(val) {
+                    return '₱' + val.toFixed(2);
+                }
+            }
+        }
+    };
+    
+    const branchComparisonChart = new ApexCharts(document.querySelector("#branchComparisonChart"), branchComparisonOptions);
+    branchComparisonChart.render();
+    <?php endif; ?>
 </script>
 
 </body>

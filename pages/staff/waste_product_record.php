@@ -10,6 +10,163 @@ $pdo = getPDO();
 // Get branch ID from session
 $branchId = $_SESSION['branch_id'];
 
+// Function to automatically process expired products
+function autoProcessExpiredProducts($pdo, $branchId) {
+    $result = [
+        'success' => false,
+        'count' => 0,
+        'message' => '',
+        'processedItems' => []
+    ];
+    
+    try {
+        // Begin transaction for data consistency
+        $pdo->beginTransaction();
+        
+        // Find expired products that haven't been recorded as waste yet
+        $findExpiredSql = "
+            SELECT 
+                ps.id AS stock_id,
+                ps.product_info_id AS product_id,
+                pi.name AS product_name,
+                ps.quantity,
+                pi.price_per_unit,
+                ps.expiry_date,
+                ps.batch_number
+            FROM product_stock ps
+            JOIN product_info pi ON ps.product_info_id = pi.id
+            WHERE ps.branch_id = ?
+            AND ps.expiry_date < CURRENT_DATE()
+            AND ps.quantity > 0
+            AND (ps.is_archived = 0 OR ps.is_archived IS NULL)
+            AND NOT EXISTS (
+                -- Check if this stock has already been recorded as waste
+                SELECT 1 FROM product_waste pw 
+                WHERE pw.stock_id = ps.id 
+                AND pw.waste_reason = 'expired'
+            )
+        ";
+        
+        $expiredStmt = $pdo->prepare($findExpiredSql);
+        $expiredStmt->execute([$branchId]);
+        $expiredProducts = $expiredStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($expiredProducts)) {
+            $result['message'] = "No new expired products found";
+            $pdo->commit();
+            return $result;
+        }
+        
+        // For each expired product, create a waste record
+        $insertWasteSql = "
+            INSERT INTO product_waste (
+                product_id, stock_id, staff_id, waste_date, waste_quantity, 
+                waste_value, waste_reason, disposal_method, notes, 
+                branch_id, created_at, auto_generated
+            ) VALUES (
+                ?, ?, ?, CURRENT_TIMESTAMP, ?, 
+                ?, 'expired', 'trash', ?, 
+                ?, CURRENT_TIMESTAMP, 1
+            )
+        ";
+        
+        // Check if product_waste table has auto_generated column
+        $checkColumnSql = "SHOW COLUMNS FROM product_waste LIKE 'auto_generated'";
+        $checkColumnStmt = $pdo->prepare($checkColumnSql);
+        $checkColumnStmt->execute();
+        $columnExists = $checkColumnStmt->rowCount() > 0;
+        
+        // If auto_generated column doesn't exist, use the simpler insert statement
+        if (!$columnExists) {
+            $insertWasteSql = "
+                INSERT INTO product_waste (
+                    product_id, stock_id, staff_id, waste_date, waste_quantity, 
+                    waste_value, waste_reason, disposal_method, notes, 
+                    branch_id, created_at
+                ) VALUES (
+                    ?, ?, ?, CURRENT_TIMESTAMP, ?, 
+                    ?, 'expired', 'trash', ?, 
+                    ?, CURRENT_TIMESTAMP
+                )
+            ";
+        }
+        
+        $insertStmt = $pdo->prepare($insertWasteSql);
+        $updateStockSql = "UPDATE product_stock SET quantity = 0 WHERE id = ?";
+        $updateStmt = $pdo->prepare($updateStockSql);
+        
+        // Archive the expired stock
+        $archiveStockSql = "UPDATE product_stock SET is_archived = 1, archived_at = CURRENT_TIMESTAMP WHERE id = ?";
+        $archiveStmt = $pdo->prepare($archiveStockSql);
+        
+        // Get the system admin user ID for auto-recorded waste
+        $adminStmt = $pdo->prepare("SELECT id FROM users WHERE role = 'company' AND branch_id = ? LIMIT 1");
+        $adminStmt->execute([$branchId]);
+        $adminId = $adminStmt->fetchColumn();
+        
+        // If no admin found, use the first staff member
+        if (!$adminId) {
+            $staffStmt = $pdo->prepare("SELECT id FROM users WHERE branch_id = ? LIMIT 1");
+            $staffStmt->execute([$branchId]);
+            $adminId = $staffStmt->fetchColumn();
+        }
+        
+        foreach ($expiredProducts as $product) {
+            $productId = $product['product_id'];
+            $stockId = $product['stock_id'];
+            $quantity = $product['quantity'];
+            $wasteValue = $quantity * $product['price_per_unit'];
+            $notes = "[SYSTEM GENERATED] Automatically recorded as waste due to product expiration. Batch: " . $product['batch_number'];
+            
+            // Insert waste record
+            $insertStmt->execute([
+                $productId,
+                $stockId,
+                $adminId,
+                $quantity,
+                $wasteValue,
+                $notes,
+                $branchId
+            ]);
+            
+            // Update stock to zero quantity
+            $updateStmt->execute([$stockId]);
+            
+            // Archive the expired stock
+            $archiveStmt->execute([$stockId]);
+            
+            $result['processedItems'][] = [
+                'name' => $product['product_name'],
+                'quantity' => $quantity,
+                'value' => $wasteValue,
+                'batch' => $product['batch_number']
+            ];
+            
+            $result['count']++;
+        }
+        
+        // Commit the transaction
+        $pdo->commit();
+        
+        if ($result['count'] > 0) {
+            $result['success'] = true;
+            $result['message'] = "{$result['count']} expired products were automatically recorded as waste and archived";
+        }
+        
+    } catch (PDOException $e) {
+        // Rollback on error
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $result['message'] = "Error processing expired products: " . $e->getMessage();
+    }
+    
+    return $result;
+}
+
+// Run the auto-processing function when the page loads
+$autoProcessResult = autoProcessExpiredProducts($pdo, $branchId);
+
 // Change delete action to archive action
 if (isset($_POST['archive_waste'])) {
     $wasteId = $_POST['waste_id'] ?? 0;
@@ -260,6 +417,34 @@ try {
 <?php include ('../layout/staff_nav.php'); ?>
 
     <div class="p-6 w-full">
+        <!-- Auto-processing notification -->
+        <?php if ($autoProcessResult['success']): ?>
+        <div class="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 mb-4" role="alert">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium"><?= htmlspecialchars($autoProcessResult['message']) ?></p>
+                    <?php if (count($autoProcessResult['processedItems']) > 0): ?>
+                    <div class="mt-2 text-sm">
+                        <ul class="list-disc pl-5 space-y-1">
+                            <?php foreach(array_slice($autoProcessResult['processedItems'], 0, 5) as $item): ?>
+                            <li><?= htmlspecialchars($item['name']) ?> (<?= htmlspecialchars($item['quantity']) ?> units, ₱<?= number_format($item['value'], 2) ?>)</li>
+                            <?php endforeach; ?>
+                            <?php if (count($autoProcessResult['processedItems']) > 5): ?>
+                            <li>And <?= count($autoProcessResult['processedItems']) - 5 ?> more items...</li>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         <div class="mb-6">
         <nav class="mb-4">
                 <ol class="flex items-center gap-2 text-gray-600">
