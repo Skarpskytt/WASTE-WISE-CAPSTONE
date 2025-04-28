@@ -48,7 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $new_branch_id = $pdo->lastInsertId();
                 $success_message = "Branch created successfully! Branch ID: " . $new_branch_id;
                 
-                // Create audit log entry
+                // Remove or comment out the audit log code below
+                /* 
                 $audit_stmt = $pdo->prepare("
                     INSERT INTO audit_logs (
                         user_id, action, details, entity_type, entity_id, created_at
@@ -62,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "Created new branch: $branch_name",
                     $new_branch_id
                 ]);
+                */
                 
             } catch (PDOException $e) {
                 $error_message = "Error creating branch: " . $e->getMessage();
@@ -92,7 +94,7 @@ $branches = $branchQuery->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Branches - WasteWise</title>
-    <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
+    <link rel="icon" type="image/x-icon" href="../../assets/images/LGU.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script>

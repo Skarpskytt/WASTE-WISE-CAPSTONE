@@ -342,7 +342,7 @@ function outputReport($data, $format, $fileName) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Export Donation Reports - WasteWise</title>
-    <link rel="icon" type="image/x-icon" href="../../assets/images/Company Logo.jpg">
+    <link rel="icon" type="image/x-icon" href="../../assets/images/LGU.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />

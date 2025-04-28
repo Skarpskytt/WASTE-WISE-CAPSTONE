@@ -55,6 +55,30 @@ $selectedBranchId = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) 
 $branchQuery = $pdo->query("SELECT id, name FROM branches ORDER BY name");
 $branches = $branchQuery->fetchAll(PDO::FETCH_ASSOC);
 
+// Add a new search parameter
+$searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Filter branches by search term if provided
+$filteredBranches = [];
+if (!empty($searchTerm)) {
+    foreach ($branches as $branch) {
+        if (stripos($branch['name'], $searchTerm) !== false) {
+            $filteredBranches[] = $branch;
+        }
+    }
+    
+    // If only one branch matches and we're not already in branch view, redirect to branch view
+    if (count($filteredBranches) == 1 && $viewMode !== 'branch') {
+        header('Location: ?view=branch&branch_id=' . $filteredBranches[0]['id'] . 
+               '&period=' . ($_GET['period'] ?? 'month') . 
+               (isset($_GET['start_date']) ? '&start_date='.$_GET['start_date'] : '') . 
+               (isset($_GET['end_date']) ? '&end_date='.$_GET['end_date'] : ''));
+        exit;
+    }
+} else {
+    $filteredBranches = $branches;
+}
+
 // Branch statistics data
 $branchStats = [];
 $aggregatedStats = [
@@ -221,6 +245,20 @@ if ($sortOrder === 'asc') {
     arsort($sortedBranches);
 }
 
+// Update the sorted branches array to only include filtered branches
+if (!empty($searchTerm)) {
+    $tempSorted = [];
+    foreach ($sortedBranches as $branchId => $sortValue) {
+        foreach ($filteredBranches as $branch) {
+            if ($branch['id'] == $branchId) {
+                $tempSorted[$branchId] = $sortValue;
+                break;
+            }
+        }
+    }
+    $sortedBranches = $tempSorted;
+}
+
 // Generate smart recommendations based on the data
 $recommendations = [];
 
@@ -328,7 +366,7 @@ $branchRecommendations = array_slice($branchRecommendations, 0, 4);
 <head>
     <meta charset="UTF-8">
     <title>Admin Dashboard - Branch Analytics</title>
-    <link rel="icon" type="image/x-icon" href="../../assets/images/Logo.png">
+    <link rel="icon" type="image/x-icon" href="../../assets/images/LGU.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -454,6 +492,71 @@ $branchRecommendations = array_slice($branchRecommendations, 0, 4);
         </div>
 
         <?php if ($viewMode === 'all'): ?>
+        <!-- NEW SECTION: Branch Search and Filter -->
+        <section class="mb-6">
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <h2 class="text-lg font-semibold mb-4">Find a Branch</h2>
+                
+                <form method="GET" action="" class="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="view" value="all">
+                    
+                    <?php if (isset($_GET['period'])): ?>
+                        <input type="hidden" name="period" value="<?= $_GET['period'] ?>">
+                    <?php endif; ?>
+                    <?php if (isset($_GET['start_date'])): ?>
+                        <input type="hidden" name="start_date" value="<?= $_GET['start_date'] ?>">
+                    <?php endif; ?>
+                    <?php if (isset($_GET['end_date'])): ?>
+                        <input type="hidden" name="end_date" value="<?= $_GET['end_date'] ?>">
+                    <?php endif; ?>
+                    
+                    <div class="flex-1">
+                        <input type="text" name="search" value="<?= htmlspecialchars($searchTerm) ?>" 
+                               placeholder="Search by branch name..." 
+                               class="input input-bordered w-full max-w-xl focus:ring-primarycol">
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <select name="sort" class="select select-bordered select-sm">
+                            <option value="name" <?= ($sortBy === 'name') ? 'selected' : '' ?>>Branch Name</option>
+                            <option value="waste_value" <?= ($sortBy === 'waste_value') ? 'selected' : '' ?>>Waste Value</option>
+                            <option value="waste_quantity" <?= ($sortBy === 'waste_quantity') ? 'selected' : '' ?>>Waste Quantity</option>
+                            <option value="waste_records" <?= ($sortBy === 'waste_records') ? 'selected' : '' ?>>Waste Records</option>
+                            <option value="donations" <?= ($sortBy === 'donations') ? 'selected' : '' ?>>Donations</option>
+                            <option value="donation_ratio" <?= ($sortBy === 'donation_ratio') ? 'selected' : '' ?>>Donation Ratio</option>
+                        </select>
+                        
+                        <select name="order" class="select select-bordered select-sm">
+                            <option value="asc" <?= ($sortOrder === 'asc') ? 'selected' : '' ?>>A-Z / Lowest First</option>
+                            <option value="desc" <?= ($sortOrder === 'desc') ? 'selected' : '' ?>>Z-A / Highest First</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn btn-sm bg-primarycol hover:bg-primarycol/80 text-white border-none">
+                            <i class="fa-solid fa-search mr-1"></i> Search
+                        </button>
+                        
+                        <?php if (!empty($searchTerm)): ?>
+                            <a href="?view=all<?= isset($_GET['period']) ? '&period='.$_GET['period'] : '' ?><?= isset($_GET['start_date']) ? '&start_date='.$_GET['start_date'] : '' ?><?= isset($_GET['end_date']) ? '&end_date='.$_GET['end_date'] : '' ?>" 
+                               class="btn btn-sm bg-gray-200 hover:bg-gray-300 text-gray-800">
+                                Clear
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+                
+                <?php if (!empty($searchTerm)): ?>
+                    <div class="mt-3 text-sm">
+                        <p class="text-gray-600">
+                            Showing <?= count($sortedBranches) ?> branch<?= count($sortedBranches) !== 1 ? 'es' : '' ?> 
+                            matching "<?= htmlspecialchars($searchTerm) ?>"
+                        </p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </section>
+        
         <!-- Smart Recommendations Section -->
         <?php if (!empty($recommendations)): ?>
         <section class="mb-8">
@@ -497,42 +600,7 @@ $branchRecommendations = array_slice($branchRecommendations, 0, 4);
         <!-- All Branches Overview -->
         <section class="mb-8">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold">Overall Performance</h2>
-                
-                <!-- Sort Controls -->
-                <div class="flex items-center text-sm">
-                    <span class="mr-2">Sort by:</span>
-                    <form method="GET" class="flex gap-2">
-                        <input type="hidden" name="view" value="all">
-                        <?php if (isset($_GET['period'])): ?>
-                            <input type="hidden" name="period" value="<?= $_GET['period'] ?>">
-                        <?php endif; ?>
-                        <?php if (isset($_GET['start_date'])): ?>
-                            <input type="hidden" name="start_date" value="<?= $_GET['start_date'] ?>">
-                        <?php endif; ?>
-                        <?php if (isset($_GET['end_date'])): ?>
-                            <input type="hidden" name="end_date" value="<?= $_GET['end_date'] ?>">
-                        <?php endif; ?>
-                        
-                        <select name="sort" class="select select-bordered select-sm">
-                            <option value="waste_value" <?= ($sortBy === 'waste_value') ? 'selected' : '' ?>>Waste Value</option>
-                            <option value="waste_quantity" <?= ($sortBy === 'waste_quantity') ? 'selected' : '' ?>>Waste Quantity</option>
-                            <option value="waste_records" <?= ($sortBy === 'waste_records') ? 'selected' : '' ?>>Waste Records</option>
-                            <option value="donations" <?= ($sortBy === 'donations') ? 'selected' : '' ?>>Donations</option>
-                            <option value="donation_ratio" <?= ($sortBy === 'donation_ratio') ? 'selected' : '' ?>>Donation Ratio</option>
-                            <option value="name" <?= ($sortBy === 'name') ? 'selected' : '' ?>>Branch Name</option>
-                        </select>
-                        
-                        <select name="order" class="select select-bordered select-sm">
-                            <option value="desc" <?= ($sortOrder === 'desc') ? 'selected' : '' ?>>Highest First</option>
-                            <option value="asc" <?= ($sortOrder === 'asc') ? 'selected' : '' ?>>Lowest First</option>
-                        </select>
-                        
-                        <button type="submit" class="btn btn-sm bg-primarycol hover:bg-primarycol/80 text-white border-none">
-                            Sort
-                        </button>
-                    </form>
-                </div>
+                <h2 class="text-lg font-bold">Branch Performance</h2>
             </div>
             
             <!-- Aggregate Statistics Cards -->
@@ -573,83 +641,91 @@ $branchRecommendations = array_slice($branchRecommendations, 0, 4);
             </div>
             
             <!-- Branch Cards -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <?php foreach ($sortedBranches as $branchId => $sortValue): 
-                    $stats = $branchStats[$branchId];
-                    // Determine card border color based on waste value
-                    $cardClass = 'branch-card';
-                    $avgWasteValue = $aggregatedStats['total_waste_value'] / count($branchStats);
-                    
-                    if ($stats['waste']['total_waste_value'] > $avgWasteValue * 1.2) {
-                        $cardClass .= ' high-waste';
-                    } elseif ($stats['waste']['total_waste_value'] > $avgWasteValue * 0.8) {
-                        $cardClass .= ' medium-waste';
-                    } else {
-                        $cardClass .= ' low-waste';
-                    }
-                ?>
-                <div class="<?= $cardClass ?> bg-white p-4 rounded-lg shadow">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h3 class="font-bold text-lg"><?= htmlspecialchars($stats['name']) ?></h3>
-                            <p class="text-xs text-gray-500"><?= $stats['waste']['total_waste_records'] ?? 0 ?> waste records</p>
+            <?php if (empty($sortedBranches)): ?>
+                <div class="bg-white p-6 rounded-lg shadow text-center">
+                    <i class="fa-solid fa-store text-gray-300 text-5xl mb-4"></i>
+                    <h3 class="text-lg font-bold text-gray-700">No branches found</h3>
+                    <p class="text-gray-500">Try adjusting your search criteria</p>
+                </div>
+            <?php else: ?>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <?php foreach ($sortedBranches as $branchId => $sortValue): 
+                        $stats = $branchStats[$branchId];
+                        // Determine card border color based on waste value
+                        $cardClass = 'branch-card';
+                        $avgWasteValue = $aggregatedStats['total_waste_value'] / count($branchStats);
+                        
+                        if ($stats['waste']['total_waste_value'] > $avgWasteValue * 1.2) {
+                            $cardClass .= ' high-waste';
+                        } elseif ($stats['waste']['total_waste_value'] > $avgWasteValue * 0.8) {
+                            $cardClass .= ' medium-waste';
+                        } else {
+                            $cardClass .= ' low-waste';
+                        }
+                    ?>
+                    <div class="<?= $cardClass ?> bg-white p-4 rounded-lg shadow">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-lg"><?= htmlspecialchars($stats['name']) ?></h3>
+                                <p class="text-xs text-gray-500"><?= $stats['waste']['total_waste_records'] ?? 0 ?> waste records</p>
+                            </div>
+                            
+                            <a href="?view=branch&branch_id=<?= $branchId ?>&period=<?= $_GET['period'] ?? 'month' ?><?= isset($_GET['start_date']) ? '&start_date='.$_GET['start_date'] : '' ?><?= isset($_GET['end_date']) ? '&end_date='.$_GET['end_date'] : '' ?>" 
+                               class="btn btn-xs bg-primarycol hover:bg-primarycol/80 text-white border-none">
+                                View Details
+                            </a>
                         </div>
                         
-                        <a href="?view=branch&branch_id=<?= $branchId ?>&period=<?= $_GET['period'] ?? 'month' ?><?= isset($_GET['start_date']) ? '&start_date='.$_GET['start_date'] : '' ?><?= isset($_GET['end_date']) ? '&end_date='.$_GET['end_date'] : '' ?>" 
-                           class="btn btn-xs bg-primarycol hover:bg-primarycol/80 text-white border-none">
-                            View Details
-                        </a>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 mt-4">
-                        <div>
-                            <div class="text-sm text-gray-500">Waste Value</div>
-                            <div class="text-xl font-semibold">₱<?= number_format($stats['waste']['total_waste_value'] ?? 0, 2) ?></div>
-                        </div>
-                        
-                        <div>
-                            <div class="text-sm text-gray-500">Waste Quantity</div>
-                            <div class="text-xl font-semibold"><?= number_format($stats['waste']['total_waste_quantity'] ?? 0) ?></div>
-                        </div>
-                        
-                        <div>
-                            <div class="text-sm text-gray-500">Donations</div>
-                            <div class="text-xl font-semibold"><?= number_format($stats['donations']['total_quantity_available'] ?? 0) ?></div>
-                        </div>
-                        
-                        <div>
-                            <div class="text-sm text-gray-500">Donation Ratio</div>
-                            <div class="text-xl font-semibold"><?= number_format($stats['donation_ratio'], 1) ?>%</div>
-                        </div>
-                    </div>
-                    
-                    <?php if (!empty($stats['top_reason']) && $stats['top_reason'] != 'No data'): ?>
-                    <div class="mt-3 pt-3 border-t border-gray-100">
-                        <div class="flex items-center">
-                            <div class="text-sm">
-                                <span class="text-gray-500">Top waste reason:</span> 
-                                <span class="font-medium"><?= htmlspecialchars(ucfirst($stats['top_reason'])) ?></span>
-                                (<?= number_format($stats['top_reason_count']) ?> occurrences)
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <div class="text-sm text-gray-500">Waste Value</div>
+                                <div class="text-xl font-semibold">₱<?= number_format($stats['waste']['total_waste_value'] ?? 0, 2) ?></div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-sm text-gray-500">Waste Quantity</div>
+                                <div class="text-xl font-semibold"><?= number_format($stats['waste']['total_waste_quantity'] ?? 0) ?></div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-sm text-gray-500">Donations</div>
+                                <div class="text-xl font-semibold"><?= number_format($stats['donations']['total_quantity_available'] ?? 0) ?></div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-sm text-gray-500">Donation Ratio</div>
+                                <div class="text-xl font-semibold"><?= number_format($stats['donation_ratio'], 1) ?>%</div>
                             </div>
                         </div>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <?php if (!empty($stats['top_waste_products'])): ?>
-                    <div class="mt-3">
-                        <div class="text-sm font-medium text-gray-500">Top wasted product:</div>
-                        <div class="mt-1">
-                            <span class="font-medium"><?= htmlspecialchars($stats['top_waste_products'][0]['product_name']) ?></span>
-                            <span class="text-sm text-gray-500">
-                                (<?= number_format($stats['top_waste_products'][0]['total_quantity']) ?> items, 
-                                ₱<?= number_format($stats['top_waste_products'][0]['total_value'], 2) ?>)
-                            </span>
+                        
+                        <?php if (!empty($stats['top_reason']) && $stats['top_reason'] != 'No data'): ?>
+                        <div class="mt-3 pt-3 border-t border-gray-100">
+                            <div class="flex items-center">
+                                <div class="text-sm">
+                                    <span class="text-gray-500">Top waste reason:</span> 
+                                    <span class="font-medium"><?= htmlspecialchars(ucfirst($stats['top_reason'])) ?></span>
+                                    (<?= number_format($stats['top_reason_count']) ?> occurrences)
+                                </div>
+                            </div>
                         </div>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($stats['top_waste_products'])): ?>
+                        <div class="mt-3">
+                            <div class="text-sm font-medium text-gray-500">Top wasted product:</div>
+                            <div class="mt-1">
+                                <span class="font-medium"><?= htmlspecialchars($stats['top_waste_products'][0]['product_name']) ?></span>
+                                <span class="text-sm text-gray-500">
+                                    (<?= number_format($stats['top_waste_products'][0]['total_quantity']) ?> items, 
+                                    ₱<?= number_format($stats['top_waste_products'][0]['total_value'], 2) ?>)
+                                </span>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
-            </div>
+            <?php endif; ?>
         </section>
         
         <!-- Overall Charts -->
@@ -1192,6 +1268,25 @@ $branchRecommendations = array_slice($branchRecommendations, 0, 4);
     const branchComparisonChart = new ApexCharts(document.querySelector("#branchComparisonChart"), branchComparisonOptions);
     branchComparisonChart.render();
     <?php endif; ?>
+    
+    // Add highlight search term functionality
+    function highlightSearchTerm() {
+        const searchTerm = "<?= addslashes($searchTerm) ?>";
+        if (!searchTerm) return;
+        
+        document.querySelectorAll('.branch-card h3').forEach(heading => {
+            if (heading.innerText.toLowerCase().includes(searchTerm.toLowerCase())) {
+                const highlighted = heading.innerText.replace(
+                    new RegExp(searchTerm, 'gi'), 
+                    match => `<span class="bg-yellow-100 px-1 rounded">${match}</span>`
+                );
+                heading.innerHTML = highlighted;
+            }
+        });
+    }
+    
+    // Call highlight function after page loads
+    document.addEventListener('DOMContentLoaded', highlightSearchTerm);
 </script>
 
 </body>

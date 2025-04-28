@@ -75,6 +75,12 @@ try {
         if ($password !== $passwordConfirm) $errors[] = "Passwords do not match";
         if (strlen($password) < 8) $errors[] = "Password must be at least 8 characters long";
         
+        // Add password complexity validation
+        if (!preg_match('/[A-Z]/', $password)) $errors[] = "Password must contain at least one uppercase letter";
+        if (!preg_match('/[a-z]/', $password)) $errors[] = "Password must contain at least one lowercase letter";
+        if (!preg_match('/[0-9]/', $password)) $errors[] = "Password must contain at least one number";
+        if (!preg_match('/[^A-Za-z0-9]/', $password)) $errors[] = "Password must contain at least one special character";
+
         // Handle business permit file upload
         $permitFileName = null;
         if (isset($_FILES['business_permit']) && $_FILES['business_permit']['error'] === UPLOAD_ERR_OK) {
@@ -349,22 +355,50 @@ try {
                     <div class="divider"></div>
                     
                     <h3 class="text-xl font-bold text-primarycol">Account Password</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 gap-6">
                         <div class="form-control">
                             <label class="label">
                                 <span class="label-text">Password</span>
+                                <button type="button" id="generatePasswordBtn" class="btn btn-sm btn-secondary">Generate Strong Password</button>
                             </label>
-                            <input type="password" name="password" class="input input-bordered" required minlength="8">
-                            <label class="label">
-                                <span class="label-text-alt text-gray-500">At least 8 characters</span>
-                            </label>
+                            <div class="relative">
+                                <input type="password" id="password" name="password" class="input input-bordered w-full pr-10" required minlength="8">
+                                <button type="button" id="togglePasswordBtn" class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="passwordStrength" class="mt-2">
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div class="bg-gray-500 h-2.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                                <p class="text-xs mt-1 text-gray-500">Strength: <span id="strengthText">None</span></p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <div class="text-xs" id="reqLength"><span class="text-red-500">✗</span> At least 8 characters</div>
+                                <div class="text-xs" id="reqUppercase"><span class="text-red-500">✗</span> Uppercase letter</div>
+                                <div class="text-xs" id="reqLowercase"><span class="text-red-500">✗</span> Lowercase letter</div>
+                                <div class="text-xs" id="reqNumber"><span class="text-red-500">✗</span> Number</div>
+                                <div class="text-xs" id="reqSpecial"><span class="text-red-500">✗</span> Special character</div>
+                            </div>
                         </div>
                         
                         <div class="form-control">
                             <label class="label">
                                 <span class="label-text">Confirm Password</span>
                             </label>
-                            <input type="password" name="password_confirm" class="input input-bordered" required minlength="8">
+                            <div class="relative">
+                                <input type="password" id="password_confirm" name="password_confirm" class="input input-bordered w-full pr-10" required minlength="8">
+                                <button type="button" id="toggleConfirmBtn" class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <p id="matchMessage" class="text-xs mt-1 invisible">Passwords match</p>
                         </div>
                     </div>
                     
@@ -375,5 +409,163 @@ try {
             </div>
         </div>
     </div>
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const passwordInput = document.getElementById('password');
+    const confirmInput = document.getElementById('password_confirm');
+    const strengthBar = document.querySelector('#passwordStrength div');
+    const strengthText = document.getElementById('strengthText');
+    const generateBtn = document.getElementById('generatePasswordBtn');
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const toggleConfirmBtn = document.getElementById('toggleConfirmBtn');
+    const matchMessage = document.getElementById('matchMessage');
+    
+    // Password requirement indicators
+    const reqLength = document.getElementById('reqLength');
+    const reqUppercase = document.getElementById('reqUppercase');
+    const reqLowercase = document.getElementById('reqLowercase');
+    const reqNumber = document.getElementById('reqNumber');
+    const reqSpecial = document.getElementById('reqSpecial');
+    
+    // Toggle password visibility
+    togglePasswordBtn.addEventListener('click', () => togglePasswordVisibility(passwordInput, togglePasswordBtn));
+    toggleConfirmBtn.addEventListener('click', () => togglePasswordVisibility(confirmInput, toggleConfirmBtn));
+    
+    // Generate strong password
+    generateBtn.addEventListener('click', function() {
+        const password = generateStrongPassword();
+        passwordInput.value = password;
+        confirmInput.value = password;
+        checkPasswordStrength();
+        checkPasswordMatch();
+        
+        // Show password briefly when generated
+        passwordInput.type = 'text';
+        confirmInput.type = 'text';
+        setTimeout(() => {
+            passwordInput.type = 'password';
+            confirmInput.type = 'password';
+        }, 3000);
+    });
+    
+    // Check password strength and match
+    passwordInput.addEventListener('input', checkPasswordStrength);
+    confirmInput.addEventListener('input', checkPasswordMatch);
+    
+    function checkPasswordStrength() {
+        const password = passwordInput.value;
+        const hasLength = password.length >= 8;
+        const hasUppercase = /[A-Z]/.test(password);
+        const hasLowercase = /[a-z]/.test(password);
+        const hasNumber = /[0-9]/.test(password);
+        const hasSpecial = /[^A-Za-z0-9]/.test(password);
+        
+        // Update requirement indicators
+        updateRequirement(reqLength, hasLength);
+        updateRequirement(reqUppercase, hasUppercase);
+        updateRequirement(reqLowercase, hasLowercase);
+        updateRequirement(reqNumber, hasNumber);
+        updateRequirement(reqSpecial, hasSpecial);
+        
+        // Calculate strength
+        let strength = 0;
+        if (hasLength) strength += 20;
+        if (hasUppercase) strength += 20;
+        if (hasLowercase) strength += 20;
+        if (hasNumber) strength += 20;
+        if (hasSpecial) strength += 20;
+        
+        // Update strength bar
+        strengthBar.style.width = strength + '%';
+        
+        // Set color based on strength
+        if (strength < 40) {
+            strengthBar.className = 'bg-red-500 h-2.5 rounded-full';
+            strengthText.textContent = 'Weak';
+            strengthText.className = 'text-red-500';
+        } else if (strength < 80) {
+            strengthBar.className = 'bg-yellow-500 h-2.5 rounded-full';
+            strengthText.textContent = 'Medium';
+            strengthText.className = 'text-yellow-500';
+        } else {
+            strengthBar.className = 'bg-green-500 h-2.5 rounded-full';
+            strengthText.textContent = 'Strong';
+            strengthText.className = 'text-green-500';
+        }
+        
+        checkPasswordMatch();
+    }
+    
+    function checkPasswordMatch() {
+        if (confirmInput.value === '') {
+            matchMessage.classList.add('invisible');
+            return;
+        }
+        
+        if (passwordInput.value === confirmInput.value) {
+            matchMessage.textContent = 'Passwords match';
+            matchMessage.className = 'text-xs mt-1 text-green-500';
+        } else {
+            matchMessage.textContent = 'Passwords do not match';
+            matchMessage.className = 'text-xs mt-1 text-red-500';
+        }
+        matchMessage.classList.remove('invisible');
+    }
+    
+    function updateRequirement(element, isMet) {
+        const icon = element.querySelector('span');
+        if (isMet) {
+            icon.textContent = '✓';
+            icon.className = 'text-green-500';
+        } else {
+            icon.textContent = '✗';
+            icon.className = 'text-red-500';
+        }
+    }
+    
+    function generateStrongPassword() {
+        const length = 12;
+        const charset = {
+            uppercase: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            lowercase: 'abcdefghijklmnopqrstuvwxyz',
+            numbers: '0123456789',
+            special: '!@#$%^&*()_+-=[]{}|;:,.<>?'
+        };
+        
+        let password = '';
+        
+        // Ensure at least one character from each set
+        password += charset.uppercase.charAt(Math.floor(Math.random() * charset.uppercase.length));
+        password += charset.lowercase.charAt(Math.floor(Math.random() * charset.lowercase.length));
+        password += charset.numbers.charAt(Math.floor(Math.random() * charset.numbers.length));
+        password += charset.special.charAt(Math.floor(Math.random() * charset.special.length));
+        
+        // Fill the rest with random characters
+        const allChars = charset.uppercase + charset.lowercase + charset.numbers + charset.special;
+        for (let i = password.length; i < length; i++) {
+            password += allChars.charAt(Math.floor(Math.random() * allChars.length));
+        }
+        
+        // Shuffle the password
+        return password.split('').sort(() => 0.5 - Math.random()).join('');
+    }
+    
+    function togglePasswordVisibility(input, button) {
+        if (input.type === 'password') {
+            input.type = 'text';
+            button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clip-rule="evenodd" />
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+            </svg>`;
+        } else {
+            input.type = 'password';
+            button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+            </svg>`;
+        }
+    }
+});
+</script>
 </body>
 </html>

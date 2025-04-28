@@ -21,3 +21,6 @@ config/session_handler.php
 .env.development
 .env.test
 .env.production
+
+# Database Backups
+/backups/
